@@ -15,6 +15,7 @@ create many.
    ((and 
      (equal process elnode-server-socket)
      (equal status "deleted\n"))
+    (kill-buffer (process-buffer process))
     (message "elnode server stopped"))
 
    ;; Client socket status
