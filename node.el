@@ -44,29 +44,32 @@ functions, the sentinel function, the log function and a filter
 function (tho we don't use that yet).
 "
   (interactive)
-  (setq elnode-server-socket 
-        (let ((buf (get-buffer-create "*elnode-webserver*")))
-          (make-network-process 
-           :name "*elnode-webserver-proc*"
-           :buffer buf
-           ;;:type 'seqpacket
-           :server t
-           ;; The following are not needed if we specify :local t
-           :host 'local
-           :service 8022
-           :family 'ipv4
-           ;;:local addr
-           :nowait 't
-           :sentinel 'elnode-sentinel
-           :log 'elnode-log
-           )
-          ))
+  (if (not elnode-server-socket)
+      (setq elnode-server-socket 
+            (let ((buf (get-buffer-create "*elnode-webserver*")))
+              (make-network-process 
+               :name "*elnode-webserver-proc*"
+               :buffer buf
+               ;;:type 'seqpacket
+               :server t
+               ;; The following are not needed if we specify :local t
+               :host 'local
+               :service 8022
+               :family 'ipv4
+               ;;:local addr
+               :nowait 't
+               :sentinel 'elnode-sentinel
+               :log 'elnode-log
+               )
+              ))
+    )
   )
 
 (defun elnode-stop ()
   "Stop the elnode server"
   (interactive)
   (delete-process elnode-server-socket)
+  (setq elnode-server-socket nil)
   )
 
 ;; End
