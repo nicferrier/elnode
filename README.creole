@@ -1,0 +1,11 @@
+= elnode =
+
+An attempt to make an emacs lisp clone of nodejs.
+
+Apparently Steve Yegge has already done this... but I couldn't find it
+so I'm writing it.
+
+
+== Why elnode?? ==
+
+It's like "hell, no". It's... well.... it's an, um, joke.
