@@ -1,6 +1,12 @@
 
 
-(defvar elnode-server-socket nil)
+(defvar elnode-server-socket nil
+  "Where we store the server socket
+
+We only keep one server for all the elnode processes. Clearly,
+one improvement would be to make this abstracted so you could
+create many.
+")
 
 (defun elnode-sentinel (process status)
   "Sentinel function for the main server and for the client sockets"
@@ -13,6 +19,7 @@
 
    ;; Client socket status
    ((equal status "connection broken by remote peer\n")
+    (kill-buffer (process-buffer process))
     (message "elnode connection dropped"))
 
    ((equal status "open\n") ;; this says "open from ..."
@@ -25,6 +32,7 @@
 
 (defun elnode-log (server con msg)
   "Don't need to do anything because the sentinel should have been assigned"
+  (message "elnode-log: %s" msg)
   )
 
 (defun elnode-start ()
@@ -61,5 +69,3 @@ function (tho we don't use that yet).
   )
 
 ;; End
-
- 
