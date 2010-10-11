@@ -5,9 +5,10 @@
 (defvar elnode-server-socket nil
   "Where we store the server socket
 
-We only keep one server for all the elnode processes. Clearly,
-one improvement would be to make this abstracted so you could
-create many.
+This code has been written to allow multiple servers each with
+their own request handler. To facilitate that this variable must
+be replaced; a hashtable or alist of port->server-process would
+be good enough.
 ")
 
 (defun elnode-sentinel (process status)
@@ -35,14 +36,14 @@ create many.
    ))
 
 
-(defun elnode-http-header (process)
-  "Parse the http header and dispatch to the user specified handler."
-  (let ((server (process-get process :server)))
-    (funcall (process-get server :elnode-http-handler) process)
-    ))
-
 (defun elnode-filter (process data)
-  "Filter for the clients"
+  "Filter for the clients.
+
+This does the work of finding and calling the user http
+connection handler for a request.
+
+A buffer for the http connection is created, uniquified by the
+port number of the connection."
   (let ((buf (or 
               (process-buffer process)
               ;; Set the process buffer (because the server doesn't automatically allocate them)
@@ -61,11 +62,17 @@ create many.
       (save-excursion 
         (goto-char (point-min))
         (if (re-search-forward "\r\n\r\n" nil 't)
-            (elnode-http-header process))
+            (let ((server (process-get process :server)))
+              (funcall (process-get server :elnode-http-handler) process)
+              )
+          )
         )
       )))
 
 (defun elnode-log-fn (server con msg)
+  "Log function for elnode.
+
+Serves only to connect the server process to the client processes"
   (process-put con :server server)
   )
 
@@ -76,7 +83,7 @@ Most of the work done by the server is actually done by
 functions, the sentinel function, the log function and a filter
 function.
 
-The request-handler is a function which is called with the
+request-handler is a function which is called with the
 request. The function is called with one argument, the
 http-connection.
 
@@ -84,6 +91,7 @@ You can use functions such as elnode-http-start and
 elnode-http-send-body to send the http response.
 
 Example:
+
  (defun nic-server (httpcon)
    (elnode-http-start 200 '((\"Content-Type\": \"text/html\")))
    (elnode-http-return \"<html><b>BIG!</b></html>\")
@@ -103,14 +111,14 @@ Example:
                :server t
                :nowait 't
                :host 'local
-               :service 8022
+               :service 8023
                :family 'ipv4
                :filter 'elnode-filter
                :sentinel 'elnode-sentinel
                :log 'elnode-log-fn
+               :plist `(:elnode-http-handler ,request-handler)
                )
               )))
-  (process-put elnode-server-socket :elnode-http-handler request-handler)
   )
 
 (defun elnode-stop ()
@@ -120,6 +128,24 @@ Example:
   (setq elnode-server-socket nil)
   )
 
+(defun elnode-http-parse (httpcon)
+  "Parse the HTTP header for the process."
+  (with-current-buffer (process-buffer httpcon)
+    ;; We need to record the end of header so we can use that instead of point-max
+    (let* ((lines (split-string (buffer-substring (point-min) (point-max)) "\r\n" 't))
+           (status (car lines))
+           (header (cdr lines)))
+      (process-put httpcon :elnode-http-status status)
+      (process-put 
+       httpcon 
+       :elnode-http-header
+       (mapcar 
+        (lambda (hdrline)
+          (if (string-match "\\([A-Za-z0-9_-]+\\): \\(.*\\)" hdrline)
+              (cons (match-string 1 hdrline) (match-string 2 hdrline))))
+        header)
+       ))))
+
 (defun elnode-http-start (httpcon status &rest header)
   "Start the http response on the specified http connection.
 
@@ -128,6 +154,7 @@ status is the HTTP status, eg: 200 or 404
 header is a sequence of (header-name . value) pairs.
 
 For example:
+
  (elnode-http-start httpcon \"200\" '(\"Content-type\" . \"text/html\"))
 "
   (let ((http-codes-strings '(("200" . "OK")
@@ -149,15 +176,22 @@ For example:
        )))))
 
 (defun elnode-http-return (httpcon data)
-  "End the http response on the specified http connection"
+  "End the http response on the specified http connection
+
+httpcon is the http connection.
+data must be a string right now."
   (process-send-string httpcon data)
   (delete-process httpcon)
   )
 
-
 (defun nicferrier-handler (httpcon)
   "Demonstration function"
-  (elnode-http-start httpcon "200" '("Content-type" . "text/html"))
+  (elnode-http-parse httpcon)
+  (elnode-http-start 
+   httpcon 
+   "200" 
+   '("Content-type" . "text/html")
+   )
   (elnode-http-return httpcon "<html><b>HELLO!</b></html>")
   )
 
