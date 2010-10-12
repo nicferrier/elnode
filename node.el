@@ -157,23 +157,33 @@ For example:
 
  (elnode-http-start httpcon \"200\" '(\"Content-type\" . \"text/html\"))
 "
-  (let ((http-codes-strings '(("200" . "OK")
+  (let ((http-codes-strings '(("200" . "Ok")
+                              (200 . "Ok")
                               ("400" . "Bad Request")
+                              (400 . "Bad Request")
                               ("401" . "Authenticate")
+                              (401 . "Authenticate")
                               ("404" . "Not Found")
-                              ("500" . "Server Error"))))
+                              (404 . "Not Found")
+                              ("500" . "Server Error")
+                              (500 . "Server Error")
+                              )))
     (process-send-string 
      httpcon 
-     (concat
-      (format
-       "%s %s HTTP/1.1\r\n%s\r\n\r\n" 
-       status 
-       ;; The status text
-       (cdr (assoc status http-codes-strings))
-       ;; The header
-       (mapconcat (lambda (p)
-                    (format "%s: %s" (car p) (cdr p))) header "\r\n")
-       )))))
+     (format
+      "HTTP/1.1 %s %s\r\n%s\r\n\r\n" 
+      status 
+      ;; The status text
+      (cdr (assoc status http-codes-strings))
+      ;; The header
+      (or 
+       (mapconcat 
+        (lambda (p)
+          (format "%s: %s" (car p) (cdr p)))
+        header
+        "\r\n")
+       "\r\n")
+      ))))
 
 (defun elnode-http-return (httpcon data)
   "End the http response on the specified http connection
@@ -186,13 +196,16 @@ data must be a string right now."
 
 (defun nicferrier-handler (httpcon)
   "Demonstration function"
-  (elnode-http-parse httpcon)
-  (elnode-http-start 
-   httpcon 
-   "200" 
-   '("Content-type" . "text/html")
-   )
-  (elnode-http-return httpcon "<html><b>HELLO!</b></html>")
+  (let ((body "<html><body><b>HELLO!</b></body></html>"))
+    (elnode-http-parse httpcon)
+    (elnode-http-start 
+     httpcon 
+     200
+     '("Content-type" . "text/html")
+     `("Content-length" . ,(length body))
+     )
+    (elnode-http-return httpcon body)
+    )
   )
 
 ;; End
