@@ -32,10 +32,26 @@ And then start the server:
 You can also start the server interactively... you still have to pass
 it a handler function.
 
+== HTTP interface ==
+
+You can query headers in the HTTP request in your handler using the
+function elnode-http-header:
+
+{{{
+(defun my-handler (httpcon)
+  (elnode-http-header httpcon "Content-type")
+  )
+}}}
+
 == But... ==
 
-There's always a but. 
+There's always a but.
 
-Right now, there is no HTTP querying interface... the request is NOT
-parsed at all so you don't even know what the path is. That's the next
-job.
+The HTTP parsing isn't very complete, only headers are available. You cannot access:
+
+ * the method
+ * the path
+ * the query
+ * POST data
+
+That stuff is coming soon.
