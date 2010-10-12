@@ -25,7 +25,8 @@ be good enough.
    ((equal status "connection broken by remote peer\n")
     (if (process-buffer process)
         (kill-buffer (process-buffer process)))
-    (message "elnode connection dropped"))
+    ;;(message "elnode connection dropped")
+    )
 
    ((equal status "open\n") ;; this says "open from ..."
     (message "elnode opened new connection"))
@@ -143,8 +144,17 @@ Example:
         (lambda (hdrline)
           (if (string-match "\\([A-Za-z0-9_-]+\\): \\(.*\\)" hdrline)
               (cons (match-string 1 hdrline) (match-string 2 hdrline))))
-        header)
-       ))))
+        header))))
+  (process-get httpcon :elnode-http-header)
+  )
+
+(defun elnode-http-header (httpcon name)
+  "Get the header specified by name from the header"
+  (let ((hdr (or 
+              (process-get httpcon :elnode-http-header)
+              (elnode-http-parse httpcon))))
+    (cdr (assoc name hdr))
+    ))
 
 (defun elnode-http-start (httpcon status &rest header)
   "Start the http response on the specified http connection.
@@ -196,8 +206,8 @@ data must be a string right now."
 
 (defun nicferrier-handler (httpcon)
   "Demonstration function"
-  (let ((body "<html><body><b>HELLO!</b></body></html>"))
-    (elnode-http-parse httpcon)
+  (let* ((host (elnode-http-header httpcon "Host"))
+         (body (format "<html><body><b>HELLO @ %s</b></body></html>" host)))
     (elnode-http-start 
      httpcon 
      200
