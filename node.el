@@ -156,6 +156,41 @@ Example:
     (cdr (assoc name hdr))
     ))
 
+(defun elnode-http-parse-status (httpcon &optional property)
+  "Parse the status line.
+
+property if specified is the property to return"
+  (let ((http-line (process-get httpcon :elnode-http-status)))
+    (string-match 
+     "\\(GET\\|POST\\|HEAD\\) \\(.*\\) HTTP/\\(1.[01]\\)" 
+     http-line)
+    (process-put httpcon :elnode-http-method (match-string 1 http-line))
+    (process-put httpcon :elnode-http-pathinfo (match-string 2 http-line))
+    (process-put httpcon :elnode-http-version (match-string 3 http-line))
+    (if property
+        (process-get httpcon property))
+    )
+  )
+
+(defun elnode-http-pathinfo (httpcon)
+  "Get the PATHINFO of the request"
+  (or
+   (process-get httpcon :elnode-http-pathinfo)
+   (elnode-http-parse-status httpcon :elnode-http-pathinfo)))
+
+(defun elnode-http-method (httpcon)
+  "Get the PATHINFO of the request"
+  (or
+   (process-get httpcon :elnode-http-method)
+   (elnode-http-parse-status httpcon :elnode-http-method)))
+
+(defun elnode-http-version (httpcon)
+  "Get the PATHINFO of the request"
+  (or
+   (process-get httpcon :elnode-http-version)
+   (elnode-http-parse-status httpcon :elnode-http-version)))
+
+
 (defun elnode-http-start (httpcon status &rest header)
   "Start the http response on the specified http connection.
 
@@ -204,10 +239,36 @@ data must be a string right now."
   (delete-process httpcon)
   )
 
+
+;; A concept for a macro to help with multiple dispatch:
+;;
+;; (elnode-start 
+;;  (elnode-map 
+;;   '(("$" 
+;;      (elnode-http-start httpcon 200 '(Content-type . "text/html"))
+;;      (elnode-http-return httpcon "done"))
+;;     ("~\\([A-Za-z0-9_-]\\)"
+;;      (elnode-send httpcon (htmlize-directory-list (string-match 1 elnode-url)))))))
+;;
+;; There are two things defined here:
+;; elnode-map is a macro which takes forms like:
+;;  (url-regex-pattern body-forms)
+;; where url-regex-pattern is an elisp regex that will match the incomming PATHINFO
+;; and body-forms is a list of things to do when that happens.
+;;
+;; elnode-send is a function which send HTML to the http con, doing
+;; all the start and return stuff for you (and working out size of the
+;; request)
 (defun nicferrier-handler (httpcon)
   "Demonstration function"
   (let* ((host (elnode-http-header httpcon "Host"))
-         (body (format "<html><body><b>HELLO @ %s</b></body></html>" host)))
+         (pathinfo (elnode-http-pathinfo httpcon))
+         (body (format 
+                "<html><body><b>HELLO @ %s %s %s</b></body></html>" 
+                host 
+                pathinfo 
+                (elnode-http-version httpcon)
+                )))
     (elnode-http-start 
      httpcon 
      200
