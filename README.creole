@@ -34,7 +34,7 @@ it a handler function.
 
 == HTTP interface ==
 
- * headers
+=== headers ===
 
 You can query headers in the HTTP request in your handler using the
 function elnode-http-header:
@@ -45,19 +45,19 @@ function elnode-http-header:
   )
 }}}
 
- * method
+=== method ===
 
 {{{
 (elnode-http-method httpcon)
 }}}
 
- * pathinfo
+=== pathinfo ===
 
 {{{
 (elnode-http-pathinfo httpcon)
 }}}
 
- * version
+=== version ===
 
 {{{
 (elnode-http-version httpcon)
