@@ -240,25 +240,52 @@ data must be a string right now."
   )
 
 
-;; A concept for a macro to help with multiple dispatch:
-;;
-;; (elnode-start 
-;;  (elnode-map 
-;;   '(("$" 
-;;      (elnode-http-start httpcon 200 '(Content-type . "text/html"))
-;;      (elnode-http-return httpcon "done"))
-;;     ("~\\([A-Za-z0-9_-]\\)"
-;;      (elnode-send httpcon (htmlize-directory-list (string-match 1 elnode-url)))))))
-;;
-;; There are two things defined here:
-;; elnode-map is a macro which takes forms like:
-;;  (url-regex-pattern body-forms)
-;; where url-regex-pattern is an elisp regex that will match the incomming PATHINFO
-;; and body-forms is a list of things to do when that happens.
-;;
-;; elnode-send is a function which send HTML to the http con, doing
-;; all the start and return stuff for you (and working out size of the
-;; request)
+(defun elnode-mapper-find (path url-mapping-table)
+  "Try and find the path inside the url-mapping-table.
+
+Implementation notes: This is basically the standard emacs filter
+with a fixed url-match filter function."
+  (car (delq nil
+             (mapcar (lambda (mapping)
+                       (and (string-match 
+                             (format "^/%s" (car mapping)) 
+                             path)
+                            mapping)) url-mapping-table))))
+
+(defun elnode-test-mapper-find ()
+  "Just a test function for the mapper"
+  (let ((mt '(("$" . (lambda (h) "root matched!"))
+              ("me/$" . (lambda (h) "me matched!")))))
+    ;; Test the paths in the list
+    (mapconcat
+     (lambda (namepath)
+       (let ((path (car namepath))
+             (name (cdr namepath)))
+         (let ((m (elnode-mapper-find path mt)))
+           (if (and m (functionp (cdr m)))
+               (funcall (cdr m) 't)
+             (format "%s failed to match" name)))))
+     '(("/" . "root") ("/me/" . "me"))
+     "\n"
+     )))
+
+(defun elnode-dispatcher (httpcon url-mapping-table &ptional function-404)
+  "Dispatch the request to the correct function based on the mapping table.
+
+url-mapping-table is an alist of url-regex . function-to-dispatch.
+"
+  (let ((m (elnode-mapper-find path mt)))
+    (if (and m (functionp (cdr m)))
+        (funcall (cdr m) 't)
+      ;; We didn't match so fire a 404... possibly a custom 404
+      (if (functionp function-404)
+          (funcall function-404 httpcon)
+        ;; We don't have a custom 404 so send our own
+        (progn 
+          (elnode-http-start httpcon 404 '("Content-type" . "text/html"))
+          (elnode-http-return httpcon "<h1>Not Found</h1>"))))
+    ))
+
 (defun nicferrier-handler (httpcon)
   "Demonstration function"
   (let* ((host (elnode-http-header httpcon "Host"))

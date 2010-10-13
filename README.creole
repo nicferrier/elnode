@@ -34,6 +34,8 @@ it a handler function.
 
 == HTTP interface ==
 
+ * headers
+
 You can query headers in the HTTP request in your handler using the
 function elnode-http-header:
 
@@ -43,15 +45,59 @@ function elnode-http-header:
   )
 }}}
 
+ * method
+
+{{{
+(elnode-http-method httpcon)
+}}}
+
+ * pathinfo
+
+{{{
+(elnode-http-pathinfo httpcon)
+}}}
+
+ * version
+
+{{{
+(elnode-http-version httpcon)
+}}}
+
+
 == But... ==
 
 There's always a but.
 
-The HTTP parsing isn't very complete, only headers are available. You cannot access:
-
- * the method
- * the path
- * the query
- * POST data
+The HTTP parsing isn't very complete, we don't parse querys OR any data sent through POST.
 
 That stuff is coming soon.
+
+
+== ideas ==
+
+A concept for a macro to help with multiple dispatch:
+
+{{{
+(elnode-start 
+ (elnode-map 
+  '(("$" 
+     (elnode-http-start httpcon 200 '(Content-type . "text/html"))
+     (elnode-http-return httpcon "done"))
+    ("~\\([A-Za-z0-9_-]\\)"
+     (elnode-send httpcon (htmlize-directory-list (string-match 1 elnode-url)))))))
+}}}
+
+There are two things defined here:
+elnode-map is a macro which takes forms like:
+
+{{{
+ (url-regex-pattern body-forms)
+}}}
+
+where url-regex-pattern is an elisp regex that will match the
+incomming PATHINFO and body-forms is a list of things to do when that
+happens.
+
+elnode-send is a function which sends HTML to the http con, doing
+all the start and return stuff for you (and working out size of the
+request)
