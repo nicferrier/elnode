@@ -190,6 +190,16 @@ property if specified is the property to return"
    (process-get httpcon :elnode-http-version)
    (elnode-http-parse-status httpcon :elnode-http-version)))
 
+(defun elnode-http-send-string (httpcon str)
+  "Send the string to the HTTP connection.
+
+This is really only a placeholder function for doing transfer-encoding."
+  ;; We should check that we are actually doing chunked encoding...
+  ;; ... but for now we just presume we're doing it.
+  (let ((len (length str)))
+    (process-send-string httpcon (format "%x\r\n%s\r\n" len (or str "")))
+    )
+  )
 
 (defun elnode-http-start (httpcon status &rest header)
   "Start the http response on the specified http connection.
@@ -213,29 +223,36 @@ For example:
                               ("500" . "Server Error")
                               (500 . "Server Error")
                               )))
-    (process-send-string 
-     httpcon 
-     (format
-      "HTTP/1.1 %s %s\r\n%s\r\n\r\n" 
-      status 
-      ;; The status text
-      (cdr (assoc status http-codes-strings))
-      ;; The header
-      (or 
-       (mapconcat 
-        (lambda (p)
-          (format "%s: %s" (car p) (cdr p)))
-        header
-        "\r\n")
-       "\r\n")
-      ))))
+    (let ((header-alist (cons 
+                         '("Transfer-encoding" . "chunked")
+                         header)))
+      (process-send-string 
+       httpcon 
+       (format
+        "HTTP/1.1 %s %s\r\n%s\r\n\r\n" 
+        status 
+        ;; The status text
+        (cdr (assoc status http-codes-strings))
+        ;; The header
+        (or 
+         (mapconcat 
+          (lambda (p)
+            (format "%s: %s" (car p) (cdr p)))
+          header-alist
+          "\r\n")
+         "\r\n")
+        ))))
+  )
 
 (defun elnode-http-return (httpcon data)
   "End the http response on the specified http connection
 
 httpcon is the http connection.
 data must be a string right now."
-  (process-send-string httpcon data)
+  (elnode-http-send-string httpcon data)
+  ;; Need to close the chunked encoding here
+  (elnode-http-send-string httpcon "")
+  (process-send-string httpcon "\r\n")
   (delete-process httpcon)
   )
 
@@ -286,24 +303,36 @@ url-mapping-table is an alist of url-regex . function-to-dispatch.
           (elnode-http-return httpcon "<h1>Not Found</h1>"))))
     ))
 
+(defun elnode-process (httpcon program &rest args)
+  "Run the specified process asyncrhonously and send it's output to the response"
+  )
+
 (defun nicferrier-handler (httpcon)
   "Demonstration function"
   (let* ((host (elnode-http-header httpcon "Host"))
          (pathinfo (elnode-http-pathinfo httpcon))
-         (body (format 
-                "<html><body><b>HELLO @ %s %s %s</b></body></html>" 
-                host 
-                pathinfo 
-                (elnode-http-version httpcon)
-                )))
+         )
     (elnode-http-start 
      httpcon 
      200
      '("Content-type" . "text/html")
-     `("Content-length" . ,(length body))
+     ;;`("Content-length" . ,(length body))
      )
-    (elnode-http-return httpcon body)
+    (elnode-http-return httpcon (format 
+                                 "<html><body><b>HELLO @ %s %s %s</b></body></html>" 
+                                 host 
+                                 pathinfo 
+                                 (elnode-http-version httpcon)
+                                 ))
     )
   )
+
+(defun nicferrier-demo ()
+  "How to start the server with a mapper"
+  (elnode-server-start 
+   (lambda (httpcon)
+     (elnode-dispatcher httpcon
+                        '(("/$" . nicferrier-handler)
+                          ("/nicferrier/$" . nicferrier-handler))))))
 
 ;; End
