@@ -316,7 +316,6 @@ url-mapping-table is an alist of url-regex . function-to-dispatch.
      httpcon 
      200
      '("Content-type" . "text/html")
-     ;;`("Content-length" . ,(length body))
      )
     (elnode-http-return httpcon (format 
                                  "<html><body><b>HELLO @ %s %s %s</b></body></html>" 
