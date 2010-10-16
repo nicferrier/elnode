@@ -77,7 +77,7 @@ Serves only to connect the server process to the client processes"
   (process-put con :server server)
   )
 
-(defun elnode-start (request-handler)
+(defun elnode-start (request-handler port)
   "Start the elnode server.
 
 Most of the work done by the server is actually done by
@@ -100,7 +100,7 @@ Example:
  (elnode-start 'nic-server)
  ;; End
 "
-  (interactive "aHandler function: ")
+  (interactive "aHandler function: \nnPort: ")
   (if (not elnode-server-socket)
       ;; Make a logging func to set the connection's plist to link back to the server
       ;; This let's us bind user handler procs to the server.
@@ -112,7 +112,7 @@ Example:
                :server t
                :nowait 't
                :host 'local
-               :service 8023
+               :service port
                :family 'ipv4
                :filter 'elnode-filter
                :sentinel 'elnode-sentinel
