@@ -137,7 +137,10 @@ Example:
     (if server
         (progn
           (delete-process (cdr server))
-          (setq elnode-server-socket (assq-delete-all port elnode-server-socket))))))
+          (setq elnode-server-socket 
+                (remove-if 
+                 (lambda (elem) (equal (car elem) port))
+                 elnode-server-socket))))))
 
 
 ;; HTTP API methods
@@ -371,6 +374,10 @@ args is a list of arguments to pass to the program."
     (set-process-filter p 'elnode-child-process-filter)
     (set-process-sentinel p 'elnode-child-process-sentinel)
     ))
+
+
+
+;; Demo handlers
 
 (defun nicferrier-handler (httpcon)
   "Demonstration function.
