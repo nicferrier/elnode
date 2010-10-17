@@ -2,21 +2,25 @@
 ;;; this is like node.js, but for elisp (obviously)
 ;;; (C) Nic Ferrier, 2010
 
+
+;; Style note
+;; This codes uses the emacs style of elnode--... for private functions.
+
 (defvar elnode-server-socket nil
-  "Where we store the server socket
+  "Where we store the server sockets.
 
-This code has been written to allow multiple servers each with
-their own request handler. To facilitate that this variable must
-be replaced; a hashtable or alist of port->server-process would
-be good enough.
-")
+This is an alist of proc->server-process.")
 
-(defun elnode-sentinel (process status)
+
+;; Main control functions
+
+(defun elnode--sentinel (process status)
   "Sentinel function for the main server and for the client sockets"
   (cond
    ;; Server status
    ((and 
-     (equal process elnode-server-socket)
+     ;;(equal process elnode-server-socket)
+     (assoc (process-contact process :service) elnode-server-socket)
      (equal status "deleted\n"))
     (kill-buffer (process-buffer process))
     (message "elnode server stopped"))
@@ -37,7 +41,7 @@ be good enough.
    ))
 
 
-(defun elnode-filter (process data)
+(defun elnode--filter (process data)
   "Filter for the clients.
 
 This does the work of finding and calling the user http
@@ -70,7 +74,7 @@ port number of the connection."
         )
       )))
 
-(defun elnode-log-fn (server con msg)
+(defun elnode--log-fn (server con msg)
   "Log function for elnode.
 
 Serves only to connect the server process to the client processes"
@@ -101,33 +105,42 @@ Example:
  ;; End
 "
   (interactive "aHandler function: \nnPort: ")
-  (if (not elnode-server-socket)
-      ;; Make a logging func to set the connection's plist to link back to the server
-      ;; This let's us bind user handler procs to the server.
-      (setq elnode-server-socket 
-            (let ((buf (get-buffer-create "*elnode-webserver*")))
-              (make-network-process 
-               :name "*elnode-webserver-proc*"
-               :buffer buf
-               :server t
-               :nowait 't
-               :host 'local
-               :service port
-               :family 'ipv4
-               :filter 'elnode-filter
-               :sentinel 'elnode-sentinel
-               :log 'elnode-log-fn
-               :plist `(:elnode-http-handler ,request-handler)
-               )
-              )))
+  (if (not (assoc port elnode-server-socket))
+      ;; Add a new server socket to the list
+      (setq elnode-server-socket
+            (cons 
+             (cons port
+                   (let ((buf (get-buffer-create "*elnode-webserver*")))
+                     (make-network-process 
+                      :name "*elnode-webserver-proc*"
+                      :buffer buf
+                      :server t
+                      :nowait 't
+                      :host 'local
+                      :service port
+                      :family 'ipv4
+                      :filter 'elnode--filter
+                      :sentinel 'elnode--sentinel
+                      :log 'elnode--log-fn
+                      :plist `(:elnode-http-handler ,request-handler)
+                      )
+                     ))
+             elnode-server-socket))
+    )
   )
 
-(defun elnode-stop ()
+;; TODO: make this take an argument for the 
+(defun elnode-stop (port)
   "Stop the elnode server"
-  (interactive)
-  (delete-process elnode-server-socket)
-  (setq elnode-server-socket nil)
-  )
+  (interactive "nPort: ")
+  (let ((server (assoc port elnode-server-socket)))
+    (if server
+        (progn
+          (delete-process (cdr server))
+          (setq elnode-server-socket (assq-delete-all port elnode-server-socket))))))
+
+
+;; HTTP API methods
 
 (defun elnode-http-parse (httpcon)
   "Parse the HTTP header for the process."
@@ -156,7 +169,7 @@ Example:
     (cdr (assoc name hdr))
     ))
 
-(defun elnode-http-parse-status (httpcon &optional property)
+(defun elnode--http-parse-status (httpcon &optional property)
   "Parse the status line.
 
 property if specified is the property to return"
@@ -176,19 +189,19 @@ property if specified is the property to return"
   "Get the PATHINFO of the request"
   (or
    (process-get httpcon :elnode-http-pathinfo)
-   (elnode-http-parse-status httpcon :elnode-http-pathinfo)))
+   (elnode--http-parse-status httpcon :elnode-http-pathinfo)))
 
 (defun elnode-http-method (httpcon)
   "Get the PATHINFO of the request"
   (or
    (process-get httpcon :elnode-http-method)
-   (elnode-http-parse-status httpcon :elnode-http-method)))
+   (elnode--http-parse-status httpcon :elnode-http-method)))
 
 (defun elnode-http-version (httpcon)
   "Get the PATHINFO of the request"
   (or
    (process-get httpcon :elnode-http-version)
-   (elnode-http-parse-status httpcon :elnode-http-version)))
+   (elnode--http-parse-status httpcon :elnode-http-version)))
 
 (defun elnode-http-send-string (httpcon str)
   "Send the string to the HTTP connection.
@@ -223,6 +236,7 @@ For example:
                               ("500" . "Server Error")
                               (500 . "Server Error")
                               )))
+    ;; Send the header
     (let ((header-alist (cons 
                          '("Transfer-encoding" . "chunked")
                          header)))
@@ -257,7 +271,7 @@ data must be a string right now."
   )
 
 
-(defun elnode-mapper-find (path url-mapping-table)
+(defun elnode--mapper-find (path url-mapping-table)
   "Try and find the path inside the url-mapping-table.
 
 Implementation notes: This is basically the standard emacs filter
@@ -278,7 +292,7 @@ with a fixed url-match filter function."
      (lambda (namepath)
        (let ((path (car namepath))
              (name (cdr namepath)))
-         (let ((m (elnode-mapper-find path mt)))
+         (let ((m (elnode--mapper-find path mt)))
            (if (and m (functionp (cdr m)))
                (funcall (cdr m) 't)
              (format "%s failed to match" name)))))
@@ -291,7 +305,7 @@ with a fixed url-match filter function."
 
 url-mapping-table is an alist of url-regex . function-to-dispatch.
 "
-  (let ((m (elnode-mapper-find path mt)))
+  (let ((m (elnode--mapper-find path mt)))
     (if (and m (functionp (cdr m)))
         (funcall (cdr m) 't)
       ;; We didn't match so fire a 404... possibly a custom 404
@@ -303,20 +317,70 @@ url-mapping-table is an alist of url-regex . function-to-dispatch.
           (elnode-http-return httpcon "<h1>Not Found</h1>"))))
     ))
 
-(defun elnode-process (httpcon program &rest args)
-  "Run the specified process asyncrhonously and send it's output to the response"
+
+;; elnode child process functions
+
+;; TODO: handle errors better than messaging
+(defun elnode-child-process-sentinel (process status)
+  "A generic sentinel for elnode child processes.
+
+elnode child processes are just emacs asynchronous processes that
+send their output to an elnode http connection.
+
+The main job of this sentinel is to send the end of the http
+stream when the child process finishes."
+  (cond
+   ((equal status "finished\n")
+    (let ((httpcon (process-get process :elnode-httpcon)))
+      (elnode-http-send-string httpcon  "")
+      (process-send-string httpcon "\r\n")
+      (delete-process httpcon)))
+   (t 
+    (message "elnode-chlild-process-sentinel: %s" status)
+    )
+   )
   )
 
+(defun elnode-child-process-filter (process data)
+  "A generic filter function for elnode child processes.
+
+elnode child processes are just emacs asynchronous processes that
+send their output to an elnode http connection.
+
+This filter function does the job of taking the output from the
+async process and finding the associated elnode http connection
+and sending the data there."
+  (let ((httpcon (process-get process :elnode-httpcon)))
+    (elnode-http-send-string httpcon data)
+    )
+  )
+
+(defun elnode-child-process (httpcon program &rest args)
+  "Run the specified process asynchronously and send it's output to the http connection.
+
+program is the program to run.
+args is a list of arguments to pass to the program."
+  (let* ((args `(,(format "%s-%s" (process-name httpcon) program)
+                 ,(format " %s-%s" (process-name httpcon) program)
+                 ,program
+                 ,@args
+                ))
+         (p (apply 'start-process args)))
+    ;; Bind the http connection to the process
+    (process-put p :elnode-httpcon httpcon)
+    (set-process-filter p 'elnode-child-process-filter)
+    (set-process-sentinel p 'elnode-child-process-sentinel)
+    ))
+
 (defun nicferrier-handler (httpcon)
-  "Demonstration function"
+  "Demonstration function.
+
+This is a simple handler that just sends some HTML in response to
+any request."
   (let* ((host (elnode-http-header httpcon "Host"))
          (pathinfo (elnode-http-pathinfo httpcon))
          )
-    (elnode-http-start 
-     httpcon 
-     200
-     '("Content-type" . "text/html")
-     )
+    (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
     (elnode-http-return httpcon (format 
                                  "<html><body><b>HELLO @ %s %s %s</b></body></html>" 
                                  host 
@@ -326,8 +390,23 @@ url-mapping-table is an alist of url-regex . function-to-dispatch.
     )
   )
 
-(defun nicferrier-demo ()
-  "How to start the server with a mapper"
+(defun nicferrier-process-handler (httpcon)
+  "Demonstration function
+
+This is a handler based on an asynchronous process."
+  (let* ((host (elnode-http-header httpcon "Host"))
+         (pathinfo (elnode-http-pathinfo httpcon))
+         )
+    (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
+    (elnode-child-process httpcon "cat" "/home/nferrier/elnode/example.html")
+    )
+  )
+
+(defun nicferrier-mapper-handler ()
+  "Demonstration function
+
+Shows how a handler can contain a dispatcher to make it simple to
+handle more complex requests."
   (elnode-server-start 
    (lambda (httpcon)
      (elnode-dispatcher httpcon
