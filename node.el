@@ -37,7 +37,7 @@ This is an alist of proc->server-process.")
 
    ;; Default
    (t
-    (message "wtf? %s %s" process status))
+    (message "elnode status: %s %s" process status))
    ))
 
 
@@ -145,10 +145,17 @@ Example:
 
 ;; HTTP API methods
 
-(defun elnode-http-parse (httpcon)
-  "Parse the HTTP header for the process."
+(defun elnode--http-parse (httpcon)
+  "Parse the HTTP header for the process.
+
+Returns a cons of the status line and the header association-list:
+
+ (http-status . http-header-alist)
+"
   (with-current-buffer (process-buffer httpcon)
-    ;; We need to record the end of header so we can use that instead of point-max
+    ;; TODO improve this parsing - we need to record the end of
+    ;; header so we can use that instead of point-max (when we're
+    ;; parsing POST bodys the point-max method will be no good)
     (let* ((lines (split-string (buffer-substring (point-min) (point-max)) "\r\n" 't))
            (status (car lines))
            (header (cdr lines)))
@@ -161,14 +168,17 @@ Example:
           (if (string-match "\\([A-Za-z0-9_-]+\\): \\(.*\\)" hdrline)
               (cons (match-string 1 hdrline) (match-string 2 hdrline))))
         header))))
-  (process-get httpcon :elnode-http-header)
+  (cons
+   (process-get httpcon :elnode-http-status)
+   (process-get httpcon :elnode-http-header)
+   )
   )
 
 (defun elnode-http-header (httpcon name)
   "Get the header specified by name from the header"
   (let ((hdr (or 
               (process-get httpcon :elnode-http-header)
-              (elnode-http-parse httpcon))))
+              (cdr (elnode--http-parse httpcon)))))
     (cdr (assoc name hdr))
     ))
 
@@ -176,7 +186,9 @@ Example:
   "Parse the status line.
 
 property if specified is the property to return"
-  (let ((http-line (process-get httpcon :elnode-http-status)))
+  (let ((http-line (or
+                    (process-get httpcon :elnode-http-status)
+                    (car (elnode--http-parse httpcon)))))
     (string-match 
      "\\(GET\\|POST\\|HEAD\\) \\(.*\\) HTTP/\\(1.[01]\\)" 
      http-line)
@@ -186,7 +198,7 @@ property if specified is the property to return"
     (if property
         (process-get httpcon property))
     )
-  )
+  ) 
 
 (defun elnode-http-pathinfo (httpcon)
   "Get the PATHINFO of the request"
@@ -279,6 +291,7 @@ data must be a string right now."
 
 Implementation notes: This is basically the standard emacs filter
 with a fixed url-match filter function."
+  (message "elnode--mapper-find path: %s" path)
   (car (delq nil
              (mapcar (lambda (mapping)
                        (and (string-match 
@@ -289,7 +302,8 @@ with a fixed url-match filter function."
 (defun elnode-test-mapper-find ()
   "Just a test function for the mapper"
   (let ((mt '(("$" . (lambda (h) "root matched!"))
-              ("me/$" . (lambda (h) "me matched!")))))
+              ("me/$" . (lambda (h) "me matched!"))
+              ("nicferrier/$" . (lambda (h) "hi nic")))))
     ;; Test the paths in the list
     (mapconcat
      (lambda (namepath)
@@ -299,25 +313,25 @@ with a fixed url-match filter function."
            (if (and m (functionp (cdr m)))
                (funcall (cdr m) 't)
              (format "%s failed to match" name)))))
-     '(("/" . "root") ("/me/" . "me"))
+     '(("/" . "root") ("/me/" . "me") ("/nicferrier/" . "hi nic"))
      "\n"
      )))
 
-(defun elnode-dispatcher (httpcon url-mapping-table &ptional function-404)
+(defun elnode-dispatcher (httpcon url-mapping-table &optional function-404)
   "Dispatch the request to the correct function based on the mapping table.
 
 url-mapping-table is an alist of url-regex . function-to-dispatch.
 "
-  (let ((m (elnode--mapper-find path mt)))
-    (if (and m (functionp (cdr m)))
-        (funcall (cdr m) 't)
+  (let ((m (elnode--mapper-find (elnode-http-pathinfo httpcon) url-mapping-table)))
+    (if (and m (functionp (caddr m)))
+        (funcall (caddr m) httpcon)
       ;; We didn't match so fire a 404... possibly a custom 404
       (if (functionp function-404)
           (funcall function-404 httpcon)
         ;; We don't have a custom 404 so send our own
         (progn 
           (elnode-http-start httpcon 404 '("Content-type" . "text/html"))
-          (elnode-http-return httpcon "<h1>Not Found</h1>"))))
+          (elnode-http-return httpcon "<h1>Not Found</h1>\r\n"))))
     ))
 
 
@@ -409,15 +423,13 @@ This is a handler based on an asynchronous process."
     )
   )
 
-(defun nicferrier-mapper-handler ()
+(defun nicferrier-mapper-handler (httpcon)
   "Demonstration function
 
 Shows how a handler can contain a dispatcher to make it simple to
 handle more complex requests."
-  (elnode-server-start 
-   (lambda (httpcon)
-     (elnode-dispatcher httpcon
-                        '(("/$" . nicferrier-handler)
-                          ("/nicferrier/$" . nicferrier-handler))))))
+  (elnode-dispatcher httpcon
+                     '(("/$" . 'nicferrier-handler)
+                       ("nicferrier/$" . 'nicferrier-handler))))
 
 ;; End
