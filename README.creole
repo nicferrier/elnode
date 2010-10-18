@@ -64,6 +64,39 @@ function elnode-http-header:
 }}}
 
 
+== Dispatching ==
+
+Handler functions can be simple functions to respond to everything
+coming into a server. It's more normal that you would have a server
+that did different things on different urls so elnode provides a url
+dispatcher function, you can use it like this:
+
+{{{
+  (elnode-dispatcher httpcon
+                     '(("/$" . 'root-handler)
+                       ("users/$" . 'users-handler))))
+}}}
+
+This seems like something people will want to do a lot so some sort of
+macro seems likely in the near future.
+
+
+== Calling processes ==
+
+There is early support for calling unix processes asynchronously:
+
+{{{
+(elnode-child-process httpcon 
+    "cat" "/home/nferrier/elnode/example.html"
+    )
+}}}
+
+Would call the program //cat// with the HTML file as an argument. The
+output of the process will be copied to the HTTP connection
+asychronously (so fast).
+
+Again, lot's of improvement needed here but this does work quite well.
+
 == But... ==
 
 There's always a but.
@@ -72,32 +105,3 @@ The HTTP parsing isn't very complete, we don't parse querys OR any data sent thr
 
 That stuff is coming soon.
 
-
-== ideas ==
-
-A concept for a macro to help with multiple dispatch:
-
-{{{
-(elnode-start 
- (elnode-map 
-  '(("$" 
-     (elnode-http-start httpcon 200 '(Content-type . "text/html"))
-     (elnode-http-return httpcon "done"))
-    ("~\\([A-Za-z0-9_-]\\)"
-     (elnode-send httpcon (htmlize-directory-list (string-match 1 elnode-url)))))))
-}}}
-
-There are two things defined here:
-elnode-map is a macro which takes forms like:
-
-{{{
- (url-regex-pattern body-forms)
-}}}
-
-where url-regex-pattern is an elisp regex that will match the
-incomming PATHINFO and body-forms is a list of things to do when that
-happens.
-
-elnode-send is a function which sends HTML to the http con, doing
-all the start and return stuff for you (and working out size of the
-request)
