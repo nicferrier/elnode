@@ -193,6 +193,8 @@ property if specified is the property to return"
      "\\(GET\\|POST\\|HEAD\\) \\(.*\\) HTTP/\\(1.[01]\\)" 
      http-line)
     (process-put httpcon :elnode-http-method (match-string 1 http-line))
+    (process-put httpcon :elnode-http-resource (match-string 2 http-line))
+    ;; TODO further parse the resource to take the path and the query out
     (process-put httpcon :elnode-http-pathinfo (match-string 2 http-line))
     (process-put httpcon :elnode-http-version (match-string 3 http-line))
     (if property
