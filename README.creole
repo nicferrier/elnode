@@ -57,6 +57,22 @@ function elnode-http-header:
 (elnode-http-pathinfo httpcon)
 }}}
 
+
+=== query ===
+
+{{{
+(elnode-http-query httpcon)
+}}}
+
+
+=== query parameters ===
+
+{{{
+(elnode-http-params httpcon)
+}}}
+
+this returns an alist of the params in the query.
+
 === version ===
 
 {{{
