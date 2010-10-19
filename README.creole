@@ -93,8 +93,10 @@ dispatcher function, you can use it like this:
                        ("users/$" . 'users-handler))))
 }}}
 
-This seems like something people will want to do a lot so some sort of
-macro seems likely in the near future.
+One of the chief advantages of any lisp is the amount of flexibility
+there can be in code like this. If elnode is at all successfull at
+catching people's imaginations I would expect a variety of
+dispatchers to emerge.
 
 
 == Calling processes ==
