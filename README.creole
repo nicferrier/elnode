@@ -117,7 +117,7 @@ Again, lot's of improvement needed here but this does work quite well.
 
 There's always a but.
 
-The HTTP parsing isn't very complete, we don't parse querys OR any data sent through POST.
+The HTTP parsing isn't very complete, we don't parse any data sent through POST.
 
 That stuff is coming soon.
 
