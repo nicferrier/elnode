@@ -26,11 +26,21 @@ Well... you can define a handler function:
 And then start the server:
 
 {{{
-(elnode-start 'nicferrier-handler)
+(elnode-start 'nicferrier-handler 8000)
 }}}
 
 You can also start the server interactively... you still have to pass
-it a handler function.
+it a handler function and a port.
+
+=== Stopping the server ===
+
+If you can remember the port you started your server on then you'll be
+able to stop it, like:
+
+{{{
+(elnode-stop 8000)
+}}}
+
 
 == HTTP interface ==
 
