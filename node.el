@@ -68,6 +68,8 @@ port number of the connection."
         (goto-char (point-min))
         (if (re-search-forward "\r\n\r\n" nil 't)
             (let ((server (process-get process :server)))
+              ;; This is where we call the user handler
+              ;; TODO: this needs error protection so we can return an error?
               (funcall (process-get server :elnode-http-handler) process)
               )
           )
@@ -182,6 +184,8 @@ Returns a cons of the status line and the header association-list:
     (cdr (assoc name hdr))
     ))
 
+
+
 (defun elnode--http-parse-status (httpcon &optional property)
   "Parse the status line.
 
@@ -194,19 +198,62 @@ property if specified is the property to return"
      http-line)
     (process-put httpcon :elnode-http-method (match-string 1 http-line))
     (process-put httpcon :elnode-http-resource (match-string 2 http-line))
-    ;; TODO further parse the resource to take the path and the query out
-    (process-put httpcon :elnode-http-pathinfo (match-string 2 http-line))
     (process-put httpcon :elnode-http-version (match-string 3 http-line))
     (if property
         (process-get httpcon property))
     )
   ) 
 
+(defun elnode--http-parse-resource (httpcon &optional property)
+  "Convert the specified resource to a path and a query"
+  (let ((resource 
+         (or
+          (process-get httpcon :elnode-http-resource)
+          (elnode--http-parse-status httpcon :elnode-http-resource))))
+    (string-match "\\(/[A-Za-z0-9_/-]+/\\|/\\)\\(\\?.*\\)*" resource)
+    (process-put httpcon :elnode-http-pathinfo (match-string 1 resource))
+    (if (match-string 2 resource)
+        (let ((query (match-string 2 resource)))
+          (string-match "\\?\\(.+\\)" query)
+          (if (match-string 1 query)
+              (process-put httpcon :elnode-http-query (match-string 1 query))))))
+  (if property
+      (elnode--http-parse-status httpcon property))
+    )
+
 (defun elnode-http-pathinfo (httpcon)
   "Get the PATHINFO of the request"
   (or
    (process-get httpcon :elnode-http-pathinfo)
-   (elnode--http-parse-status httpcon :elnode-http-pathinfo)))
+   (elnode--http-parse-resource httpcon :elnode-http-pathinfo)))
+
+(defun elnode-http-query (httpcon)
+  "Get the QUERY of the request"
+  (or
+   (process-get httpcon :elnode-http-query)
+   (elnode--http-parse-resource httpcon :elnode-http-query)))
+
+(defun elnode-http-params (httpcon)
+  "Get an alist of the parameters in the request"
+  (or 
+   (process-get httpcon :elnode-http-params)
+   (let ((query (elnode-http-query httpcon)))
+     (if query
+         (let ((alist (mapcar 
+                       (lambda (nv)
+                         (string-match "\\([^=]+\\)\\(=\\(.*\\)\\)*" nv)
+                         (cons 
+                          (match-string 1 nv)
+                          (if (match-string 2 nv)
+                              (match-string 3 nv)
+                            nil)))
+                       (split-string query "&"))
+                      ))
+           (process-put httpcon :elnode-http-params alist)
+           alist)
+       ;; Else just return nil
+       '()
+       ))))
 
 (defun elnode-http-method (httpcon)
   "Get the PATHINFO of the request"
@@ -404,12 +451,20 @@ any request."
          (pathinfo (elnode-http-pathinfo httpcon))
          )
     (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
-    (elnode-http-return httpcon (format 
-                                 "<html><body><b>HELLO @ %s %s %s</b></body></html>" 
-                                 host 
-                                 pathinfo 
-                                 (elnode-http-version httpcon)
-                                 ))
+    (elnode-http-return 
+     httpcon 
+     (format 
+      "<html>
+<body>
+<h1>%s</h1>
+<b>HELLO @ %s %s %s</b>
+</body>
+</html>" 
+      (or (cdr (assoc "name" (elnode-http-params httpcon))) "no name")
+      host 
+      pathinfo 
+      (elnode-http-version httpcon)
+      ))
     )
   )
 
