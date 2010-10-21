@@ -210,7 +210,8 @@ property if specified is the property to return"
          (or
           (process-get httpcon :elnode-http-resource)
           (elnode--http-parse-status httpcon :elnode-http-resource))))
-    (string-match "\\(/[A-Za-z0-9_/-]+/\\|/\\)\\(\\?.*\\)*" resource)
+    (or (string-match "\\(/\\)\\(\\?.*\\)" resource)
+        (string-match "\\(/[A-Za-z0-9_/.-]+\\)\\(\\?.*\\)*" resource))
     (process-put httpcon :elnode-http-pathinfo (match-string 1 resource))
     (if (match-string 2 resource)
         (let ((query (match-string 2 resource)))
@@ -366,6 +367,12 @@ with a fixed url-match filter function."
      "\n"
      )))
 
+(defun elnode-handler-404 (httpcon)
+  "A generic 404 handler"
+  (elnode-http-start httpcon 404 '("Content-type" . "text/html"))
+  (elnode-http-return httpcon "<h1>Not Found</h1>\r\n"))
+
+
 (defun elnode-dispatcher (httpcon url-mapping-table &optional function-404)
   "Dispatch the request to the correct function based on the mapping table.
 
@@ -378,9 +385,8 @@ url-mapping-table is an alist of url-regex . function-to-dispatch.
       (if (functionp function-404)
           (funcall function-404 httpcon)
         ;; We don't have a custom 404 so send our own
-        (progn 
-          (elnode-http-start httpcon 404 '("Content-type" . "text/html"))
-          (elnode-http-return httpcon "<h1>Not Found</h1>\r\n"))))
+        (elnode-handler-404 httpcon)
+        ))
     ))
 
 
@@ -459,7 +465,8 @@ any request."
 <h1>%s</h1>
 <b>HELLO @ %s %s %s</b>
 </body>
-</html>" 
+</html>
+" 
       (or (cdr (assoc "name" (elnode-http-params httpcon))) "no name")
       host 
       pathinfo 
@@ -479,6 +486,35 @@ This is a handler based on an asynchronous process."
     (elnode-child-process httpcon "cat" "/home/nferrier/elnode/example.html")
     )
   )
+
+
+(defvar nicferrier-webserver-docroot "/home/nferrier/elnode")
+(defun nicferrier-process-webserver (httpcon)
+  "Demonstration webserver."
+  (let* ((docroot nicferrier-webserver-docroot)
+         (pathinfo (elnode-http-pathinfo httpcon))
+         (targetfile (format "%s/%s" docroot (if (equal pathinfo "/")
+                                                 ""
+                                               pathinfo))))
+    (if (not (or 
+              (file-exists-p targetfile)
+              ;; Test the targetfile is under the docroot
+              (compare-strings           
+               docroot 0 (length docroot)
+               (file-truename targetfile) 0 (length docroot)
+               )
+              ))
+        (elnode-handler-404 httpcon)
+      ;; The file exists and is legal
+      (progn
+        (require 'mailcap)
+        (mailcap-parse-mimetypes)
+        (let ((mimetype (or (mm-default-file-encoding targetfile)
+                            "application/octet-stream")))
+          (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
+          (elnode-child-process httpcon "cat" targetfile)
+          )
+        ))))
 
 (defun nicferrier-mapper-handler (httpcon)
   "Demonstration function
