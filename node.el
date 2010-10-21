@@ -230,8 +230,8 @@ property if specified is the property to return"
          (or
           (process-get httpcon :elnode-http-resource)
           (elnode--http-parse-status httpcon :elnode-http-resource))))
-    (or (string-match "\\(/\\)\\(\\?.*\\)*" resource)
-        (string-match "\\(/[A-Za-z0-9_/.-]+\\)\\(\\?.*\\)*" resource))
+    (or (string-match "^\\(/\\)\\(\\?.*\\)*$" resource)
+        (string-match "^\\(/[A-Za-z0-9_/.-]+\\)\\(\\?.*\\)*$" resource))
     (process-put httpcon :elnode-http-pathinfo (match-string 1 resource))
     (if (match-string 2 resource)
         (let ((query (match-string 2 resource)))
@@ -509,6 +509,7 @@ This is a handler based on an asynchronous process."
 
 
 (defvar nicferrier-webserver-docroot "/home/nferrier/elnode")
+(defvar nicferrier-webserver-extra-mimetypes '(("text/plain" . "creole")))
 (defun nicferrier-process-webserver (httpcon)
   "Demonstration webserver."
   (let* ((docroot nicferrier-webserver-docroot)
@@ -541,6 +542,7 @@ This is a handler based on an asynchronous process."
           (require 'mailcap)
           (mailcap-parse-mimetypes)
           (let ((mimetype (or (mm-default-file-encoding targetfile)
+                              (car (rassoc "creole" nicferrier-webserver-extra-mimetypes))
                               "application/octet-stream")))
             (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
             (elnode-child-process httpcon "cat" targetfile)
