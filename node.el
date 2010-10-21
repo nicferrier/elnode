@@ -70,11 +70,15 @@ port number of the connection."
             (let ((server (process-get process :server)))
               ;; This is where we call the user handler
               ;; TODO: this needs error protection so we can return an error?
-              (funcall (process-get server :elnode-http-handler) process)
+              (condition-case nil
+                  (funcall (process-get server :elnode-http-handler) process)
+                ('t 
+                 ;; Try and send a 500 error response
+                 (process-send-string process "HTTP/1.1 500 Server-Error\r\n<h1>Server Error</h1>\r\n"))
               )
           )
         )
-      )))
+      ))))
 
 (defun elnode--log-fn (server con msg)
   "Log function for elnode.
@@ -145,6 +149,22 @@ Example:
                  elnode-server-socket))))))
 
 
+(defun elnode-list-buffers ()
+  "List the current buffers being managed by elnode"
+  (interactive)
+  (with-current-buffer (get-buffer-create "*elnode-buffers*")
+    (erase-buffer)
+    (mapc
+     (lambda (b)
+       (save-excursion
+         (if (string-match " \\*elnode-.*" (buffer-name b))
+             (insert (format "%s\n" b)))
+       ))
+     (sort (buffer-list)
+           (lambda (a b)
+             (string-lessp (buffer-name b) (buffer-name a))))))
+  (display-buffer (get-buffer "*elnode-buffers*")))
+
 ;; HTTP API methods
 
 (defun elnode--http-parse (httpcon)
@@ -210,7 +230,7 @@ property if specified is the property to return"
          (or
           (process-get httpcon :elnode-http-resource)
           (elnode--http-parse-status httpcon :elnode-http-resource))))
-    (or (string-match "\\(/\\)\\(\\?.*\\)" resource)
+    (or (string-match "\\(/\\)\\(\\?.*\\)*" resource)
         (string-match "\\(/[A-Za-z0-9_/.-]+\\)\\(\\?.*\\)*" resource))
     (process-put httpcon :elnode-http-pathinfo (match-string 1 resource))
     (if (match-string 2 resource)
@@ -493,9 +513,9 @@ This is a handler based on an asynchronous process."
   "Demonstration webserver."
   (let* ((docroot nicferrier-webserver-docroot)
          (pathinfo (elnode-http-pathinfo httpcon))
-         (targetfile (format "%s/%s" docroot (if (equal pathinfo "/")
-                                                 ""
-                                               pathinfo))))
+         (targetfile (format "%s/%s" 
+                             docroot 
+                             (if (equal pathinfo "/")  "" pathinfo))))
     (if (not (or 
               (file-exists-p targetfile)
               ;; Test the targetfile is under the docroot
@@ -506,15 +526,26 @@ This is a handler based on an asynchronous process."
               ))
         (elnode-handler-404 httpcon)
       ;; The file exists and is legal
-      (progn
-        (require 'mailcap)
-        (mailcap-parse-mimetypes)
-        (let ((mimetype (or (mm-default-file-encoding targetfile)
-                            "application/octet-stream")))
-          (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
-          (elnode-child-process httpcon "cat" targetfile)
-          )
-        ))))
+      (if (file-directory-p targetfile)
+          ;; What's the best way to do simple directory indexes?
+          (let* ((dirlist (directory-files-and-attributes targetfile))
+                 (html-dir (mapconcat 
+                            (lambda (dir-entry)
+                              (format "<a href='%s'>%s</a><br/>" (car dir-entry) (car dir-entry))
+                              )
+                            dirlist 
+                            "\n")))
+            (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
+            (elnode-http-return httpcon html-dir))
+        (progn
+          (require 'mailcap)
+          (mailcap-parse-mimetypes)
+          (let ((mimetype (or (mm-default-file-encoding targetfile)
+                              "application/octet-stream")))
+            (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
+            (elnode-child-process httpcon "cat" targetfile)
+            )
+          )))))
 
 (defun nicferrier-mapper-handler (httpcon)
   "Demonstration function
