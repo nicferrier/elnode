@@ -521,7 +521,7 @@ This is a handler based on an asynchronous process."
   "Demonstration webserver."
   (let* ((docroot nicferrier-webserver-docroot)
          (pathinfo (elnode-http-pathinfo httpcon))
-         (targetfile (format "%s/%s" 
+         (targetfile (format "%s%s" 
                              docroot 
                              (if (equal pathinfo "/")  "" pathinfo))))
     (if (not (or 
@@ -539,7 +539,7 @@ This is a handler based on an asynchronous process."
           (let* ((dirlist (directory-files-and-attributes targetfile))
                  (html-dir (mapconcat 
                             (lambda (dir-entry)
-                              (format "<a href='%s'>%s</a><br/>" (car dir-entry) (car dir-entry))
+                              (format "<a href='%s'>%s</a><br/>\r\n" (car dir-entry) (car dir-entry))
                               )
                             dirlist 
                             "\n")))
@@ -548,7 +548,9 @@ This is a handler based on an asynchronous process."
         (progn
           (require 'mailcap)
           (mailcap-parse-mimetypes)
-          (let ((mimetype (or (car (rassoc "creole" nicferrier-webserver-extra-mimetypes))
+          (let ((mimetype (or (car (rassoc 
+                                    (cadr (split-string targetfile "\\."))
+                                    nicferrier-webserver-extra-mimetypes))
                               (mm-default-file-encoding targetfile)
                               "application/octet-stream")))
             (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
