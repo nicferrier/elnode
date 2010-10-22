@@ -508,8 +508,15 @@ This is a handler based on an asynchronous process."
   )
 
 
-(defvar nicferrier-webserver-docroot "/home/nferrier/elnode")
-(defvar nicferrier-webserver-extra-mimetypes '(("text/plain" . "creole")))
+(defcustom nicferrier-webserver-docroot "/home/nferrier/elnode"
+  "the document root of the webserver.")
+
+(defcustom nicferrier-webserver-extra-mimetypes '(("text/plain" . "creole")
+                                               ("text/plain" . "el"))
+  "this is just a way of hacking the mime type discovery so we
+  can add more file mappings more easily than editing
+  /etc/mime.types")
+
 (defun nicferrier-process-webserver (httpcon)
   "Demonstration webserver."
   (let* ((docroot nicferrier-webserver-docroot)
@@ -541,8 +548,8 @@ This is a handler based on an asynchronous process."
         (progn
           (require 'mailcap)
           (mailcap-parse-mimetypes)
-          (let ((mimetype (or (mm-default-file-encoding targetfile)
-                              (car (rassoc "creole" nicferrier-webserver-extra-mimetypes))
+          (let ((mimetype (or (car (rassoc "creole" nicferrier-webserver-extra-mimetypes))
+                              (mm-default-file-encoding targetfile)
                               "application/octet-stream")))
             (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
             (elnode-child-process httpcon "cat" targetfile)
