@@ -464,6 +464,69 @@ args is a list of arguments to pass to the program."
     (set-process-sentinel p 'elnode-child-process-sentinel)
     ))
 
+;; Webserver stuff
+
+(defcustom elnode-webserver-docroot "/home/nferrier/elnode"
+  "the document root of the webserver.")
+
+(defcustom elnode-webserver-extra-mimetypes '(("text/plain" . "creole")
+                                               ("text/plain" . "el"))
+  "this is just a way of hacking the mime type discovery so we
+  can add more file mappings more easily than editing
+  /etc/mime.types")
+
+(defun elnode-webserver-handler-maker (&optional docroot extra-mime-types)
+  "Make a webserver handler possibly with the specific docroot and extra-mime-types
+
+Returns a proc which is the handler."
+  (lexical-let ((my-docroot (or 
+                             docroot
+                             elnode-webserver-docroot))
+                (my-mime-types (or extra-mime-types
+                                   elnode-webserver-extra-mimetypes)))
+    ;; Return the proc
+    (lambda (httpcon)
+      (let* ((pathinfo (elnode-http-pathinfo httpcon))
+             (targetfile (format "%s%s" 
+                                 my-docroot 
+                                 (if (equal pathinfo "/")  "" pathinfo))))
+        (if (not (or 
+                  (file-exists-p targetfile)
+                  ;; Test the targetfile is under the docroot
+                  (compare-strings           
+                   my-docroot 0 (length my-docroot)
+                   (file-truename targetfile) 0 (length docroot)
+                   )
+                  ))
+            (elnode-handler-404 httpcon)
+          ;; The file exists and is legal
+          (if (file-directory-p targetfile)
+              ;; What's the best way to do simple directory indexes?
+              (let* ((dirlist (directory-files-and-attributes targetfile))
+                     (html-dir (format "<html><head><title>%s</title></head><body><h1>%s</h1><div>%s</div></body></html>"
+                                       pathinfo
+                                       pathinfo
+                                       (mapconcat 
+                                        (lambda (dir-entry)
+                                          (format "<a href='%s'>%s</a><br/>\r\n" (car dir-entry) (car dir-entry))
+                                          )
+                                        dirlist 
+                                        "\n"))))
+                (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
+                (elnode-http-return httpcon html-dir))
+            (progn
+              (require 'mailcap)
+              (mailcap-parse-mimetypes)
+              (let ((mimetype (or (car (rassoc 
+                                        (cadr (split-string targetfile "\\."))
+                                        my-mime-types))
+                                  (mm-default-file-encoding targetfile)
+                                  "application/octet-stream")))
+                (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
+                (elnode-child-process httpcon "cat" targetfile)
+                )
+              )))))))
+
 
 
 ;; Demo handlers
@@ -507,56 +570,14 @@ This is a handler based on an asynchronous process."
     )
   )
 
-
-(defcustom nicferrier-webserver-docroot "/home/nferrier/elnode"
-  "the document root of the webserver.")
-
-(defcustom nicferrier-webserver-extra-mimetypes '(("text/plain" . "creole")
-                                               ("text/plain" . "el"))
-  "this is just a way of hacking the mime type discovery so we
-  can add more file mappings more easily than editing
-  /etc/mime.types")
-
 (defun nicferrier-process-webserver (httpcon)
-  "Demonstration webserver."
-  (let* ((docroot nicferrier-webserver-docroot)
-         (pathinfo (elnode-http-pathinfo httpcon))
-         (targetfile (format "%s%s" 
-                             docroot 
-                             (if (equal pathinfo "/")  "" pathinfo))))
-    (if (not (or 
-              (file-exists-p targetfile)
-              ;; Test the targetfile is under the docroot
-              (compare-strings           
-               docroot 0 (length docroot)
-               (file-truename targetfile) 0 (length docroot)
-               )
-              ))
-        (elnode-handler-404 httpcon)
-      ;; The file exists and is legal
-      (if (file-directory-p targetfile)
-          ;; What's the best way to do simple directory indexes?
-          (let* ((dirlist (directory-files-and-attributes targetfile))
-                 (html-dir (mapconcat 
-                            (lambda (dir-entry)
-                              (format "<a href='%s'>%s</a><br/>\r\n" (car dir-entry) (car dir-entry))
-                              )
-                            dirlist 
-                            "\n")))
-            (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
-            (elnode-http-return httpcon html-dir))
-        (progn
-          (require 'mailcap)
-          (mailcap-parse-mimetypes)
-          (let ((mimetype (or (car (rassoc 
-                                    (cadr (split-string targetfile "\\."))
-                                    nicferrier-webserver-extra-mimetypes))
-                              (mm-default-file-encoding targetfile)
-                              "application/octet-stream")))
-            (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
-            (elnode-child-process httpcon "cat" targetfile)
-            )
-          )))))
+  "Demonstration webserver.
+
+Shows how to use elnode's built in webserver toolkit to make
+something that will serve a docroot."
+  (let ((webserver (elnode-webserver-handler-maker)))
+    (funcall webserver httpcon))
+  )
 
 (defun nicferrier-mapper-handler (httpcon)
   "Demonstration function
