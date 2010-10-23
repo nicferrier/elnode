@@ -2,15 +2,14 @@
 ;;; this is like node.js, but for elisp (obviously)
 ;;; (C) Nic Ferrier, 2010
 
-
 ;; Style note
 ;; This codes uses the emacs style of elnode--... for private functions.
+
 
 (defvar elnode-server-socket nil
   "Where we store the server sockets.
 
 This is an alist of proc->server-process.")
-
 
 ;; Main control functions
 
@@ -232,15 +231,18 @@ property if specified is the property to return"
           (elnode--http-parse-status httpcon :elnode-http-resource))))
     (or (string-match "^\\(/\\)\\(\\?.*\\)*$" resource)
         (string-match "^\\(/[A-Za-z0-9_/.-]+\\)\\(\\?.*\\)*$" resource))
-    (process-put httpcon :elnode-http-pathinfo (match-string 1 resource))
+    ;; Make path-info always be either / or /path/path or /path but never /path/
+    (let ((path (match-string 1 resource)))
+      (process-put httpcon :elnode-http-pathinfo (if (string-match "\\(.+\\)/$" path)
+                                                     (match-string 1 path)
+                                                   path)))
     (if (match-string 2 resource)
         (let ((query (match-string 2 resource)))
           (string-match "\\?\\(.+\\)" query)
           (if (match-string 1 query)
               (process-put httpcon :elnode-http-query (match-string 1 query))))))
   (if property
-      (elnode--http-parse-status httpcon property))
-    )
+      (elnode--http-parse-status httpcon property)))
 
 (defun elnode-http-pathinfo (httpcon)
   "Get the PATHINFO of the request"
@@ -427,11 +429,14 @@ stream when the child process finishes."
       (elnode-http-send-string httpcon  "")
       (process-send-string httpcon "\r\n")
       (delete-process httpcon)))
+   ((string-match "exited abnormally with code \\([0-9]+\\)\n" status)
+    (let ((httpcon (process-get process :elnode-httpcon)))
+      (elnode-http-send-string httpcon "")
+      (process-send-string httpcon "\r\n")
+      (delete-process httpcon)
+      (message "elnode-chlild-process-sentinel died with " (match-data 1 status))))
    (t 
-    (message "elnode-chlild-process-sentinel: %s" status)
-    )
-   )
-  )
+    (message "elnode-chlild-process-sentinel: %s" status))))
 
 (defun elnode-child-process-filter (process data)
   "A generic filter function for elnode child processes.
@@ -466,7 +471,7 @@ args is a list of arguments to pass to the program."
 
 ;; Webserver stuff
 
-(defcustom elnode-webserver-docroot "/home/nferrier/elnode"
+(defcustom elnode-webserver-docroot "~/public_html"
   "the document root of the webserver.")
 
 (defcustom elnode-webserver-extra-mimetypes '(("text/plain" . "creole")
@@ -475,45 +480,63 @@ args is a list of arguments to pass to the program."
   can add more file mappings more easily than editing
   /etc/mime.types")
 
+(defun elnode--webserver-index-list-item (docroot targetfile pathinfo dir-entry)
+  "Make the "
+  ;; dir-entry is a long list of attribute values
+  (let ((entry (format 
+                "%s/%s" 
+                (if (equal pathinfo "/")  "" pathinfo)
+                (car dir-entry))))
+    (format "<a href='%s'>%s</a><br/>\r\n" 
+            entry
+            (car dir-entry))))
+
+(defun elnode--webserver-index (docroot targetfile pathinfo)
+  (let ((dirlist (directory-files-and-attributes targetfile)))
+    ;; TODO make some templating here so people can change this
+    (format "<html><head><title>%s</title></head><body><h1>%s</h1><div>%s</div></body></html>\n"
+            pathinfo
+            pathinfo
+            (mapconcat 
+             (lambda (dir-entry)
+               (elnode--webserver-index-list-item
+                docroot 
+                targetfile 
+                pathinfo 
+                dir-entry))
+             dirlist
+             "\n")
+            )))
+
 (defun elnode-webserver-handler-maker (&optional docroot extra-mime-types)
   "Make a webserver handler possibly with the specific docroot and extra-mime-types
 
 Returns a proc which is the handler."
-  (lexical-let ((my-docroot (or 
-                             docroot
-                             elnode-webserver-docroot))
-                (my-mime-types (or extra-mime-types
-                                   elnode-webserver-extra-mimetypes)))
+  (lexical-let ((my-docroot (or docroot elnode-webserver-docroot))
+                (my-mime-types (or 
+                                extra-mime-types
+                                elnode-webserver-extra-mimetypes)))
     ;; Return the proc
     (lambda (httpcon)
       (let* ((pathinfo (elnode-http-pathinfo httpcon))
              (targetfile (format "%s%s" 
-                                 my-docroot 
+                                 (expand-file-name my-docroot)
                                  (if (equal pathinfo "/")  "" pathinfo))))
         (if (not (or 
                   (file-exists-p targetfile)
                   ;; Test the targetfile is under the docroot
                   (compare-strings           
                    my-docroot 0 (length my-docroot)
-                   (file-truename targetfile) 0 (length docroot)
-                   )
-                  ))
+                   (file-truename targetfile) 0 (length my-docroot))))
             (elnode-handler-404 httpcon)
           ;; The file exists and is legal
           (if (file-directory-p targetfile)
-              ;; What's the best way to do simple directory indexes?
-              (let* ((dirlist (directory-files-and-attributes targetfile))
-                     (html-dir (format "<html><head><title>%s</title></head><body><h1>%s</h1><div>%s</div></body></html>"
-                                       pathinfo
-                                       pathinfo
-                                       (mapconcat 
-                                        (lambda (dir-entry)
-                                          (format "<a href='%s'>%s</a><br/>\r\n" (car dir-entry) (car dir-entry))
-                                          )
-                                        dirlist 
-                                        "\n"))))
+              (let ((index (elnode--webserver-index my-docroot targetfile pathinfo)))
+                ;; What's the best way to do simple directory indexes?
                 (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
-                (elnode-http-return httpcon html-dir))
+                (elnode-http-return httpcon index))
+            ;; It's a file... use 'cat' to send it to the user 
+            ;; ... some means of reading and writing file contents in Emacs would be fun
             (progn
               (require 'mailcap)
               (mailcap-parse-mimetypes)
@@ -523,10 +546,7 @@ Returns a proc which is the handler."
                                   (mm-default-file-encoding targetfile)
                                   "application/octet-stream")))
                 (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
-                (elnode-child-process httpcon "cat" targetfile)
-                )
-              )))))))
-
+                (elnode-child-process httpcon "cat" targetfile)))))))))
 
 
 ;; Demo handlers
@@ -565,8 +585,8 @@ This is a handler based on an asynchronous process."
   (let* ((host (elnode-http-header httpcon "Host"))
          (pathinfo (elnode-http-pathinfo httpcon))
          )
-    (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
-    (elnode-child-process httpcon "cat" "/home/nferrier/elnode/example.html")
+    (elnode-http-start httpcon 200 '("Content-type" . "text/plain"))
+    (elnode-child-process httpcon "cat" (expand-file-name "~/elnode/node.el"))
     )
   )
 
@@ -587,5 +607,8 @@ handle more complex requests."
   (elnode-dispatcher httpcon
                      '(("/$" . 'nicferrier-handler)
                        ("nicferrier/$" . 'nicferrier-handler))))
+
+
+(provide 'elnode)
 
 ;; End
