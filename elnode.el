@@ -1,10 +1,35 @@
-;;; A simple emacs async http server
-;;; this is like node.js, but for elisp (obviously)
-;;; (C) Nic Ferrier, 2010
+;;; elnode.el --- A simple emacs async http server
+;;; Copyright (C) 2010 by Nic Ferrier
 
-;; Style note
-;; This codes uses the emacs style of elnode--... for private functions.
+;; Author: Nic Ferrier <nferrier+elnode@ferrier.me.uk>
+;; Maintainer: Nic Ferrier <nferrier+elnode@ferrier.me.uk>
+;; Created: 5th October 2010
+;; Version: 0.1
+;; Keywords: http webserver httpd asynchronous network server node.js
 
+;;; Commentary
+;;
+;; This is an elisp version of the popular node.js asyncrhonous
+;; webserver toolkit.
+;;
+;; You can define HTTP request handlers and start an HTTP server
+;; attached to the handler. Many HTTP servers can be started, each
+;; must have it's own TCP port.
+;;
+;; See elnode-start for how to start an HTTP server.
+;;
+;; See functions titled nicferrier-... for example handlers.
+
+;;; Style note
+;;
+;; This codes uses the emacs style of:
+;;
+;;    elnode--private-function 
+;;
+;; for private functions.
+
+
+;;; Code
 
 (defvar elnode-server-socket nil
   "Where we store the server sockets.
@@ -611,4 +636,4 @@ handle more complex requests."
 
 (provide 'elnode)
 
-;; End
+;; elnode.el ends here
