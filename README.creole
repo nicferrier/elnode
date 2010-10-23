@@ -111,7 +111,8 @@ dispatchers to emerge.
 
 == Calling processes ==
 
-There is early support for calling unix processes asynchronously:
+There is support for calling unix processes asynchronously and mapping
+the output to an HTTP connection:
 
 {{{
 (elnode-child-process httpcon 
@@ -123,7 +124,26 @@ Would call the program //cat// with the HTML file as an argument. The
 output of the process will be copied to the HTTP connection
 asychronously (so fast).
 
-Again, lot's of improvement needed here but this does work quite well.
+
+== File serving ==
+
+elnode includes a file-server handler maker. This can be used to make
+file servers with specific docroots (so you're not tied to just one).
+
+Here's an example usage:
+
+{{{
+(defvar docroot "~/www")
+(defun my-handler (httpcon)
+  (let ((webserver (elnode-webserver-handler-maker docroot)))
+    (elnode-dispatcher httpcon
+                       '(("/$" . webserver)
+                         ("users/$" . 'users-handler)))))
+}}}
+
+One point of interest is that the webserver tools are written using
+the child-process tools, specifically, elnode serves files by calling
+unix ///cat///.
 
 == But... ==
 
@@ -131,5 +151,5 @@ There's always a but.
 
 The HTTP parsing isn't very complete, we don't parse any data sent through POST.
 
-That stuff is coming soon.
+The error handling is absolute rubbish. It will get better.
 
