@@ -36,6 +36,12 @@
 ;;
 ;; See functions titled nicferrier-... for example handlers.
 
+;;; Source code
+;;
+;; elnode's code can be found here:
+;;   http://github.com/nicferrier/elnode
+
+
 ;;; Style note
 ;;
 ;; This codes uses the emacs style of:
@@ -52,6 +58,19 @@
 
 This is an alist of proc->server-process.")
 
+(defvar elnode-server-error-log "*elnode-server-error*"
+  "The buffer where error log messages are sent.")
+
+;; Error log handling
+
+(defun elnode-error (msg &rest args)
+  (with-current-buffer (get-buffer-create elnode-server-error-log)
+    (insert (format "elnode-%s: %s\n" 
+                    (format-time-string "%Y%m%d%H%M%S") 
+                    (apply 'format `(,msg ,@args))))
+    ))
+
+
 ;; Main control functions
 
 (defun elnode--sentinel (process status)
@@ -63,21 +82,21 @@ This is an alist of proc->server-process.")
      (assoc (process-contact process :service) elnode-server-socket)
      (equal status "deleted\n"))
     (kill-buffer (process-buffer process))
-    (message "elnode server stopped"))
+    (elnode-error "elnode server stopped"))
 
    ;; Client socket status
    ((equal status "connection broken by remote peer\n")
     (if (process-buffer process)
         (kill-buffer (process-buffer process)))
-    ;;(message "elnode connection dropped")
+    ;;(elnode-error "elnode connection dropped")
     )
 
    ((equal status "open\n") ;; this says "open from ..."
-    (message "elnode opened new connection"))
+    (elnode-error "elnode opened new connection"))
 
    ;; Default
    (t
-    (message "elnode status: %s %s" process status))
+    (elnode-error "elnode status: %s %s" process status))
    ))
 
 
@@ -127,7 +146,16 @@ Serves only to connect the server process to the client processes"
   (process-put con :server server)
   )
 
-(defun elnode-start (request-handler port)
+(defvar elnode-handler-history '()
+  "The history of handlers.")
+
+(defvar elnode-port-history '()
+  "The history of ports.")
+
+(defvar elnode-host-history '()
+  "The history of hosts.")
+
+(defun elnode-start (request-handler port host)
   "Start the elnode server.
 
 Most of the work done by the server is actually done by
@@ -147,10 +175,25 @@ Example:
    (elnode-http-start 200 '((\"Content-Type\": \"text/html\")))
    (elnode-http-return \"<html><b>BIG!</b></html>\")
    )
- (elnode-start 'nic-server)
+ (elnode-start 'nic-server 8000)
  ;; End
+
+You must also specify the port to start the server on.
+
+You can optionally specify the hostname to start the server on,
+this must be bound to a local IP. Some names are special:
+
+  localhost  means 127.0.0.1
+  * means 0.0.0.0
+
+specifying an IP is also possible.
 "
-  (interactive "aHandler function: \nnPort: ")
+  (interactive
+   (let ((handler (completing-read "Handler function: " 
+                                   obarray 'fboundp t nil nil))
+         (port (read-number "Port: " nil))
+         (host (read-string "Host: " "localhost" 'elnode-host-history)))
+     (list handler port host)))
   (if (not (assoc port elnode-server-socket))
       ;; Add a new server socket to the list
       (setq elnode-server-socket
@@ -162,7 +205,13 @@ Example:
                       :buffer buf
                       :server t
                       :nowait 't
-                      :host 'local
+                      :host (cond
+                             ((equal host "localhost")
+                              'local)
+                             ((equal host "*")
+                              nil)
+                             (t
+                              host))
                       :service port
                       :family 'ipv4
                       :filter 'elnode--filter
@@ -171,9 +220,7 @@ Example:
                       :plist `(:elnode-http-handler ,request-handler)
                       )
                      ))
-             elnode-server-socket))
-    )
-  )
+             elnode-server-socket))))
 
 ;; TODO: make this take an argument for the 
 (defun elnode-stop (port)
@@ -404,7 +451,7 @@ data must be a string right now."
 
 Implementation notes: This is basically the standard emacs filter
 with a fixed url-match filter function."
-  (message "elnode--mapper-find path: %s" path)
+  (elnode-error "elnode--mapper-find path: %s" path)
   (car (delq nil
              (mapcar (lambda (mapping)
                        (and (string-match 
@@ -475,9 +522,9 @@ stream when the child process finishes."
       (elnode-http-send-string httpcon "")
       (process-send-string httpcon "\r\n")
       (delete-process httpcon)
-      (message "elnode-chlild-process-sentinel died with " (match-data 1 status))))
+      (elnode-error "elnode-chlild-process-sentinel died with " (match-data 1 status))))
    (t 
-    (message "elnode-chlild-process-sentinel: %s" status))))
+    (elnode-error "elnode-chlild-process-sentinel: %s" status))))
 
 (defun elnode-child-process-filter (process data)
   "A generic filter function for elnode child processes.
