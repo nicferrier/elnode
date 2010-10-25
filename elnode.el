@@ -59,7 +59,10 @@
 (defvar elnode-server-socket nil
   "Where we store the server sockets.
 
-This is an alist of proc->server-process.")
+This is an alist of proc->server-process: 
+
+  (port . process)
+")
 
 (defvar elnode-server-error-log "*elnode-server-error*"
   "The buffer where error log messages are sent.")
