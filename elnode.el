@@ -70,6 +70,12 @@ This is an alist of proc->server-process:
 ;; Error log handling
 
 (defun elnode-error (msg &rest args)
+  "How errors are logged.
+
+This function is available for handlers to call. It is also used
+by elnode iteslf. 
+
+There is only one error log, in the future there may be more."
   (with-current-buffer (get-buffer-create elnode-server-error-log)
     (save-excursion
       (goto-char (point-max))
