@@ -16,7 +16,7 @@
            (buffer-file-name 
             (car
              (save-excursion 
-               (find-definition-noselect 'elnode--webserver-index-list nil))))))
+               (find-definition-noselect 'elnode--webserver-index-list-item nil))))))
          (test-docroot (concat elnode-dir "test_docroot")))
     (should (equal "<a href='/example.html'>example.html</a><br/>\r\n"
                    (elnode--webserver-index-list-item

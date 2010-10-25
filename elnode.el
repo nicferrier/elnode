@@ -720,9 +720,15 @@ This is a handler based on an asynchronous process."
 
 Shows how to use elnode's built in webserver toolkit to make
 something that will serve a docroot."
-  (let ((webserver (elnode-webserver-handler-maker)))
-    (funcall webserver httpcon))
-  )
+  ;; Find the directory where this file is defined so we can serve
+  ;; files from there
+  (let ((docroot (file-name-directory
+                  (buffer-file-name 
+                   (car
+                    (save-excursion 
+                      (find-definition-noselect 'nicferrier-process-webserver nil)))))))
+    (let ((webserver (elnode-webserver-handler-maker docroot)))
+      (funcall webserver httpcon))))
 
 (defun nicferrier-mapper-handler (httpcon)
   "Demonstration function
