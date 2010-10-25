@@ -157,13 +157,13 @@ Serves only to connect the server process to the client processes"
   )
 
 (defvar elnode-handler-history '()
-  "The history of handlers.")
+  "The history of handlers bound to servers.")
 
 (defvar elnode-port-history '()
-  "The history of ports.")
+  "The history of ports that servers are started on.")
 
 (defvar elnode-host-history '()
-  "The history of hosts.")
+  "The history of hosts that servers are started on.")
 
 ;;;###autoload
 (defun elnode-start (request-handler port host)
