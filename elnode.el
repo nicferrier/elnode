@@ -282,24 +282,32 @@ Returns a cons of the status line and the header association-list:
  (http-status . http-header-alist)
 "
   (with-current-buffer (process-buffer httpcon)
-    ;; TODO improve this parsing - we need to record the end of
-    ;; header so we can use that instead of point-max (when we're
-    ;; parsing POST bodys the point-max method will be no good)
-    (let* ((lines (split-string (buffer-substring (point-min) (point-max)) "\r\n" 't))
-           (status (car lines))
-           (header (cdr lines)))
-      (process-put httpcon :elnode-http-status status)
-      (process-put 
-       httpcon 
-       :elnode-http-header
-       (mapcar 
-        (lambda (hdrline)
-          (if (string-match "\\([A-Za-z0-9_-]+\\): \\(.*\\)" hdrline)
-              (cons (match-string 1 hdrline) (match-string 2 hdrline))))
-        header))))
-  (cons
-   (process-get httpcon :elnode-http-status)
-   (process-get httpcon :elnode-http-header)))
+    (save-excursion
+      (goto-char (point-min))
+      (let ((hdrend (re-search-forward "\r\n\r\n" nil 't)))
+        ;; It's an error if we can't find the end of header because
+        ;; elnode--filter should not have called the user handler
+        ;; until the header has ended
+        (if (not hdrend)
+            (error "elnode: the header was not found by the HTTP parsing routines."))
+        ;; Split the lines from the beginning of the buffer to the
+        ;; header end, use the first as the status line and the rest as the header
+        ;; FIXME: we don't handle continuation lines of anything like that
+        (let* ((lines (split-string (buffer-substring (point-min) hdrend) "\r\n" 't))
+               (status (car lines))
+               (header (cdr lines)))
+          (process-put httpcon :elnode-http-status status)
+          (process-put 
+           httpcon 
+           :elnode-http-header
+           (mapcar 
+            (lambda (hdrline)
+              (if (string-match "\\([A-Za-z0-9_-]+\\): \\(.*\\)" hdrline)
+                  (cons (match-string 1 hdrline) (match-string 2 hdrline))))
+            header))))
+      (cons
+       (process-get httpcon :elnode-http-status)
+       (process-get httpcon :elnode-http-header)))))
 
 (defun elnode-http-header (httpcon name)
   "Get the header specified by name from the header"
