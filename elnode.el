@@ -144,11 +144,10 @@ port number of the connection."
                   (funcall (process-get server :elnode-http-handler) process)
                 ('t 
                  ;; Try and send a 500 error response
-                 (process-send-string process "HTTP/1.1 500 Server-Error\r\n<h1>Server Error</h1>\r\n"))
-              )
-          )
-        )
-      ))))
+                 ;; FIXME: we need some sort of check to see if the header has been written
+                 (process-send-string 
+                  process 
+                  "HTTP/1.1 500 Server-Error\r\n<h1>Server Error</h1>\r\n")))))))))
 
 (defun elnode--log-fn (server con msg)
   "Log function for elnode.
