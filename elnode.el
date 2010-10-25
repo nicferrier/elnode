@@ -53,6 +53,10 @@
 
 ;;; Code
 
+(require 'mm-encode)
+(require 'mailcap)
+(eval-when-compile (require 'cl))
+
 (defvar elnode-server-socket nil
   "Where we store the server sockets.
 
@@ -113,12 +117,10 @@ port number of the connection."
               ;; Set the process buffer (because the server doesn't automatically allocate them)
               ;; the name of the buffer has the client port in it
               ;; the space in the name ensures that emacs does not list it
-              (let* ((proc-name (process-name process))
-                     (port-match 
-                      (string-match "\\*elnode-webserver-proc\\* <127.0.0.1:\\([0-9]+\\)>" proc-name)))
+              (let* ((port (cadr (process-contact process))))
                 (set-process-buffer 
                  process 
-                 (get-buffer-create (concat " *elnode-request-" (match-string 1 proc-name) "*")))
+                 (get-buffer-create (format " *elnode-request-%s*" port)))
                 (process-buffer process)))))
     (with-current-buffer buf
       (insert data)
@@ -193,7 +195,7 @@ specifying an IP is also possible.
                                    obarray 'fboundp t nil nil))
          (port (read-number "Port: " nil))
          (host (read-string "Host: " "localhost" 'elnode-host-history)))
-     (list handler port host)))
+     (list (intern handler) port host)))
   (if (not (assoc port elnode-server-socket))
       ;; Add a new server socket to the list
       (setq elnode-server-socket
@@ -231,10 +233,17 @@ specifying an IP is also possible.
         (progn
           (delete-process (cdr server))
           (setq elnode-server-socket 
-                (remove-if 
-                 (lambda (elem) (equal (car elem) port))
-                 elnode-server-socket))))))
-
+		;; remove-if
+		(let ((test (lambda (elem) 
+			      (= (car elem) port)))
+		      (l elnode-server-socket)
+		      result)
+		  (while (car l)
+		    (let ((p (pop l))
+			  (r (cdr l)))
+		      (if (not (funcall test p))
+			  (setq result (cons p result)))))
+		  result))))))
 
 (defun elnode-list-buffers ()
   "List the current buffers being managed by elnode"
@@ -560,13 +569,15 @@ args is a list of arguments to pass to the program."
 ;; Webserver stuff
 
 (defcustom elnode-webserver-docroot "~/public_html"
-  "the document root of the webserver.")
+  "the document root of the webserver."
+  :group 'elnode)
 
 (defcustom elnode-webserver-extra-mimetypes '(("text/plain" . "creole")
                                                ("text/plain" . "el"))
   "this is just a way of hacking the mime type discovery so we
   can add more file mappings more easily than editing
-  /etc/mime.types")
+  /etc/mime.types"
+  :group 'elnode)
 
 (defun elnode--webserver-index-list-item (docroot targetfile pathinfo dir-entry)
   "Make the "
