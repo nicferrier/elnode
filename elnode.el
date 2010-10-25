@@ -69,10 +69,11 @@ This is an alist of proc->server-process.")
 
 (defun elnode-error (msg &rest args)
   (with-current-buffer (get-buffer-create elnode-server-error-log)
-    (insert (format "elnode-%s: %s\n" 
-                    (format-time-string "%Y%m%d%H%M%S") 
-                    (apply 'format `(,msg ,@args))))
-    ))
+    (save-excursion
+      (goto-char (point-max))
+      (insert (format "elnode-%s: %s\n" 
+                      (format-time-string "%Y%m%d%H%M%S") 
+                      (apply 'format `(,msg ,@args)))))))
 
 
 ;; Main control functions
@@ -157,6 +158,7 @@ Serves only to connect the server process to the client processes"
 (defvar elnode-host-history '()
   "The history of hosts.")
 
+;;;###autoload
 (defun elnode-start (request-handler port host)
   "Start the elnode server.
 
@@ -189,6 +191,10 @@ this must be bound to a local IP. Some names are special:
   * means 0.0.0.0
 
 specifying an IP is also possible.
+
+Note that although host can be specified, elnode does not
+disambiguate on running servers by host. So you cannot start 2
+different elnode servers on the same port on different hosts.
 "
   (interactive
    (let ((handler (completing-read "Handler function: " 
@@ -219,9 +225,7 @@ specifying an IP is also possible.
                       :filter 'elnode--filter
                       :sentinel 'elnode--sentinel
                       :log 'elnode--log-fn
-                      :plist `(:elnode-http-handler ,request-handler)
-                      )
-                     ))
+                      :plist `(:elnode-http-handler ,request-handler))))
              elnode-server-socket))))
 
 ;; TODO: make this take an argument for the 
@@ -288,19 +292,14 @@ Returns a cons of the status line and the header association-list:
         header))))
   (cons
    (process-get httpcon :elnode-http-status)
-   (process-get httpcon :elnode-http-header)
-   )
-  )
+   (process-get httpcon :elnode-http-header)))
 
 (defun elnode-http-header (httpcon name)
   "Get the header specified by name from the header"
   (let ((hdr (or 
               (process-get httpcon :elnode-http-header)
               (cdr (elnode--http-parse httpcon)))))
-    (cdr (assoc name hdr))
-    ))
-
-
+    (cdr (assoc name hdr))))
 
 (defun elnode--http-parse-status (httpcon &optional property)
   "Parse the status line.
@@ -316,9 +315,7 @@ property if specified is the property to return"
     (process-put httpcon :elnode-http-resource (match-string 2 http-line))
     (process-put httpcon :elnode-http-version (match-string 3 http-line))
     (if property
-        (process-get httpcon property))
-    )
-  ) 
+        (process-get httpcon property)))) 
 
 (defun elnode--http-parse-resource (httpcon &optional property)
   "Convert the specified resource to a path and a query"
@@ -442,6 +439,12 @@ For example:
         ))))
   )
 
+(defun elnode--http-end (httpcon)
+  "We need a special end function to do the emacs clear up"
+  (delete-process httpcon)
+  (kill-buffer (process-buffer httpcon))
+  )
+
 (defun elnode-http-return (httpcon data)
   "End the http response on the specified http connection
 
@@ -451,7 +454,7 @@ data must be a string right now."
   ;; Need to close the chunked encoding here
   (elnode-http-send-string httpcon "")
   (process-send-string httpcon "\r\n")
-  (delete-process httpcon)
+  (elnode--http-end httpcon)
   )
 
 
@@ -525,12 +528,14 @@ stream when the child process finishes."
     (let ((httpcon (process-get process :elnode-httpcon)))
       (elnode-http-send-string httpcon  "")
       (process-send-string httpcon "\r\n")
-      (delete-process httpcon)))
+      (elnode--http-end httpcon)))
    ((string-match "exited abnormally with code \\([0-9]+\\)\n" status)
     (let ((httpcon (process-get process :elnode-httpcon)))
       (elnode-http-send-string httpcon "")
       (process-send-string httpcon "\r\n")
-      (delete-process httpcon)
+      (delete-process process)
+      (kill-buffer (process-buffer process))
+      (elnode--http-end httpcon)
       (elnode-error "elnode-chlild-process-sentinel died with " (match-data 1 status))))
    (t 
     (elnode-error "elnode-chlild-process-sentinel: %s" status))))
@@ -553,7 +558,10 @@ and sending the data there."
   "Run the specified process asynchronously and send it's output to the http connection.
 
 program is the program to run.
-args is a list of arguments to pass to the program."
+args is a list of arguments to pass to the program.
+
+It is NOT POSSIBLE to run more than one process at a time
+directed at the same http connection."
   (let* ((args `(,(format "%s-%s" (process-name httpcon) program)
                  ,(format " %s-%s" (process-name httpcon) program)
                  ,program
@@ -562,9 +570,12 @@ args is a list of arguments to pass to the program."
          (p (apply 'start-process args)))
     ;; Bind the http connection to the process
     (process-put p :elnode-httpcon httpcon)
+    ;; Bind the process to the http connection
+    ;; WARNING: this means you can only have 1 child process at a time
+    (process-put httpcon :elnode-child-process p)
+    ;; Setup the filter and the sentinel to do the right thing with incomming data and signals
     (set-process-filter p 'elnode-child-process-filter)
-    (set-process-sentinel p 'elnode-child-process-sentinel)
-    ))
+    (set-process-sentinel p 'elnode-child-process-sentinel)))
 
 ;; Webserver stuff
 
