@@ -25,7 +25,7 @@
 
 ;;; Commentary:
 ;;
-;; This is an elisp version of the popular node.js asyncrhonous
+;; This is an elisp version of the popular node.js asynchronous
 ;; webserver toolkit.
 ;;
 ;; You can define HTTP request handlers and start an HTTP server
@@ -40,7 +40,6 @@
 ;;
 ;; elnode's code can be found here:
 ;;   http://github.com/nicferrier/elnode
-
 
 ;;; Style note
 ;;
