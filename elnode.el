@@ -296,6 +296,7 @@ Returns a cons of the status line and the header association-list:
         (let* ((lines (split-string (buffer-substring (point-min) hdrend) "\r\n" 't))
                (status (car lines))
                (header (cdr lines)))
+          (process-put httpcon :elnode-header-end hdrend)
           (process-put httpcon :elnode-http-status status)
           (process-put 
            httpcon 
@@ -365,27 +366,71 @@ property if specified is the property to return"
    (process-get httpcon :elnode-http-query)
    (elnode--http-parse-resource httpcon :elnode-http-query)))
 
+(defun elnode--http-query-to-alist (query)
+  "Crap parser for HTTP query data. 
+Returns an association list."
+  (let ((alist (mapcar 
+                (lambda (nv)
+                  (string-match "\\([^=]+\\)\\(=\\(.*\\)\\)*" nv)
+                  (cons 
+                   (match-string 1 nv)
+                   (if (match-string 2 nv)
+                       (match-string 3 nv)
+                     nil)))
+                (split-string query "&"))
+               ))
+    alist))
+
+(defun elnode--alist-merge (a b)
+  "Merge two association lists non-destructively.
+
+a is considered the priority (it's elements go in first)."
+  (let* ((res '()))
+    (let ((lst (append a b)))
+      (while lst
+        (let ((item (car-safe lst)))
+          (setq lst (cdr-safe lst))
+          (let* ((key (car item))
+                 (aval (assq key a))
+                 (bval (assq key b)))
+            (if (not (assq key res))
+                (setq res (cons 
+                           (if (and aval bval)
+                               ;; the item is in both lists
+                               (cons (car item)
+                                     (list (cdr aval) (cdr bval)))
+                             item)
+                           res))))))
+        res)))
+
+(defun elnode--http-post-to-alist (httpcon)
+  "Parse the POST body.
+This is not a strong parser. Replace with something better."
+  (let ((postdata 
+         (with-current-buffer (process-buffer httpcon)
+           (buffer-substring 
+            ;; we might have to add 2 to this because of trailing \r\n
+            (process-get httpcon :elnode-header-end)
+            (point-max)))))
+    (elnode--http-query-to-alist postdata)))
+
 (defun elnode-http-params (httpcon)
   "Get an alist of the parameters in the request"
   (or 
    (process-get httpcon :elnode-http-params)
    (let ((query (elnode-http-query httpcon)))
-     (if query
-         (let ((alist (mapcar 
-                       (lambda (nv)
-                         (string-match "\\([^=]+\\)\\(=\\(.*\\)\\)*" nv)
-                         (cons 
-                          (match-string 1 nv)
-                          (if (match-string 2 nv)
-                              (match-string 3 nv)
-                            nil)))
-                       (split-string query "&"))
-                      ))
-           (process-put httpcon :elnode-http-params alist)
-           alist)
-       ;; Else just return nil
-       '()
-       ))))
+     (let ((alist (if query 
+                      (elnode--http-query-to-alist query)
+                    '())))
+       (if (equal "POST" (elnode-http-method httpcon))
+           (setq alist (elnode--alist-merge 
+                        alist 
+                        (elnode--http-post-to-alist httpcon))))
+       (process-put httpcon :elnode-http-params alist)
+       alist)
+     ;; Else just return nil
+     '()
+     )))
 
 (defun elnode-http-method (httpcon)
   "Get the PATHINFO of the request"
