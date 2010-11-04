@@ -381,19 +381,21 @@ Returns an association list."
                ))
     alist))
 
-(defun elnode--alist-merge (a b)
+(defun elnode--alist-merge (a b &optional operator)
   "Merge two association lists non-destructively.
 
 a is considered the priority (it's elements go in first)."
+  (if (not operator)
+      (setq operator assq))
   (let* ((res '()))
     (let ((lst (append a b)))
       (while lst
         (let ((item (car-safe lst)))
           (setq lst (cdr-safe lst))
           (let* ((key (car item))
-                 (aval (assq key a))
-                 (bval (assq key b)))
-            (if (not (assq key res))
+                 (aval (funcall operator key a))
+                 (bval (funcall operator key b)))
+            (if (not (funcall operator key res))
                 (setq res (cons 
                            (if (and aval bval)
                                ;; the item is in both lists
@@ -423,14 +425,15 @@ This is not a strong parser. Replace with something better."
                       (elnode--http-query-to-alist query)
                     '())))
        (if (equal "POST" (elnode-http-method httpcon))
-           (setq alist (elnode--alist-merge 
-                        alist 
-                        (elnode--http-post-to-alist httpcon))))
-       (process-put httpcon :elnode-http-params alist)
-       alist)
-     ;; Else just return nil
-     '()
-     )))
+           (progn
+             (setq alist (elnode--alist-merge 
+                          alist 
+                          (elnode--http-post-to-alist httpcon)
+                          'assoc))
+             (process-put httpcon :elnode-http-params alist)
+             alist)
+         ;; Else just return nil
+         '())))))
 
 (defun elnode-http-method (httpcon)
   "Get the PATHINFO of the request"
