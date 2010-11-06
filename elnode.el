@@ -681,46 +681,73 @@ directed at the same http connection."
              "\n")
             )))
 
+(defun elnode-test-path (httpcon docroot handler &optional 404-handler)
+  "Check that the path requested is above the docroot specified.
+
+Call 404-handler (or default 404 handler) on failure and handler
+on success.
+
+handler is called: httpcon docroot targetfile
+
+This is used by elnode-webserver-handler-maker in the webservers
+that it creates... but it's also meant to be generally useful for
+other handler writers."
+  (let* ((pathinfo (elnode-http-pathinfo httpcon))
+         (targetfile (format "%s%s" 
+                             (expand-file-name docroot)
+                             (if (equal pathinfo "/")  "" pathinfo))))
+    (if (or 
+         (file-exists-p targetfile)
+         ;; Test the targetfile is under the docroot
+         (let ((docrootlen (length docroot)))
+           (compare-strings           
+            docroot 0 docrootlen
+            (file-truename targetfile) 0 docrootlen)))
+        (funcall handler httpcon docroot targetfile)
+      ;; Call the 404 handler
+      (if (functionp 404-handler)
+          (funcall 404-handler httpcon)
+        (elnode-handler-404 httpcon)))))
+
+
+(defun elnode--webserver-handler-fn (httpcon docroot mime-types)
+  "Actual webserver implementation.
+
+This is not a real handler (because it takes more than the
+httpcon) but it is called directly by the real webserver
+handlers."
+  (elnode-test-path 
+   httpcon docroot 
+   (lambda (httpcon docroot targetfile)
+     ;; The file exists and is legal
+     (let ((pathinfo (elnode-http-pathinfo httpcon)))
+       (if (file-directory-p targetfile)
+           (let ((index (elnode--webserver-index docroot targetfile pathinfo)))
+             ;; What's the best way to do simple directory indexes?
+             (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
+             (elnode-http-return httpcon index))
+         ;; It's a file... use 'cat' to send it to the user 
+         (progn
+           (require 'mailcap)
+           (mailcap-parse-mimetypes)
+           (let ((mimetype (or (car (rassoc 
+                                     (cadr (split-string targetfile "\\."))
+                                     mime-types))
+                               (mm-default-file-encoding targetfile)
+                               "application/octet-stream")))
+             (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
+             (elnode-child-process httpcon "cat" targetfile))))))))
+
 (defun elnode-webserver-handler-maker (&optional docroot extra-mime-types)
   "Make a webserver handler possibly with the specific docroot and extra-mime-types
 
 Returns a proc which is the handler."
   (lexical-let ((my-docroot (or docroot elnode-webserver-docroot))
-                (my-mime-types (or 
-                                extra-mime-types
-                                elnode-webserver-extra-mimetypes)))
+                (my-mime-types (or extra-mime-types
+                                   elnode-webserver-extra-mimetypes)))
     ;; Return the proc
     (lambda (httpcon)
-      (let* ((pathinfo (elnode-http-pathinfo httpcon))
-             (targetfile (format "%s%s" 
-                                 (expand-file-name my-docroot)
-                                 (if (equal pathinfo "/")  "" pathinfo))))
-        (if (not (or 
-                  (file-exists-p targetfile)
-                  ;; Test the targetfile is under the docroot
-                  (compare-strings           
-                   my-docroot 0 (length my-docroot)
-                   (file-truename targetfile) 0 (length my-docroot))))
-            (elnode-handler-404 httpcon)
-          ;; The file exists and is legal
-          (if (file-directory-p targetfile)
-              (let ((index (elnode--webserver-index my-docroot targetfile pathinfo)))
-                ;; What's the best way to do simple directory indexes?
-                (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
-                (elnode-http-return httpcon index))
-            ;; It's a file... use 'cat' to send it to the user 
-            ;; ... some means of reading and writing file contents in Emacs would be fun
-            (progn
-              (require 'mailcap)
-              (mailcap-parse-mimetypes)
-              (let ((mimetype (or (car (rassoc 
-                                        (cadr (split-string targetfile "\\."))
-                                        my-mime-types))
-                                  (mm-default-file-encoding targetfile)
-                                  "application/octet-stream")))
-                (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
-                (elnode-child-process httpcon "cat" targetfile)))))))))
-
+      (elnode--webserver-handler-fn httpcon my-docroot my-mime-types))))
 
 ;; Demo handlers
 
@@ -746,10 +773,7 @@ any request."
       (or (cdr (assoc "name" (elnode-http-params httpcon))) "no name")
       host 
       pathinfo 
-      (elnode-http-version httpcon)
-      ))
-    )
-  )
+      (elnode-http-version httpcon)))))
 
 (defun nicferrier-process-handler (httpcon)
   "Demonstration function
@@ -759,9 +783,7 @@ This is a handler based on an asynchronous process."
          (pathinfo (elnode-http-pathinfo httpcon))
          )
     (elnode-http-start httpcon 200 '("Content-type" . "text/plain"))
-    (elnode-child-process httpcon "cat" (expand-file-name "~/elnode/node.el"))
-    )
-  )
+    (elnode-child-process httpcon "cat" (expand-file-name "~/elnode/node.el"))))
 
 (defun nicferrier-process-webserver (httpcon)
   "Demonstration webserver.
