@@ -557,6 +557,11 @@ with a fixed url-match filter function."
   (elnode-http-start httpcon 404 '("Content-type" . "text/html"))
   (elnode-http-return httpcon "<h1>Not Found</h1>\r\n"))
 
+(defun elnode-handler-400 (httpcon)
+  "A generic 400 handler"
+  (elnode-http-start httpcon 400 '("Content-type" . "text/html"))
+  (elnode-http-return httpcon "<h1>Bad request</h1>\r\n"))
+
 
 (defun elnode-dispatcher (httpcon url-mapping-table &optional function-404)
   "Dispatch the request to the correct function based on the mapping table.
@@ -678,8 +683,7 @@ directed at the same http connection."
                 pathinfo 
                 dir-entry))
              dirlist
-             "\n")
-            )))
+             "\n"))))
 
 (defun elnode-test-path (httpcon docroot handler &optional 404-handler)
   "Check that the path requested is above the docroot specified.
@@ -809,6 +813,22 @@ handle more complex requests."
                      '(("/$" . 'nicferrier-handler)
                        ("nicferrier/$" . 'nicferrier-handler))))
 
+(defun nicferrier-post-handler (httpcon)
+  "Handle a POST.
+
+If it's not a POST send a 400."
+  (if (not (equal "POST" (elnode-http-method httpcon)))
+      (elnode-handler-400 httpcon)
+    (let ((params (elnode-http-params httpcon)))
+      (elnode-http-start httpcon 200 ''(("Content-type" . "text/html")))
+      (elnode-http-return 
+       httpcon 
+       (format "<html><body><ul>%s</ul></body></html>\n"
+               (mapconcat 
+                (lambda (param)
+                  (format "<li>%s: %s</li>" (car param) (cdr param)))
+                params
+                "\n"))))))
 
 (provide 'elnode)
 
