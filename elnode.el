@@ -339,8 +339,11 @@ property if specified is the property to return"
          (or
           (process-get httpcon :elnode-http-resource)
           (elnode--http-parse-status httpcon :elnode-http-resource))))
-    (or (string-match "^\\(/\\)\\(\\?.*\\)*$" resource)
-        (string-match "^\\(/[A-Za-z0-9_/.-]+\\)\\(\\?.*\\)*$" resource))
+    (or 
+     ;; root pattern
+     (string-match "^\\(/\\)\\(\\?.*\\)*$" resource) 
+     ;; /somepath or /somepath/somepath 
+     (string-match "^\\(/[A-Za-z0-9_/.-]+\\)\\(\\?.*\\)*$" resource)) 
     ;; Make path-info always be either / or /path/path or /path but never /path/
     (let ((path (match-string 1 resource)))
       (process-put httpcon :elnode-http-pathinfo (if (string-match "\\(.+\\)/$" path)
@@ -386,7 +389,7 @@ Returns an association list."
 
 a is considered the priority (it's elements go in first)."
   (if (not operator)
-      (setq operator assq))
+      (setq operator 'assq))
   (let* ((res '()))
     (let ((lst (append a b)))
       (while lst
@@ -567,6 +570,22 @@ with a fixed url-match filter function."
   "Dispatch the request to the correct function based on the mapping table.
 
 url-mapping-table is an alist of url-regex . function-to-dispatch.
+
+To map the root url you should use:
+
+  $
+
+to map another url you should use:
+
+  path$
+
+or:
+
+  path/path$
+
+never:
+
+  path/path/$
 "
   (let ((m (elnode--mapper-find (elnode-http-pathinfo httpcon) url-mapping-table)))
     (if (and m (functionp (caddr m)))
@@ -818,7 +837,19 @@ handle more complex requests."
 
 If it's not a POST send a 400."
   (if (not (equal "POST" (elnode-http-method httpcon)))
-      (elnode-handler-400 httpcon)
+      (progn
+        (elnode-http-start httpcon 200 ''(("Content-type" . "text/html")))
+        (elnode-http-return httpcon (format "<html>
+<head>
+<body>
+<form method='POST' action='%s'>
+<input type='text' name='a' value='100'/>
+<input type='text' name='b' value='200'/>
+<input type='submit' name='send'/>
+</form>
+</body>
+</html>
+" (elnode-http-pathinfo httpcon))))
     (let ((params (elnode-http-params httpcon)))
       (elnode-http-start httpcon 200 ''(("Content-type" . "text/html")))
       (elnode-http-return 
@@ -829,6 +860,18 @@ If it's not a POST send a 400."
                   (format "<li>%s: %s</li>" (car param) (cdr param)))
                 params
                 "\n"))))))
+
+(defun nicferrier-everything-mapper-handler (httpcon)
+  "Demonstration function
+
+Shows how a handler can contain a dispatcher to make it simple to
+handle more complex requests."
+  (let ((webserver (elnode-webserver-handler-maker "~/public_html")))
+    (elnode-dispatcher 
+     httpcon
+     '(("$" . 'nicferrier-post-handler)
+       ("nicferrier$" . webserver)))))
+
 
 (provide 'elnode)
 
