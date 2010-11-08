@@ -589,14 +589,15 @@ never:
 "
   (let ((m (elnode--mapper-find (elnode-http-pathinfo httpcon) url-mapping-table)))
     (if (and m (functionp (cdr m)))
-        (funcall (cdr m) httpcon)
+        ;; We found a binding... remember what the bound path was and call the handler
+        (let ((matched-path (car m)))
+          (process-put httpcon :elnode-matched-path matched-path)
+          (funcall (cdr m) httpcon))
       ;; We didn't match so fire a 404... possibly a custom 404
       (if (functionp function-404)
           (funcall function-404 httpcon)
         ;; We don't have a custom 404 so send our own
-        (elnode-handler-404 httpcon)
-        ))
-    ))
+        (elnode-handler-404 httpcon)))))
 
 
 ;; elnode child process functions
@@ -866,11 +867,10 @@ If it's not a POST send a 400."
 
 Shows how a handler can contain a dispatcher to make it simple to
 handle more complex requests."
-  (let ((webserver (elnode-webserver-handler-maker "~/public_html")))
-    (elnode-dispatcher 
-     httpcon
-     `(("$" . nicferrier-post-handler)
-       ("nicferrier$" . ,webserver)))))
+  (elnode-dispatcher 
+   httpcon
+   `(("$" . nicferrier-post-handler)
+     ("nicferrier$" . ,(elnode-webserver-handler-maker "~/public_html")))))
 
 
 (provide 'elnode)
