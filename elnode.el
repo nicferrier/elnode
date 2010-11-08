@@ -588,8 +588,8 @@ never:
   path/path/$
 "
   (let ((m (elnode--mapper-find (elnode-http-pathinfo httpcon) url-mapping-table)))
-    (if (and m (functionp (caddr m)))
-        (funcall (caddr m) httpcon)
+    (if (and m (functionp (cdr m)))
+        (funcall (cdr m) httpcon)
       ;; We didn't match so fire a 404... possibly a custom 404
       (if (functionp function-404)
           (funcall function-404 httpcon)
@@ -829,8 +829,8 @@ something that will serve a docroot."
 Shows how a handler can contain a dispatcher to make it simple to
 handle more complex requests."
   (elnode-dispatcher httpcon
-                     '(("/$" . 'nicferrier-handler)
-                       ("nicferrier/$" . 'nicferrier-handler))))
+                     '(("/$" . nicferrier-handler)
+                       ("nicferrier/$" . nicferrier-handler))))
 
 (defun nicferrier-post-handler (httpcon)
   "Handle a POST.
@@ -869,8 +869,8 @@ handle more complex requests."
   (let ((webserver (elnode-webserver-handler-maker "~/public_html")))
     (elnode-dispatcher 
      httpcon
-     '(("$" . 'nicferrier-post-handler)
-       ("nicferrier$" . webserver)))))
+     `(("$" . nicferrier-post-handler)
+       ("nicferrier$" . ,webserver)))))
 
 
 (provide 'elnode)
