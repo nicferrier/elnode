@@ -77,11 +77,12 @@ by elnode iteslf.
 
 There is only one error log, in the future there may be more."
   (with-current-buffer (get-buffer-create elnode-server-error-log)
-    (save-excursion
-      (goto-char (point-max))
-      (insert (format "elnode-%s: %s\n" 
-                      (format-time-string "%Y%m%d%H%M%S") 
-                      (apply 'format `(,msg ,@args)))))))
+    (goto-char (point-max))
+    (insert (format "elnode-%s: %s\n" 
+		    (format-time-string "%Y%m%d%H%M%S")
+		    (if (car-safe args)
+			(apply 'format `(,msg ,@args))
+		      msg)))))
 
 
 ;; Main control functions
@@ -91,7 +92,6 @@ There is only one error log, in the future there may be more."
   (cond
    ;; Server status
    ((and 
-     ;;(equal process elnode-server-socket)
      (assoc (process-contact process :service) elnode-server-socket)
      (equal status "deleted\n"))
     (kill-buffer (process-buffer process))
@@ -100,8 +100,9 @@ There is only one error log, in the future there may be more."
    ;; Client socket status
    ((equal status "connection broken by remote peer\n")
     (if (process-buffer process)
-        (kill-buffer (process-buffer process)))
-    ;;(elnode-error "elnode connection dropped")
+	(progn
+	  (kill-buffer (process-buffer process))
+	  (elnode-error "elnode connection dropped")))
     )
 
    ((equal status "open\n") ;; this says "open from ..."
@@ -228,6 +229,7 @@ different elnode servers on the same port on different hosts.
                              (t
                               host))
                       :service port
+                      :coding '(raw-text-unix . raw-text-unix)
                       :family 'ipv4
                       :filter 'elnode--filter
                       :sentinel 'elnode--sentinel
@@ -355,7 +357,7 @@ property if specified is the property to return"
           (if (match-string 1 query)
               (process-put httpcon :elnode-http-query (match-string 1 query))))))
   (if property
-      (elnode--http-parse-status httpcon property)))
+      (process-get httpcon property)))
 
 (defun elnode-http-pathinfo (httpcon)
   "Get the PATHINFO of the request"
@@ -507,6 +509,7 @@ For example:
 
 (defun elnode--http-end (httpcon)
   "We need a special end function to do the emacs clear up"
+  (process-send-eof httpcon)
   (delete-process httpcon)
   (kill-buffer (process-buffer httpcon))
   )
@@ -532,28 +535,11 @@ with a fixed url-match filter function."
   (elnode-error "elnode--mapper-find path: %s" path)
   (car (delq nil
              (mapcar (lambda (mapping)
-                       (and (string-match 
-                             (format "^/%s" (car mapping)) 
-                             path)
-                            mapping)) url-mapping-table))))
+                       (let ((mapping-re (format "^/%s" (car mapping))))
+                         (if (string-match mapping-re path)
+                             mapping)))
+                     url-mapping-table))))
 
-(defun elnode-test-mapper-find ()
-  "Just a test function for the mapper"
-  (let ((mt '(("$" . (lambda (h) "root matched!"))
-              ("me/$" . (lambda (h) "me matched!"))
-              ("nicferrier/$" . (lambda (h) "hi nic")))))
-    ;; Test the paths in the list
-    (mapconcat
-     (lambda (namepath)
-       (let ((path (car namepath))
-             (name (cdr namepath)))
-         (let ((m (elnode--mapper-find path mt)))
-           (if (and m (functionp (cdr m)))
-               (funcall (cdr m) 't)
-             (format "%s failed to match" name)))))
-     '(("/" . "root") ("/me/" . "me") ("/nicferrier/" . "hi nic"))
-     "\n"
-     )))
 
 (defun elnode-handler-404 (httpcon)
   "A generic 404 handler"
@@ -567,9 +553,11 @@ with a fixed url-match filter function."
 
 
 (defun elnode-dispatcher (httpcon url-mapping-table &optional function-404)
-  "Dispatch the request to the correct function based on the mapping table.
+  "Dispatch the HTTPCON to the correct function based on the URL-MAPPING-TABLE.
 
-url-mapping-table is an alist of url-regex . function-to-dispatch.
+URL-MAPPING-TABLE is an alist of:
+
+ (url-regex . function-to-dispatch)
 
 To map the root url you should use:
 
@@ -589,10 +577,7 @@ never:
 "
   (let ((m (elnode--mapper-find (elnode-http-pathinfo httpcon) url-mapping-table)))
     (if (and m (functionp (cdr m)))
-        ;; We found a binding... remember what the bound path was and call the handler
-        (let ((matched-path (car m)))
-          (process-put httpcon :elnode-matched-path matched-path)
-          (funcall (cdr m) httpcon))
+        (funcall (cdr m) httpcon)
       ;; We didn't match so fire a 404... possibly a custom 404
       (if (functionp function-404)
           (funcall function-404 httpcon)
@@ -611,20 +596,28 @@ send their output to an elnode http connection.
 
 The main job of this sentinel is to send the end of the http
 stream when the child process finishes."
+  ;; FIXME: BIG PROBLEM
+  ;; the sentinel's finished gets called before all the data is written?
+  ;; apparently that can't happen
   (cond
    ((equal status "finished\n")
     (let ((httpcon (process-get process :elnode-httpcon)))
-      (elnode-http-send-string httpcon  "")
-      (process-send-string httpcon "\r\n")
-      (elnode--http-end httpcon)))
+      (elnode-error "status @ finished: %s -> %s" (process-status httpcon) (process-status process))
+      (if (not (eq 'closed (process-status httpcon)))
+	  (progn 
+	    (elnode-http-send-string httpcon  "")
+	    (process-send-string httpcon "\r\n")
+	    (elnode--http-end httpcon)))))
    ((string-match "exited abnormally with code \\([0-9]+\\)\n" status)
     (let ((httpcon (process-get process :elnode-httpcon)))
-      (elnode-http-send-string httpcon "")
-      (process-send-string httpcon "\r\n")
+      (if (not (eq 'closed (process-status httpcon)))
+	  (progn
+	    (elnode-http-send-string httpcon "")
+	    (process-send-string httpcon "\r\n")
+	    (elnode--http-end httpcon)))
       (delete-process process)
       (kill-buffer (process-buffer process))
-      (elnode--http-end httpcon)
-      (elnode-error "elnode-chlild-process-sentinel died with " (match-data 1 status))))
+      (elnode-error "elnode-child-process-sentinel: %s" status)))
    (t 
     (elnode-error "elnode-chlild-process-sentinel: %s" status))))
 
@@ -638,9 +631,12 @@ This filter function does the job of taking the output from the
 async process and finding the associated elnode http connection
 and sending the data there."
   (let ((httpcon (process-get process :elnode-httpcon)))
-    (elnode-http-send-string httpcon data)
-    )
-  )
+    (elnode-error "elnode-child-process-filter http state: %s data length: %s" 
+		  (process-status httpcon)
+		  (length data)
+		  )
+    (if (not (equal "closed" (process-status httpcon)))
+	(elnode-http-send-string httpcon data))))
 
 (defun elnode-child-process (httpcon program &rest args)
   "Run the specified process asynchronously and send it's output to the http connection.
@@ -655,7 +651,9 @@ directed at the same http connection."
                  ,program
                  ,@args
                 ))
-         (p (apply 'start-process args)))
+         (p (let ((process-connection-type nil))
+	      (apply 'start-process args))))
+    (set-process-coding-system p 'raw-text-unix)
     ;; Bind the http connection to the process
     (process-put p :elnode-httpcon httpcon)
     ;; Bind the process to the http connection
@@ -717,9 +715,14 @@ This is used by elnode-webserver-handler-maker in the webservers
 that it creates... but it's also meant to be generally useful for
 other handler writers."
   (let* ((pathinfo (elnode-http-pathinfo httpcon))
+         ;; Let webserver users prefix the webserver path in a dispatcher regex
+         ;; use a regex like this:
+         ;;  "prefix\\(.*\\)$" 
+         ;; and we'll be able to prefix the path properl
+         (path (or (match-string 1 pathinfo) pathinfo))
          (targetfile (format "%s%s" 
                              (expand-file-name docroot)
-                             (if (equal pathinfo "/")  "" pathinfo))))
+                             (if (equal path "/")  "" path))))
     (if (or 
          (file-exists-p targetfile)
          ;; Test the targetfile is under the docroot
@@ -751,16 +754,20 @@ handlers."
              (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
              (elnode-http-return httpcon index))
          ;; It's a file... use 'cat' to send it to the user 
-         (progn
-           (require 'mailcap)
-           (mailcap-parse-mimetypes)
-           (let ((mimetype (or (car (rassoc 
-                                     (cadr (split-string targetfile "\\."))
-                                     mime-types))
-                               (mm-default-file-encoding targetfile)
-                               "application/octet-stream")))
-             (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
-             (elnode-child-process httpcon "cat" targetfile))))))))
+         (if (file-exists-p targetfile)
+             (progn
+               (require 'mailcap)
+               (mailcap-parse-mimetypes)
+               (let ((mimetype (or (car (rassoc 
+                                         (cadr (split-string targetfile "\\."))
+                                         mime-types))
+                                   (mm-default-file-encoding targetfile)
+                                   "application/octet-stream")))
+                 (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
+                 (elnode-child-process httpcon "cat" targetfile)))
+           ;; FIXME: This needs improving so we can handle the 404
+           ;; This function should raise an exception?
+           (elnode-handler-404 httpcon)))))))
 
 (defun elnode-webserver-handler-maker (&optional docroot extra-mime-types)
   "Make a webserver handler possibly with the specific docroot and extra-mime-types
@@ -870,7 +877,7 @@ handle more complex requests."
   (elnode-dispatcher 
    httpcon
    `(("$" . nicferrier-post-handler)
-     ("nicferrier$" . ,(elnode-webserver-handler-maker "~/public_html")))))
+     ("nicferrier\\(.*\\)$" . ,(elnode-webserver-handler-maker "~/public_html")))))
 
 
 (provide 'elnode)
