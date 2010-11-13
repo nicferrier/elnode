@@ -337,25 +337,23 @@ property if specified is the property to return"
 
 (defun elnode--http-parse-resource (httpcon &optional property)
   "Convert the specified resource to a path and a query"
-  (let ((resource 
-         (or
-          (process-get httpcon :elnode-http-resource)
-          (elnode--http-parse-status httpcon :elnode-http-resource))))
-    (or 
-     ;; root pattern
-     (string-match "^\\(/\\)\\(\\?.*\\)*$" resource) 
-     ;; /somepath or /somepath/somepath 
-     (string-match "^\\(/[A-Za-z0-9_/.-]+\\)\\(\\?.*\\)*$" resource)) 
-    ;; Make path-info always be either / or /path/path or /path but never /path/
-    (let ((path (match-string 1 resource)))
-      (process-put httpcon :elnode-http-pathinfo (if (string-match "\\(.+\\)/$" path)
-                                                     (match-string 1 path)
-                                                   path)))
-    (if (match-string 2 resource)
-        (let ((query (match-string 2 resource)))
-          (string-match "\\?\\(.+\\)" query)
-          (if (match-string 1 query)
-              (process-put httpcon :elnode-http-query (match-string 1 query))))))
+  (save-match-data
+    (let ((resource 
+           (or
+            (process-get httpcon :elnode-http-resource)
+            (elnode--http-parse-status httpcon :elnode-http-resource))))
+      (or 
+       ;; root pattern
+       (string-match "^\\(/\\)\\(\\?.*\\)*$" resource) 
+       ;; /somepath or /somepath/somepath 
+       (string-match "^\\(/[A-Za-z0-9_/.-]+\\)\\(\\?.*\\)*$" resource)) 
+      (let ((path (match-string 1 resource)))
+        (process-put httpcon :elnode-http-pathinfo path))
+      (if (match-string 2 resource)
+          (let ((query (match-string 2 resource)))
+            (string-match "\\?\\(.+\\)" query)
+            (if (match-string 1 query)
+                (process-put httpcon :elnode-http-query (match-string 1 query)))))))
   (if property
       (process-get httpcon property)))
 
@@ -476,6 +474,8 @@ For example:
 "
   (let ((http-codes-strings '(("200" . "Ok")
                               (200 . "Ok")
+                              ("302" . "Redirect")
+                              (302 . "Redirect")
                               ("400" . "Bad Request")
                               (400 . "Bad Request")
                               ("401" . "Authenticate")
@@ -503,9 +503,7 @@ For example:
             (format "%s: %s" (car p) (cdr p)))
           header-alist
           "\r\n")
-         "\r\n")
-        ))))
-  )
+         "\r\n"))))))
 
 (defun elnode--http-end (httpcon)
   "We need a special end function to do the emacs clear up"
@@ -528,29 +526,62 @@ data must be a string right now."
 
 
 (defun elnode--mapper-find (path url-mapping-table)
-  "Try and find the path inside the url-mapping-table.
+  "Try and find the 'path' inside the 'url-mapping-table'.
 
-Implementation notes: This is basically the standard emacs filter
-with a fixed url-match filter function."
+This function exposes it's match-data on the 'path' variable so
+that you can access that in your handler with something like:
+
+ (match-string 1 (elnode-http-pathinfo httpcon))
+"
   (elnode-error "elnode--mapper-find path: %s" path)
-  (car (delq nil
-             (mapcar (lambda (mapping)
-                       (let ((mapping-re (format "^/%s" (car mapping))))
-                         (if (string-match mapping-re path)
-                             mapping)))
-                     url-mapping-table))))
+  ;; Implement a simple escaping find function
+  (catch 'found
+    (mapcar 
+     (lambda (mapping)
+       (let ((mapping-re (format "^/%s" (car mapping))))
+         (if (string-match mapping-re path)
+             (throw 'found mapping))))
+     url-mapping-table)))
 
 
-(defun elnode-handler-404 (httpcon)
+(defun elnode-send-404 (httpcon)
   "A generic 404 handler"
   (elnode-http-start httpcon 404 '("Content-type" . "text/html"))
   (elnode-http-return httpcon "<h1>Not Found</h1>\r\n"))
 
-(defun elnode-handler-400 (httpcon)
+(defun elnode-send-400 (httpcon)
   "A generic 400 handler"
   (elnode-http-start httpcon 400 '("Content-type" . "text/html"))
   (elnode-http-return httpcon "<h1>Bad request</h1>\r\n"))
 
+(defun elnode-send-redirect (httpcon location)
+  "Sends a redirect to the specified location"
+  (elnode-http-start httpcon 302 `("Location" . ,location))
+  (elnode-http-return httpcon (format "<h1>redirecting you to %s</h1>\r\n" location)))
+
+(defun elnode-normalize-path (httpcon handler)
+  "A decorator for 'handler' that normalizes paths to have a trailing slash.
+
+This checks the path for a trailing slash and sends a 302 to the
+slash trailed url if there is none. 
+
+Otherwise it calls 'handler'"
+  (if (not (save-match-data 
+             (string-match ".*\\(/\\|.*\\.[^/]*\\)$" (elnode-http-pathinfo httpcon))))
+      (elnode-send-redirect httpcon (format "%s/" (elnode-http-pathinfo httpcon)))
+    (funcall handler httpcon)))
+
+
+(defun elnode--dispatch-proc (httpcon url-mapping-table &optional function-404)
+  "Does the actual dispatch work"
+  (let ((m (elnode--mapper-find (elnode-http-pathinfo httpcon) url-mapping-table)))
+    (if (and m (functionp (cdr m)))
+        (funcall (cdr m) httpcon)
+      ;; We didn't match so fire a 404... possibly a custom 404
+      (if (functionp function-404)
+          (funcall function-404 httpcon)
+        ;; We don't have a custom 404 so send our own
+        (elnode-send-404 httpcon)))))
 
 (defun elnode-dispatcher (httpcon url-mapping-table &optional function-404)
   "Dispatch the HTTPCON to the correct function based on the URL-MAPPING-TABLE.
@@ -563,26 +594,20 @@ To map the root url you should use:
 
   $
 
-to map another url you should use:
+'elnode-dispatcher' uses 'elnode-normalize-path' to ensure paths
+end in / so to map another url you should use:
 
-  path$
+  path/$
 
 or:
 
-  path/path$
+  path/subpath/$
 
-never:
-
-  path/path/$
 "
-  (let ((m (elnode--mapper-find (elnode-http-pathinfo httpcon) url-mapping-table)))
-    (if (and m (functionp (cdr m)))
-        (funcall (cdr m) httpcon)
-      ;; We didn't match so fire a 404... possibly a custom 404
-      (if (functionp function-404)
-          (funcall function-404 httpcon)
-        ;; We don't have a custom 404 so send our own
-        (elnode-handler-404 httpcon)))))
+  (elnode-normalize-path 
+   httpcon 
+   (lambda (httpcon)
+     (elnode--dispatch-proc httpcon url-mapping-table function-404))))
 
 
 ;; elnode child process functions
@@ -596,9 +621,6 @@ send their output to an elnode http connection.
 
 The main job of this sentinel is to send the end of the http
 stream when the child process finishes."
-  ;; FIXME: BIG PROBLEM
-  ;; the sentinel's finished gets called before all the data is written?
-  ;; apparently that can't happen
   (cond
    ((equal status "finished\n")
     (let ((httpcon (process-get process :elnode-httpcon)))
@@ -676,32 +698,28 @@ directed at the same http connection."
   /etc/mime.types"
   :group 'elnode)
 
-(defun elnode--webserver-index-list-item (docroot targetfile pathinfo dir-entry)
-  "Make the "
-  ;; dir-entry is a long list of attribute values
-  (let ((entry (format 
-                "%s/%s" 
-                (if (equal pathinfo "/")  "" pathinfo)
-                (car dir-entry))))
-    (format "<a href='%s'>%s</a><br/>\r\n" 
-            entry
-            (car dir-entry))))
 
 (defun elnode--webserver-index (docroot targetfile pathinfo)
+  "Constructs index documents for a 'docroot' and 'targetfile' pointing to a dir."
+  ;; TODO make this usable by people generally
   (let ((dirlist (directory-files-and-attributes targetfile)))
     ;; TODO make some templating here so people can change this
-    (format "<html><head><title>%s</title></head><body><h1>%s</h1><div>%s</div></body></html>\n"
-            pathinfo
-            pathinfo
-            (mapconcat 
-             (lambda (dir-entry)
-               (elnode--webserver-index-list-item
-                docroot 
-                targetfile 
-                pathinfo 
-                dir-entry))
-             dirlist
-             "\n"))))
+    (format 
+     "<html><head><title>%s</title></head><body><h1>%s</h1><div>%s</div></body></html>\n"
+     pathinfo
+     pathinfo
+     (mapconcat 
+      (lambda (dir-entry)
+        (let ((entry (format 
+                      "%s%s" 
+                      (if (equal pathinfo "/")  "" pathinfo)
+                      (car dir-entry))))
+          (format 
+           "<a href='%s'>%s</a><br/>\r\n" 
+           entry
+           (car dir-entry))))
+      dirlist
+      "\n"))))
 
 (defun elnode-test-path (httpcon docroot handler &optional 404-handler)
   "Check that the path requested is above the docroot specified.
@@ -711,18 +729,18 @@ on success.
 
 handler is called: httpcon docroot targetfile
 
-This is used by elnode-webserver-handler-maker in the webservers
+This is used by 'elnode--webserver-handler-proc' in the webservers
 that it creates... but it's also meant to be generally useful for
 other handler writers."
   (let* ((pathinfo (elnode-http-pathinfo httpcon))
          ;; Let webserver users prefix the webserver path in a dispatcher regex
          ;; use a regex like this:
-         ;;  "prefix\\(.*\\)$" 
+         ;;  "prefix/\\(.*\\)$" 
          ;; and we'll be able to prefix the path properl
          (path (or (match-string 1 pathinfo) pathinfo))
          (targetfile (format "%s%s" 
                              (expand-file-name docroot)
-                             (if (equal path "/")  "" path))))
+                             (format "/%s" (if (equal path "/")  "" path)))))
     (if (or 
          (file-exists-p targetfile)
          ;; Test the targetfile is under the docroot
@@ -734,10 +752,10 @@ other handler writers."
       ;; Call the 404 handler
       (if (functionp 404-handler)
           (funcall 404-handler httpcon)
-        (elnode-handler-404 httpcon)))))
+        (elnode-send-404 httpcon)))))
 
 
-(defun elnode--webserver-handler-fn (httpcon docroot mime-types)
+(defun elnode--webserver-handler-proc (httpcon docroot mime-types)
   "Actual webserver implementation.
 
 This is not a real handler (because it takes more than the
@@ -756,7 +774,6 @@ handlers."
          ;; It's a file... use 'cat' to send it to the user 
          (if (file-exists-p targetfile)
              (progn
-               (require 'mailcap)
                (mailcap-parse-mimetypes)
                (let ((mimetype (or (car (rassoc 
                                          (cadr (split-string targetfile "\\."))
@@ -767,7 +784,7 @@ handlers."
                  (elnode-child-process httpcon "cat" targetfile)))
            ;; FIXME: This needs improving so we can handle the 404
            ;; This function should raise an exception?
-           (elnode-handler-404 httpcon)))))))
+           (elnode-send-404 httpcon)))))))
 
 (defun elnode-webserver-handler-maker (&optional docroot extra-mime-types)
   "Make a webserver handler possibly with the specific docroot and extra-mime-types
@@ -778,7 +795,7 @@ Returns a proc which is the handler."
                                    elnode-webserver-extra-mimetypes)))
     ;; Return the proc
     (lambda (httpcon)
-      (elnode--webserver-handler-fn httpcon my-docroot my-mime-types))))
+      (elnode--webserver-handler-proc httpcon my-docroot my-mime-types))))
 
 ;; Demo handlers
 
@@ -837,7 +854,7 @@ something that will serve a docroot."
 Shows how a handler can contain a dispatcher to make it simple to
 handle more complex requests."
   (elnode-dispatcher httpcon
-                     '(("/$" . nicferrier-handler)
+                     '(("$" . nicferrier-handler)
                        ("nicferrier/$" . nicferrier-handler))))
 
 (defun nicferrier-post-handler (httpcon)
@@ -846,7 +863,7 @@ handle more complex requests."
 If it's not a POST send a 400."
   (if (not (equal "POST" (elnode-http-method httpcon)))
       (progn
-        (elnode-http-start httpcon 200 ''(("Content-type" . "text/html")))
+        (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
         (elnode-http-return httpcon (format "<html>
 <head>
 <body>
@@ -859,7 +876,7 @@ If it's not a POST send a 400."
 </html>
 " (elnode-http-pathinfo httpcon))))
     (let ((params (elnode-http-params httpcon)))
-      (elnode-http-start httpcon 200 ''(("Content-type" . "text/html")))
+      (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
       (elnode-http-return 
        httpcon 
        (format "<html><body><ul>%s</ul></body></html>\n"
@@ -877,7 +894,7 @@ handle more complex requests."
   (elnode-dispatcher 
    httpcon
    `(("$" . nicferrier-post-handler)
-     ("nicferrier\\(.*\\)$" . ,(elnode-webserver-handler-maker "~/public_html")))))
+     ("nicferrier/\\(.*\\)$" . ,(elnode-webserver-handler-maker "~/public_html")))))
 
 
 (provide 'elnode)
