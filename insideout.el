@@ -21,6 +21,9 @@
              (buffer-substring-no-properties (point-min) (point-max))))))
 
 (defun insideout-handler (httpcon)
+  "Turn your emacs insideout with elnode.
+
+This exposes all your non * buffers to localhost - so beware."
   (let ((p (elnode-http-pathinfo httpcon)))
     (let ((buf-name (progn
                       (string-match "/\\(.*\\)" p)
