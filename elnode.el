@@ -420,7 +420,19 @@ This is not a strong parser. Replace with something better."
     (elnode--http-query-to-alist postdata)))
 
 (defun elnode-http-params (httpcon)
-  "Get an alist of the parameters in the request"
+  "Get an alist of the parameters in the request.
+
+If the method is a GET then the parameters are from the url. If
+the method is a POST then the parameters may come from either the
+url or the POST body or both:
+
+ POST /path?a=b&x=y
+ a=c
+
+would result in:
+
+ '(('a' 'b' 'c')('x' . 'y'))
+"
   (or 
    (process-get httpcon :elnode-http-params)
    (let ((query (elnode-http-query httpcon)))
@@ -613,7 +625,7 @@ or:
 ;; elnode child process functions
 
 ;; TODO: handle errors better than messaging
-(defun elnode-child-process-sentinel (process status)
+(defun elnode--child-process-sentinel (process status)
   "A generic sentinel for elnode child processes.
 
 elnode child processes are just emacs asynchronous processes that
@@ -643,7 +655,7 @@ stream when the child process finishes."
    (t 
     (elnode-error "elnode-chlild-process-sentinel: %s" status))))
 
-(defun elnode-child-process-filter (process data)
+(defun elnode--child-process-filter (process data)
   "A generic filter function for elnode child processes.
 
 elnode child processes are just emacs asynchronous processes that
@@ -682,8 +694,8 @@ directed at the same http connection."
     ;; WARNING: this means you can only have 1 child process at a time
     (process-put httpcon :elnode-child-process p)
     ;; Setup the filter and the sentinel to do the right thing with incomming data and signals
-    (set-process-filter p 'elnode-child-process-filter)
-    (set-process-sentinel p 'elnode-child-process-sentinel)))
+    (set-process-filter p 'elnode--child-process-filter)
+    (set-process-sentinel p 'elnode--child-process-sentinel)))
 
 ;; Webserver stuff
 
@@ -787,15 +799,25 @@ handlers."
            (elnode-send-404 httpcon)))))))
 
 (defun elnode-webserver-handler-maker (&optional docroot extra-mime-types)
-  "Make a webserver handler possibly with the specific docroot and extra-mime-types
+  "Make a webserver handler possibly with the specific 'docroot' and 'extra-mime-types'.
 
-Returns a proc which is the handler."
+Returns a proc which is the handler. The handler serves files out
+of the docroot and marks them with the content types that Emacs
+knows about. You can add extra content types for the webserver
+just by supplying an alist of mime-types and extensions for
+'extra-mime-types'.
+
+The webserver handler also creates file indexes.
+
+The webserver uses 'elnode-test-path' to make sure that the
+request does not go above the 'docroot'."
   (lexical-let ((my-docroot (or docroot elnode-webserver-docroot))
                 (my-mime-types (or extra-mime-types
                                    elnode-webserver-extra-mimetypes)))
     ;; Return the proc
     (lambda (httpcon)
       (elnode--webserver-handler-proc httpcon my-docroot my-mime-types))))
+
 
 ;; Demo handlers
 

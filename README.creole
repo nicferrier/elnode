@@ -42,114 +42,237 @@ able to stop it, like:
 }}}
 
 
-== HTTP interface ==
+== API ==
 
-=== headers ===
+=== elnode-child-process ===
 
-You can query headers in the HTTP request in your handler using the
-function elnode-http-header:
+Run the specified process asynchronously and send it's output to the http connection.
 
-{{{
-(defun my-handler (httpcon)
-  (elnode-http-header httpcon "Content-type")
-  )
-}}}
+program is the program to run.
+args is a list of arguments to pass to the program.
 
-=== method ===
-
-{{{
-(elnode-http-method httpcon)
-}}}
-
-=== pathinfo ===
-
-{{{
-(elnode-http-pathinfo httpcon)
-}}}
+It is NOT POSSIBLE to run more than one process at a time
+directed at the same http connection.
 
 
-=== query ===
+=== elnode-dispatcher ===
 
-{{{
-(elnode-http-query httpcon)
-}}}
+Dispatch the HTTPCON to the correct function based on the URL-MAPPING-TABLE.
 
+URL-MAPPING-TABLE is an alist of:
 
-=== query parameters ===
+ (url-regex . function-to-dispatch)
 
-{{{
-(elnode-http-params httpcon)
-}}}
+To map the root url you should use:
 
-this returns an alist of the params in the query.
+  $
 
-=== version ===
+'elnode-dispatcher' uses 'elnode-normalize-path' to ensure paths
+end in / so to map another url you should use:
 
-{{{
-(elnode-http-version httpcon)
-}}}
+  path/$
 
+or:
 
-== Dispatching ==
-
-Handler functions can be simple functions to respond to everything
-coming into a server. It's more normal that you would have a server
-that did different things on different urls so elnode provides a url
-dispatcher function, you can use it like this:
-
-{{{
-  (elnode-dispatcher httpcon
-                     '(("/$" . 'root-handler)
-                       ("users/$" . 'users-handler))))
-}}}
-
-One of the chief advantages of any lisp is the amount of flexibility
-there can be in code like this. If elnode is at all successfull at
-catching people's imaginations I would expect a variety of
-dispatchers to emerge.
+  path/subpath/$
 
 
-== Calling processes ==
-
-There is support for calling unix processes asynchronously and mapping
-the output to an HTTP connection:
-
-{{{
-(elnode-child-process httpcon 
-    "cat" "/home/nferrier/elnode/example.html"
-    )
-}}}
-
-Would call the program //cat// with the HTML file as an argument. The
-output of the process will be copied to the HTTP connection
-asychronously (so fast).
 
 
-== File serving ==
+=== elnode-error ===
 
-elnode includes a file-server handler maker. This can be used to make
-file servers with specific docroots (so you're not tied to just one).
+How errors are logged.
 
-Here's an example usage:
+This function is available for handlers to call. It is also used
+by elnode iteslf. 
 
-{{{
-(defvar docroot "~/www")
-(defun my-handler (httpcon)
-  (let ((webserver (elnode-webserver-handler-maker docroot)))
-    (elnode-dispatcher httpcon
-                       '(("/$" . webserver)
-                         ("users/$" . 'users-handler)))))
-}}}
+There is only one error log, in the future there may be more.
 
-One point of interest is that the webserver tools are written using
-the child-process tools, specifically, elnode serves files by calling
-unix ///cat///.
+
+=== elnode-http-header ===
+
+Get the header specified by name from the header
+
+
+=== elnode-http-method ===
+
+Get the PATHINFO of the request
+
+
+=== elnode-http-params ===
+
+Get an alist of the parameters in the request.
+
+If the method is a GET then the parameters are from the url. If
+the method is a POST then the parameters may come from either the
+url or the POST body or both:
+
+ POST /path?a=b&x=y
+ a=c
+
+would result in:
+
+ '(('a' 'b' 'c')('x' . 'y'))
+
+
+
+=== elnode-http-pathinfo ===
+
+Get the PATHINFO of the request
+
+
+=== elnode-http-query ===
+
+Get the QUERY of the request
+
+
+=== elnode-http-return ===
+
+End the http response on the specified http connection
+
+httpcon is the http connection.
+data must be a string right now.
+
+
+=== elnode-http-send-string ===
+
+Send the string to the HTTP connection.
+
+This is really only a placeholder function for doing transfer-encoding.
+
+
+=== elnode-http-start ===
+
+Start the http response on the specified http connection.
+
+httpcon is the HTTP connection being handled.
+status is the HTTP status, eg: 200 or 404
+header is a sequence of (header-name . value) pairs.
+
+For example:
+
+ (elnode-http-start httpcon "200" '("Content-type" . "text/html"))
+
+
+
+=== elnode-http-version ===
+
+Get the PATHINFO of the request
+
+
+=== elnode-list-buffers ===
+
+List the current buffers being managed by elnode
+
+
+=== elnode-normalize-path ===
+
+A decorator for 'handler' that normalizes paths to have a trailing slash.
+
+This checks the path for a trailing slash and sends a 302 to the
+slash trailed url if there is none. 
+
+Otherwise it calls 'handler'
+
+
+=== elnode-send-400 ===
+
+A generic 400 handler
+
+
+=== elnode-send-404 ===
+
+A generic 404 handler
+
+
+=== elnode-send-redirect ===
+
+Sends a redirect to the specified location
+
+
+=== elnode-start ===
+
+Start the elnode server.
+
+Most of the work done by the server is actually done by
+functions, the sentinel function, the log function and a filter
+function.
+
+request-handler is a function which is called with the
+request. The function is called with one argument, the
+http-connection.
+
+You can use functions such as elnode-http-start and
+elnode-http-send-body to send the http response.
+
+Example:
+
+ (defun nic-server (httpcon)
+   (elnode-http-start 200 '(("Content-Type": "text/html")))
+   (elnode-http-return "<html><b>BIG!</b></html>")
+   )
+ (elnode-start 'nic-server 8000)
+ ;; End
+
+You must also specify the port to start the server on.
+
+You can optionally specify the hostname to start the server on,
+this must be bound to a local IP. Some names are special:
+
+  localhost  means 127.0.0.1
+  * means 0.0.0.0
+
+specifying an IP is also possible.
+
+Note that although host can be specified, elnode does not
+disambiguate on running servers by host. So you cannot start 2
+different elnode servers on the same port on different hosts.
+
+
+
+=== elnode-stop ===
+
+Stop the elnode server
+
+
+=== elnode-test-path ===
+
+Check that the path requested is above the docroot specified.
+
+Call 404-handler (or default 404 handler) on failure and handler
+on success.
+
+handler is called: httpcon docroot targetfile
+
+This is used by 'elnode--webserver-handler-proc' in the webservers
+that it creates... but it's also meant to be generally useful for
+other handler writers.
+
+
+=== elnode-webserver-handler-maker ===
+
+Make a webserver handler possibly with the specific 'docroot' and 'extra-mime-types'.
+
+Returns a proc which is the handler. The handler serves files out
+of the docroot and marks them with the content types that Emacs
+knows about. You can add extra content types for the webserver
+just by supplying an alist of mime-types and extensions for
+'extra-mime-types'.
+
+The webserver handler also creates file indexes.
+
+The webserver uses 'elnode-test-path' to make sure that the
+request does not go above the 'docroot'.
+
+
 
 == But... ==
 
 There's always a but.
 
-The HTTP parsing isn't very complete, we don't parse any data sent through POST.
+Here's a list of buts:
 
-The error handling is absolute rubbish. It will get better.
+ * the HTTP parsing isn't great, it uses too many regexs
+ * we don't parse any data sent through POST other than form-data
+ * the error handling is absolute rubbish
 
