@@ -61,22 +61,28 @@ Dispatch the HTTPCON to the correct function based on the URL-MAPPING-TABLE.
 
 URL-MAPPING-TABLE is an alist of:
 
+{{{
  (url-regex . function-to-dispatch)
+}}}
 
 To map the root url you should use:
 
+{{{
   $
+}}}
 
 'elnode-dispatcher' uses 'elnode-normalize-path' to ensure paths
 end in / so to map another url you should use:
 
+{{{
   path/$
+}}}
 
 or:
 
+{{{
   path/subpath/$
-
-
+}}}
 
 
 === elnode-error ===
@@ -107,13 +113,16 @@ If the method is a GET then the parameters are from the url. If
 the method is a POST then the parameters may come from either the
 url or the POST body or both:
 
+{{{
  POST /path?a=b&x=y
  a=c
+}}}
 
 would result in:
 
+{{{
  '(('a' 'b' 'c')('x' . 'y'))
-
+}}}
 
 
 === elnode-http-pathinfo ===
@@ -151,8 +160,9 @@ header is a sequence of (header-name . value) pairs.
 
 For example:
 
+{{{
  (elnode-http-start httpcon "200" '("Content-type" . "text/html"))
-
+}}}
 
 
 === elnode-http-version ===
@@ -207,20 +217,24 @@ elnode-http-send-body to send the http response.
 
 Example:
 
+{{{
  (defun nic-server (httpcon)
    (elnode-http-start 200 '(("Content-Type": "text/html")))
    (elnode-http-return "<html><b>BIG!</b></html>")
    )
  (elnode-start 'nic-server 8000)
  ;; End
+}}}
 
 You must also specify the port to start the server on.
 
 You can optionally specify the hostname to start the server on,
 this must be bound to a local IP. Some names are special:
 
+{{{
   localhost  means 127.0.0.1
   * means 0.0.0.0
+}}}
 
 specifying an IP is also possible.
 
