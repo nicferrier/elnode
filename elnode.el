@@ -168,7 +168,7 @@ Serves only to connect the server process to the client processes"
 
 ;;;###autoload
 (defun elnode-start (request-handler port host)
-  "Start the elnode server.
+  "Start the elnode server so that REQUEST-HANDLER handles requests on PORT on HOST.
 
 Most of the work done by the server is actually done by
 functions, the sentinel function, the log function and a filter
@@ -484,38 +484,33 @@ For example:
 
  (elnode-http-start httpcon \"200\" '(\"Content-type\" . \"text/html\"))
 "
-  (let ((http-codes-strings '(("200" . "Ok")
-                              (200 . "Ok")
-                              ("302" . "Redirect")
-                              (302 . "Redirect")
-                              ("400" . "Bad Request")
-                              (400 . "Bad Request")
-                              ("401" . "Authenticate")
-                              (401 . "Authenticate")
-                              ("404" . "Not Found")
-                              (404 . "Not Found")
-                              ("500" . "Server Error")
-                              (500 . "Server Error")
-                              )))
-    ;; Send the header
-    (let ((header-alist (cons 
-                         '("Transfer-encoding" . "chunked")
-                         header)))
-      (process-send-string 
-       httpcon 
-       (format
-        "HTTP/1.1 %s %s\r\n%s\r\n\r\n" 
-        status 
-        ;; The status text
-        (cdr (assoc status http-codes-strings))
-        ;; The header
-        (or 
-         (mapconcat 
-          (lambda (p)
-            (format "%s: %s" (car p) (cdr p)))
-          header-alist
-          "\r\n")
-         "\r\n"))))))
+  (if (process-get httpcon :elnode-http-started)
+      (elnode-error "http already started")
+    (let ((http-codes-strings '(("200" . "Ok")           (200 . "Ok")
+                                ("302" . "Redirect")     (302 . "Redirect")
+                                ("400" . "Bad Request")  (400 . "Bad Request")
+                                ("401" . "Authenticate") (401 . "Authenticate")
+                                ("404" . "Not Found")    (404 . "Not Found")
+                                ("500" . "Server Error") (500 . "Server Error")
+                                )))
+      ;; Send the header
+      (let ((header-alist (cons '("Transfer-encoding" . "chunked") header)))
+        (process-send-string 
+         httpcon 
+         (format
+          "HTTP/1.1 %s %s\r\n%s\r\n\r\n" 
+          status 
+          ;; The status text
+          (cdr (assoc status http-codes-strings))
+          ;; The header
+          (or 
+           (mapconcat 
+            (lambda (p)
+              (format "%s: %s" (car p) (cdr p)))
+            header-alist
+            "\r\n")
+           "\r\n")))
+        (process-put httpcon :elnode-http-started 't)))))
 
 (defun elnode--http-end (httpcon)
   "We need a special end function to do the emacs clear up"
@@ -525,16 +520,20 @@ For example:
   )
 
 (defun elnode-http-return (httpcon data)
-  "End the http response on the specified http connection
+  "End the http response on the specified 'httpcon' sending 'data'.
 
-httpcon is the http connection.
-data must be a string right now."
-  (elnode-http-send-string httpcon data)
-  ;; Need to close the chunked encoding here
-  (elnode-http-send-string httpcon "")
-  (process-send-string httpcon "\r\n")
-  (elnode--http-end httpcon)
-  )
+'httpcon' is the http connection which must have had the headers
+sent with 'elnode-http-start' 
+
+'data' must be a string right now."
+  (if (not (process-get httpcon :elnode-http-started))
+      (elnode-error "http not started")
+    (progn
+      (elnode-http-send-string httpcon data)
+      ;; Need to close the chunked encoding here
+      (elnode-http-send-string httpcon "")
+      (process-send-string httpcon "\r\n")
+      (elnode--http-end httpcon))))
 
 
 (defun elnode--mapper-find (path url-mapping-table)
@@ -621,6 +620,64 @@ or:
    (lambda (httpcon)
      (elnode--dispatch-proc httpcon url-mapping-table function-404))))
 
+(defun elnode--hostpath-dispatch-proc (httpcon hostpath-mapping-table &optional function-404)
+  "Does the actual hostpath dispatch work."
+  ;; TODO - find a way to abstract this and elnode--dispatch-proc
+  (let* ((hostpath (format "%s%s" 
+                    (let ((host (elnode-http-header httpcon "Host")))
+                      (save-match-data
+                        (string-match "\\([^:]+\\)\\(:[0-9]+.*\\)" host)
+                        (match-string 1 host)))
+                    (elnode-http-pathinfo httpcon)))
+         (m (catch 'found
+             (mapcar 
+              (lambda (mapping)
+                (let ((mapping-re (car mapping)))
+                  (if (string-match mapping-re hostpath)
+                      (throw 'found mapping))))
+              hostpath-mapping-table))))
+    (if (and m (functionp (cdr m)))
+        (funcall (cdr m) httpcon)
+      ;; We didn't match so fire a 404... possibly a custom 404
+      (if (functionp function-404)
+          (funcall function-404 httpcon)
+        ;; We don't have a custom 404 so send our own
+        (elnode-send-404 httpcon)))))
+
+(defun elnode-hostpath-dispatcher (httpcon hostpath-mapping-table &optional function-404)
+  "Dispatch the HTTPCON to the correct handler based on the HOSTPATH-MAPPING-TABLE.
+
+HOSTPATH-MAPPING-TABLE has a regex of the host and the path slash separated, thus:
+
+ (\"^localhost/pastebin.*\" . pastebin-handler)
+
+"
+  (elnode-normalize-path 
+   httpcon 
+   (lambda (httpcon)
+     (elnode--hostpath-dispatch-proc httpcon hostpath-mapping-table function-404))))
+
+;;;###autoload
+(defcustom elnode-hostpath-default-table 
+  '(("[^/]+/.*" . elnode-webserver))
+  "Customizable variable defining hostpath mappings for 'elnode-hostpath-default-handler'.
+
+This is the default mapping table for elnode, out of the box. If
+you customize this then elnode will serve these hostpath mappings
+by just loading elnode.
+
+By default the table maps everything to
+'elnode-webserver'. Unless you're happy with the default you
+should probably get rid of the everything path because it will
+interfere with any other mappings you add.")
+
+;;;###autoload
+(defun elnode-hostpath-default-handler (httpcon)
+  "A hostpath handler using the 'elnode-hostpath-default-table' for the match table.
+
+This simply calls 'elnode-hostpath-dispatcher' with 'elnode-hostpath-default-table'."
+  (elnode-hostpath-dispatcher httpcon elnode-hostpath-default-table))
+
 
 ;; elnode child process functions
 
@@ -700,14 +757,17 @@ directed at the same http connection."
 ;; Webserver stuff
 
 (defcustom elnode-webserver-docroot "~/public_html"
-  "the document root of the webserver."
+  "the document root of the webserver.
+
+Webserver functions are free to use this or not. The
+'elnode-webserver' function does use it."
   :group 'elnode)
 
 (defcustom elnode-webserver-extra-mimetypes '(("text/plain" . "creole")
                                                ("text/plain" . "el"))
   "this is just a way of hacking the mime type discovery so we
-  can add more file mappings more easily than editing
-  /etc/mime.types"
+can add more file mappings more easily than editing
+/etc/mime.types"
   :group 'elnode)
 
 
@@ -818,6 +878,32 @@ request does not go above the 'docroot'."
     (lambda (httpcon)
       (elnode--webserver-handler-proc httpcon my-docroot my-mime-types))))
 
+;;;###autoload
+(defun elnode-webserver (httpcon)
+  "A very simple default webserver that serves documents out of 'elnode-webserver-docroot'.
+
+This is just an example of an elnode webserver, but it may be all
+that is needed most of the time.
+
+See 'elnode-webserver-handler-maker' for more possibilities for
+making webserver functions."
+  (elnode--webserver-handler-proc 
+   httpcon 
+   elnode-webserver-docroot
+   elnode-webserver-extra-mimetypes))
+
+
+;;;###autoload
+(defcustom elnode-init-port 8000
+  "The port that 'elnode-init' starts the default server on.")
+
+;;;###autoload
+(defun elnode-init ()
+  (if elnode-init-port
+      (elnode-start 'elnode-hostpath-default-handler elnode-init-port "localhost")))
+
+;; Auto start elnode
+(elnode-init)
 
 ;; Demo handlers
 
