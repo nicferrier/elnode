@@ -669,7 +669,8 @@ by just loading elnode.
 By default the table maps everything to
 'elnode-webserver'. Unless you're happy with the default you
 should probably get rid of the everything path because it will
-interfere with any other mappings you add.")
+interfere with any other mappings you add."
+  :group 'elnode)
 
 ;;;###autoload
 (defun elnode-hostpath-default-handler (httpcon)
@@ -895,12 +896,17 @@ making webserver functions."
 
 ;;;###autoload
 (defcustom elnode-init-port 8000
-  "The port that 'elnode-init' starts the default server on.")
+  "The port that 'elnode-init' starts the default server on."
+  :group 'elnode)
 
 ;;;###autoload
 (defun elnode-init ()
   (if elnode-init-port
-      (elnode-start 'elnode-hostpath-default-handler elnode-init-port "localhost")))
+      (condition-case nil
+          (elnode-start 'elnode-hostpath-default-handler elnode-init-port "localhost")
+        (error (message 
+                "elnode can't start because port %d has something attached already" 
+                elnode-init-port)))))
 
 ;; Auto start elnode
 (elnode-init)
