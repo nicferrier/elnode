@@ -468,7 +468,7 @@ would result in:
 This is really only a placeholder function for doing transfer-encoding."
   ;; We should check that we are actually doing chunked encoding...
   ;; ... but for now we just presume we're doing it.
-  (let ((len (length str)))
+  (let ((len (string-bytes str)))
     (process-send-string httpcon (format "%x\r\n%s\r\n" len (or str "")))
     )
   )
