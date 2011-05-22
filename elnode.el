@@ -1,3 +1,4 @@
+;;; -*- lexical-binding: t -*-
 ;;; elnode.el --- a simple emacs async HTTP server
 
 ;; Copyright (C) 2010  Nic Ferrier
@@ -30,11 +31,10 @@
 ;;
 ;; You can define HTTP request handlers and start an HTTP server
 ;; attached to the handler. Many HTTP servers can be started, each
-;; must have it's own TCP port.
+;; must have it's own TCP port. Handlers can defer processing with a
+;; signal (which allows comet style resource management)
 ;;
 ;; See elnode-start for how to start an HTTP server.
-;;
-;; See functions titled nicferrier-... for example handlers.
 
 ;;; Source code
 ;;
@@ -85,6 +85,79 @@ There is only one error log, in the future there may be more."
 		      msg)))))
 
 
+;; Defer stuff
+
+(put 'elnode-defer 'error-conditions '(elnode-defer)) ;; the elnode defer signal
+
+(defvar elnode--deferred 
+  '()
+  "list of deferred pairs: (socket . handler)")
+
+(defun elnode-defer-now (handler)
+  "the function you call to defer processing of the current socket.
+
+Pass in the current handler.
+
+FIXME: We could capture the current handler somehow? I think the
+point is that whatever signals elnode-defer should be getting
+control back when the deferred is re-processed." 
+  (signal 'elnode-defer handler)
+  )
+
+(defun elnode--deferred-add (httpcon handler)
+  "add the specified connection / handler pair to the list to be processed later.
+
+Basically, add the http connection and the handler that is
+dealing with it to enable COMET like behaviour."
+  ;; Update the elnode--deferred list directly. 
+  ;; Remember, there are no concurrency issues here.
+  (if elnode--deferred
+      (setcdr 
+       (last elnode--deferred) 
+       (cons `(,httpcon . ,handler) nil))
+    (setq elnode--deferred (cons `(,httpcon . ,handler) nil))
+    )
+  )
+
+(defun elnode--deferred-processor ()
+  "Called by an idle timer to process any deferred socket/handler pairs.
+
+It's this that gives elnode the ability to be a COMET server."
+  (let* ((lst 'elnode--deferred))
+    (while (eval lst)
+      (let* ((pair (car (eval lst)))
+             (httpcon (car pair))
+             (handler (cdr pair)))
+        ;; This could benefit from a try/catch/else type form
+        (catch 'next
+          (condition-case signal-value
+              ;; Defer handling - for comet style operations
+              (funcall handler httpcon)
+            ('elnode-defer
+             ;; We need to continue to defer this
+             ;; basically it means not removing it from the list
+             (throw 'next 't)))
+          ;; We completed without a defer signal so we need to remove the pair
+          (set lst (cdr (eval lst)))
+          )
+        )
+      )
+    )
+  )
+
+(defvar elnode--defer-timer nil
+  "The timer used by the elnode defer processing.
+
+This is initialized by elnode--init-deferring."
+  )
+
+(defun elnode--init-deferring ()
+  "Initialize elnode defer processing. Necessary for running comet apps."
+  (setq elnode--defer-timer 
+        (run-with-idle-timer 0.1 't 'elnode--deferred-processor))
+  )
+
+
 ;; Main control functions
 
 (defun elnode--sentinel (process status)
@@ -113,7 +186,6 @@ There is only one error log, in the future there may be more."
     (elnode-error "elnode status: %s %s" process status))
    ))
 
-
 (defun elnode--filter (process data)
   "Filter for the clients.
 
@@ -141,14 +213,20 @@ port number of the connection."
             (let ((server (process-get process :server)))
               ;; This is where we call the user handler
               ;; TODO: this needs error protection so we can return an error?
-              (condition-case nil
+              (condition-case signal-value
+                  ;; Defer handling - for comet style operations
                   (funcall (process-get server :elnode-http-handler) process)
+                ('elnode-defer
+                 ;; The handler's processing of the socket should be deferred 
+                 ;; - the value of the signal is the current handler (see elnode-defer-now)
+                 (elnode--deferred-add process (cdr signal-value)))
                 ('t 
                  ;; Try and send a 500 error response
                  ;; FIXME: we need some sort of check to see if the header has been written
                  (process-send-string 
                   process 
                   "HTTP/1.1 500 Server-Error\r\n<h1>Server Error</h1>\r\n")))))))))
+
 
 (defun elnode--log-fn (server con msg)
   "Log function for elnode.
@@ -899,117 +977,33 @@ making webserver functions."
   "The port that 'elnode-init' starts the default server on."
   :group 'elnode)
 
+(defcustom elnode-init-host "localhost"
+  "The host that 'elnode-init' starts the default server listening on."
+  :group 'elnode)
+
 ;;;###autoload
 (defun elnode-init ()
+  "Bootstraps the elnode environment when the lisp is loaded.
+
+It's useful to have elnode start automatically... on lisp
+load. If the variable 'elnode-init-port' is set then this
+function will launch a server on it.
+
+The server is started with 'elnode-hostpath-default-handler' as
+the handler and listening on 'elnode-init-host'
+"
   (if elnode-init-port
       (condition-case nil
-          (elnode-start 'elnode-hostpath-default-handler elnode-init-port "localhost")
+          (elnode-start 'elnode-hostpath-default-handler elnode-init-port elnode-init-host)
         (error (message 
                 "elnode can't start because port %d has something attached already" 
-                elnode-init-port)))))
+                elnode-init-port))))
+  ;;(if (not elnode--defer-timer)
+  ;;    (elnode--init-deferring))
+  )
 
 ;; Auto start elnode
 (elnode-init)
-
-;; Demo handlers
-
-(defun nicferrier-handler (httpcon)
-  "Demonstration function.
-
-This is a simple handler that just sends some HTML in response to
-any request."
-  (let* ((host (elnode-http-header httpcon "Host"))
-         (pathinfo (elnode-http-pathinfo httpcon))
-         )
-    (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
-    (elnode-http-return 
-     httpcon 
-     (format 
-      "<html>
-<body>
-<h1>%s</h1>
-<b>HELLO @ %s %s %s</b>
-</body>
-</html>
-" 
-      (or (cdr (assoc "name" (elnode-http-params httpcon))) "no name")
-      host 
-      pathinfo 
-      (elnode-http-version httpcon)))))
-
-(defun nicferrier-process-handler (httpcon)
-  "Demonstration function
-
-This is a handler based on an asynchronous process."
-  (let* ((host (elnode-http-header httpcon "Host"))
-         (pathinfo (elnode-http-pathinfo httpcon))
-         )
-    (elnode-http-start httpcon 200 '("Content-type" . "text/plain"))
-    (elnode-child-process httpcon "cat" (expand-file-name "~/elnode/node.el"))))
-
-(defun nicferrier-process-webserver (httpcon)
-  "Demonstration webserver.
-
-Shows how to use elnode's built in webserver toolkit to make
-something that will serve a docroot."
-  ;; Find the directory where this file is defined so we can serve
-  ;; files from there
-  (let ((docroot (file-name-directory
-                  (buffer-file-name 
-                   (car
-                    (save-excursion 
-                      (find-definition-noselect 'nicferrier-process-webserver nil)))))))
-    (let ((webserver (elnode-webserver-handler-maker docroot)))
-      (funcall webserver httpcon))))
-
-(defun nicferrier-mapper-handler (httpcon)
-  "Demonstration function
-
-Shows how a handler can contain a dispatcher to make it simple to
-handle more complex requests."
-  (elnode-dispatcher httpcon
-                     '(("$" . nicferrier-handler)
-                       ("nicferrier/$" . nicferrier-handler))))
-
-(defun nicferrier-post-handler (httpcon)
-  "Handle a POST.
-
-If it's not a POST send a 400."
-  (if (not (equal "POST" (elnode-http-method httpcon)))
-      (progn
-        (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
-        (elnode-http-return httpcon (format "<html>
-<head>
-<body>
-<form method='POST' action='%s'>
-<input type='text' name='a' value='100'/>
-<input type='text' name='b' value='200'/>
-<input type='submit' name='send'/>
-</form>
-</body>
-</html>
-" (elnode-http-pathinfo httpcon))))
-    (let ((params (elnode-http-params httpcon)))
-      (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
-      (elnode-http-return 
-       httpcon 
-       (format "<html><body><ul>%s</ul></body></html>\n"
-               (mapconcat 
-                (lambda (param)
-                  (format "<li>%s: %s</li>" (car param) (cdr param)))
-                params
-                "\n"))))))
-
-(defun nicferrier-everything-mapper-handler (httpcon)
-  "Demonstration function
-
-Shows how a handler can contain a dispatcher to make it simple to
-handle more complex requests."
-  (elnode-dispatcher 
-   httpcon
-   `(("$" . nicferrier-post-handler)
-     ("nicferrier/\\(.*\\)$" . ,(elnode-webserver-handler-maker "~/public_html")))))
-
 
 (provide 'elnode)
 
