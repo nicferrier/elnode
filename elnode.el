@@ -104,6 +104,14 @@ control back when the deferred is re-processed."
   (signal 'elnode-defer handler)
   )
 
+(defmacro elnode-defer-or-do (guard &rest body)
+  "Test the guard and defer if it suceeds and body if it doesn't."
+  `(if ,guard
+       (elnode-defer-now)
+     (progn
+       ,@body))
+  )
+
 (defun elnode--deferred-add (httpcon handler)
   "add the specified connection / handler pair to the list to be processed later.
 
@@ -527,6 +535,15 @@ would result in:
              alist)
          ;; Else just return nil
          '())))))
+
+(defun elnode-http-param (httpcon name)
+  "Get the named parameter from the request."
+  (let* ((params (elnode-http-params httpcon))
+         (param-pair (assoc name params)))
+    (if param-pair
+        (cdr param-pair))
+    ;; Should we signal when we don't have a param?
+    ))
 
 (defun elnode-http-method (httpcon)
   "Get the PATHINFO of the request"
