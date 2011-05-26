@@ -13,7 +13,7 @@ It's like "hell, no". It's... well.... it's an, um, joke.
 
 == How does it work? ==
 
-Well... you can define a handler function:
+You can define a handler function:
 
 {{{
 (defun nicferrier-handler (httpcon)
