@@ -967,9 +967,10 @@ The webserver handler also creates file indexes.
 
 The webserver uses 'elnode-test-path' to make sure that the
 request does not go above the 'docroot'."
-  (lexical-let ((my-docroot (or docroot elnode-webserver-docroot))
-                (my-mime-types (or extra-mime-types
-                                   elnode-webserver-extra-mimetypes)))
+  ;;; REQUIRES LEXICAL SCOPE
+  (let ((my-docroot (or docroot elnode-webserver-docroot))
+        (my-mime-types (or extra-mime-types
+                           elnode-webserver-extra-mimetypes)))
     ;; Return the proc
     (lambda (httpcon)
       (elnode--webserver-handler-proc httpcon my-docroot my-mime-types))))
