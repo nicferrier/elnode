@@ -614,17 +614,18 @@ For example:
   (kill-buffer (process-buffer httpcon))
   )
 
-(defun elnode-http-return (httpcon data)
-  "End the http response on the specified 'httpcon' sending 'data'.
+(defun elnode-http-return (httpcon &optional data)
+  "End the http response on the specified 'httpcon' optionally sending 'data' first.
 
 'httpcon' is the http connection which must have had the headers
 sent with 'elnode-http-start' 
 
-'data' must be a string right now."
+'data' must be a string, it's just passed to 'elnode-http-send'."
   (if (not (process-get httpcon :elnode-http-started))
       (elnode-error "http not started")
     (progn
-      (elnode-http-send-string httpcon data)
+      (if data
+          (elnode-http-send-string httpcon data))
       ;; Need to close the chunked encoding here
       (elnode-http-send-string httpcon "")
       (process-send-string httpcon "\r\n")
@@ -680,7 +681,8 @@ Otherwise it calls 'handler'"
 
 (defun elnode--dispatch-proc (httpcon url-mapping-table &optional function-404)
   "Does the actual dispatch work"
-  (let ((m (elnode--mapper-find (elnode-http-pathinfo httpcon) url-mapping-table)))
+  (let* ((pi (elnode-http-pathinfo httpcon))
+         (m (elnode--mapper-find pi url-mapping-table)))
     (if (and m (functionp (cdr m)))
         (funcall (cdr m) httpcon)
       ;; We didn't match so fire a 404... possibly a custom 404
