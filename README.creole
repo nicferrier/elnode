@@ -50,7 +50,7 @@ You can define a handler function:
 And then start the server:
 
 {{{
-(elnode-start 'nicferrier-handler 8000)
+(elnode-start 'nicferrier-handler 8010 "localhost")
 }}}
 
 You can also start the server interactively... you still have to pass
