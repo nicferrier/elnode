@@ -11,6 +11,30 @@ so I'm writing it.
 It's like "hell, no". It's... well.... it's an, um, joke.
 
 
+== Installation ==
+
+Unfortunately, elnode isn't packaged yet. I will try and get to that.
+
+Until then you can install it by copying the elnode.el file to your machine, somewhere on your load-path and then:
+
+{{{
+(load-library "elnode")
+}}}
+
+When elnode initializes it automatically starts a webserver.
+
+If you:
+
+{{{
+M-x customize-group
+elnode
+}}}
+
+you can alter a number of variables pertaining to the default configuration.
+
+You can also just ignore it and write your own servers.
+
+
 == How does it work? ==
 
 You can define a handler function:
