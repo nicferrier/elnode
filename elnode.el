@@ -3,8 +3,8 @@
 
 ;; Copyright (C) 2010  Nic Ferrier
 
-;; Author: Nic Ferrier <nferrier+elnode@ferrier.me.uk>
-;; Maintainer: Nic Ferrier <nferrier+elnode@ferrier.me.uk>
+;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
+;; Maintainer: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Created: 5th October 2010
 ;; Version: 0.1
 ;; Keywords: lisp
