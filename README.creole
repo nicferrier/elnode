@@ -62,7 +62,7 @@ If you can remember the port you started your server on then you'll be
 able to stop it, like:
 
 {{{
-(elnode-stop 8000)
+(elnode-stop 8010)
 }}}
 
 
