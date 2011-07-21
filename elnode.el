@@ -50,7 +50,7 @@
 ;; for private functions.
 
 
-;;; Code
+;;; Code goes here
 
 (require 'mm-encode)
 (require 'mailcap)
