@@ -112,10 +112,10 @@ control back when the deferred is re-processed."
   )
 
 (defun elnode--deferred-add (httpcon handler)
-  "Add the specified connection / handler pair to the list to be processed later.
+  "Add the specified HTTPCON HANDLER pair to the list to be processed later.
 
-Basically, add the http connection and the handler that is
-dealing with it to enable COMET like behaviour."
+Basically, add the HTTPCON connection and the HANDLER that is
+dealing with it to enable comet like behaviour."
   ;; Update the elnode--deferred list directly.
   ;; Remember, there are no concurrency issues here.
   (if elnode--deferred
