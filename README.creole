@@ -314,3 +314,16 @@ Here's a list of buts:
  * we don't parse any data sent through POST other than form-data
  * the error handling is absolute rubbish
 
+== To Do? ==
+
+If you're playing with elnode but you can't think of anything to do with it...
+
+ * an elpa repository written with elnode
+ ** turn the package list into html
+ ** allow packages to be downloaded from elnode
+ ** upload of packages will require fixing the request management a little
+ * an emacsclient with elnode
+ ** write a command line client that submits data to the server over HTTP
+ ** it should interact with the emacs user in the same way that emacs server does
+ * a simple wiki engine with elnode
+ ** maybe using a command line wiki templating tool
