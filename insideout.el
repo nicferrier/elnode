@@ -11,7 +11,7 @@
       ((equal src "<")  "&lt;")))
    str))
 
-(defun insideout-render (buf)
+(defun insideout-render (buf-name)
   "Render buffer 'buf' as HTML"
   (with-current-buffer (get-buffer buf-name)
     (format "<html>
@@ -34,7 +34,7 @@ This exposes all your non * buffers to localhost - so beware."
         (elnode-http-return 
          httpcon 
          (if (bufferp (get-buffer buf-name))
-             (insideout-render buf)
+             (insideout-render buf-name)
            ;; The buffer index
            (format "<html><body><ul>%s</ul></body></html>"
                    (mapconcat
