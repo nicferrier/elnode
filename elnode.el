@@ -1,13 +1,12 @@
-;;; -*- lexical-binding: t -*-
-;;; elnode.el --- a simple emacs async HTTP server
+;;; elnode.el --- a simple emacs async HTTP server -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2010  Nic Ferrier
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Maintainer: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Created: 5th October 2010
-;; Version: 0.1
-;; Keywords: lisp
+;; Version: 0.2
+;; Keywords: lisp, http
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -50,7 +49,6 @@
 ;; for private functions.
 
 
-
 ;;; Code:
 
 (require 'mm-encode)
@@ -64,8 +62,7 @@
 
 This is an alist of proc->server-process:
 
-  (port . process)
-")
+  (port . process)")
 
 (defvar elnode-server-error-log "*elnode-server-error*"
   "The buffer where error log messages are sent.")
@@ -73,9 +70,9 @@ This is an alist of proc->server-process:
 ;; Error log handling
 
 (defun elnode-error (msg &rest args)
-  "How errors are logged.
+  "Log MSG with ARGS as an error.
 
-This function is available for handlers to call. It is also used
+This function is available for handlers to call.  It is also used
 by elnode iteslf.
 
 There is only one error log, in the future there may be more."
@@ -116,10 +113,10 @@ control back when the deferred is re-processed."
   )
 
 (defun elnode--deferred-add (httpcon handler)
-  "Add the specified connection / handler pair to the list to be processed later.
+  "Add the specified HTTPCON HANDLER pair to the list to be processed later.
 
-Basically, add the http connection and the handler that is
-dealing with it to enable COMET like behaviour."
+Basically, add the HTTPCON connection and the HANDLER that is
+dealing with it to enable comet like behaviour."
   ;; Update the elnode--deferred list directly.
   ;; Remember, there are no concurrency issues here.
   (if elnode--deferred
@@ -159,7 +156,7 @@ It's this that gives elnode the ability to be a COMET server."
 (defvar elnode--defer-timer nil
   "The timer used by the elnode defer processing.
 
-This is initialized by elnode--init-deferring."
+This is initialized by `elnode--init-deferring'."
   )
 
 (defun elnode--init-deferring ()
@@ -327,7 +324,7 @@ different elnode servers on the same port on different hosts."
 
 ;; TODO: make this take an argument for the
 (defun elnode-stop (port)
-  "Stop the elnode server."
+  "Stop the elnode server attached to PORT."
   (interactive "nPort: ")
   (let ((server (assoc port elnode-server-socket)))
     (if server
@@ -504,7 +501,8 @@ property if specified is the property to return"
    (elnode--http-parse-resource httpcon :elnode-http-query)))
 
 (defun elnode--http-query-to-alist (query)
-  "Crap parser for HTTP query data.
+  "Crap parser for HTTP QUERY data.
+
 Returns an association list."
   (let ((alist (mapcar
                 (lambda (nv)
@@ -544,6 +542,7 @@ A is considered the priority (it's elements go in first)."
 
 (defun elnode--http-post-to-alist (httpcon)
   "Parse the POST body.
+
 This is not a strong parser. Replace with something better."
   (let ((postdata
          (with-current-buffer (process-buffer httpcon)
@@ -681,7 +680,7 @@ sent with 'elnode-http-start'
 (defun elnode--mapper-find (path url-mapping-table)
   "Try and find the 'PATH' inside the 'URL-MAPPING-TABLE'.
 
-This function exposes it's match-data on the 'path' variable so
+This function exposes it's `match-data' on the 'path' variable so
 that you can access that in your handler with something like:
 
  (match-string 1 (elnode-http-pathinfo httpcon))"
