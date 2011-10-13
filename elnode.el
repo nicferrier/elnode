@@ -84,6 +84,18 @@ There is only one error log, in the future there may be more."
 			(apply 'format `(,msg ,@args))
 		      msg)))))
 
+(ert-deftest elnode-test-error-log ()
+  (let ((err-message "whoops!! something went wrong! %s" )
+        (err-include '("some included value")))
+    (if (get-buffer elnode-server-error-log)
+        (kill-buffer elnode-server-error-log))
+    (apply 'elnode-error `(,err-message ,@err-include))
+    (should (string-match
+             (format "^elnode-.*: %s\n$" (apply 'format `(,err-message ,@err-include)))
+             (with-current-buffer (get-buffer elnode-server-error-log)
+               (buffer-substring (point-min) (point-max)))))))
+
+
 
 ;; Defer stuff
 
@@ -448,6 +460,10 @@ Returns a cons of the status line and the header association-list:
       )
     )
   )
+
+
+
+
 
 
 (defun elnode--http-parse-status (httpcon &optional property)
