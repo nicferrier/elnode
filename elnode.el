@@ -5,7 +5,7 @@
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Maintainer: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Created: 5th October 2010
-;; Version: 0.3
+;; Version: 0.5
 ;; Keywords: lisp, http
 
 ;; This file is NOT part of GNU Emacs.
@@ -54,8 +54,14 @@
 (require 'mm-encode)
 (require 'mailcap)
 (require 'url-util)
+(require 'ert)
 
 (eval-when-compile (require 'cl))
+
+(defgroup elnode nil
+  "An extensible asynchronous web server for Emacs."
+  :group 'applications
+  )
 
 (defvar elnode-server-socket nil
   "Where we store the server sockets.
@@ -825,7 +831,6 @@ should probably get rid of the everything path because it will
 interfere with any other mappings you add."
   :group 'elnode)
 
-;;;###autoload
 (defun elnode-hostpath-default-handler (httpcon)
   "A hostpath handler using the 'elnode-hostpath-default-table' for the match table.
 
@@ -981,6 +986,7 @@ other handler writers."
         (elnode-send-404 httpcon)))))
 
 
+;;;###autoload
 (defun elnode--webserver-handler-proc (httpcon docroot mime-types)
   "Actual webserver implementation.
 
@@ -1035,13 +1041,15 @@ request does not go above the 'docroot'."
 
 ;;;###autoload
 (defun elnode-webserver (httpcon)
-  "A very simple default webserver that serves documents out of 'elnode-webserver-docroot'.
+  "A simple webserver that serves documents out of `elnode-webserver-docroot'.
 
 This is just an example of an elnode webserver, but it may be all
 that is needed most of the time.
 
 See 'elnode-webserver-handler-maker' for more possibilities for
-making webserver functions."
+making webserver functions.
+
+HTTPCON is the HTTP connection to the user agent."
   (elnode--webserver-handler-proc
    httpcon
    elnode-webserver-docroot
@@ -1067,6 +1075,7 @@ function will launch a server on it.
 
 The server is started with 'elnode-hostpath-default-handler' as
 the handler and listening on 'elnode-init-host'"
+  (interactive)
   (if elnode-init-port
       (condition-case nil
           (elnode-start 'elnode-hostpath-default-handler elnode-init-port elnode-init-host)
@@ -1077,8 +1086,33 @@ the handler and listening on 'elnode-init-host'"
   ;;    (elnode--init-deferring))
   )
 
-;; Auto start elnode
-(elnode-init)
+;;;###autoload
+(defcustom elnode-do-init 't
+  "Should elnode start a server on load?
+
+The server that is started is controlled by more elnode
+customizations.
+
+'elnode-hostpath-default-table' defines the mappings from
+hostpath regexs to handler functions. By default elnode ships
+with this customization setup to serve the document root defined
+in 'elnode-webserver-docroot', which by default is ~/public_html."
+  :group 'elnode
+  :type '(boolean)
+  )
+
+;;;###autoload
+(defvar elnode--inited nil
+  "Records when elnode is initialized.
+This is autoloading mechanics, see the eval-after-load for doing init.")
+
+;; Auto start elnode if we're ever loaded
+;;;###autoload
+(eval-after-load 'elnode 
+  (if (and elnode-do-init (not elnode--inited))
+      (progn
+        (elnode-init)
+        (setq elnode--inited nil))))
 
 (provide 'elnode)
 
