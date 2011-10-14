@@ -135,7 +135,7 @@ or:
 
 {{{
   path/subpath/$
-
+}}}
 
 === elnode-error (MSG &REST ARGS) ===
 
@@ -162,7 +162,7 @@ HOSTPATH-MAPPING-TABLE has a regex of the host and the path slash separated, thu
 
 {{{
  ("^localhost/pastebin.*" . pastebin-handler)
-
+}}}
 
 === elnode-http-cookie (HTTPCON NAME) ===
 
@@ -201,7 +201,7 @@ would result in:
 
 {{{
  '(([[a]] [[b]] [[c]])([[x]] . [[y]]))
-
+}}}
 
 === elnode-http-pathinfo (HTTPCON) ===
 
@@ -242,7 +242,7 @@ For example:
 
 {{{
  (elnode-http-start httpcon "200" '("Content-type" . "text/html"))
-
+}}}
 
 === elnode-http-version (HTTPCON) ===
 
