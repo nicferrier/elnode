@@ -1,27 +1,33 @@
-= elnode =
+= Elnode =
 
-An attempt to make an emacs lisp clone of nodejs.
-
-Apparently Steve Yegge has already done this... but I couldn't find it
-so I'm writing it.
-
-
-== Why elnode?? ==
-
-It's like "hell, no". It's... well.... it's an, um, joke.
+An attempt to make an EmacsLISP clone of node.js.
 
 
 == Installation ==
 
-Unfortunately, elnode isn't packaged yet. I will try and get to that.
+Elnode is now packaged in [http://marmalade-repo.org/packages/elnode|marmalade]. 
 
-Until then you can install it by copying the elnode.el file to your machine, somewhere on your load-path and then:
+For dealing with package repositories check out the
+[http://www.emacswiki.org/emacs/ELPA|Emacs Wiki] but the short version
+is to add the following to your {{{.emacs}}} or your
+{{{.emacs.d/init.el}}}:
 
 {{{
-(load-library "elnode")
+(add-to-list 
+   'package-archives
+   '("marmalade" . "http://marmalade-repo.org/packages/"))
 }}}
 
-When elnode initializes it automatically starts a webserver.
+If you don't want to use packages you can just install {{{elnode.el}}}
+on your {{{load-path}}} somewhere and:
+
+{{{
+(require 'elnode)
+}}}
+
+== Out of the box ==
+
+When Elnode initializes it automatically starts a webserver.
 
 If you:
 
@@ -64,6 +70,13 @@ able to stop it, like:
 {{{
 (elnode-stop 8010)
 }}}
+
+You can also stop interactively:
+
+{{{
+M-x elnode-stop
+}}}
+
 
 
 == API ==
