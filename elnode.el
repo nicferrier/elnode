@@ -682,12 +682,12 @@ For example:
   )
 
 (defun elnode-http-return (httpcon &optional data)
-  "End the http response on the specified 'httpcon' optionally sending 'data' first.
+  "End the response on HTTPCON optionally sending DATA first.
 
-'httpcon' is the http connection which must have had the headers
+HTTPCON is the http connection which must have had the headers
 sent with 'elnode-http-start'
 
-'data' must be a string, it's just passed to 'elnode-http-send'."
+DATA must be a string, it's just passed to 'elnode-http-send'."
   (if (not (process-get httpcon :elnode-http-started))
       (elnode-error "Http not started")
     (progn
@@ -733,12 +733,12 @@ that you can access that in your handler with something like:
   (elnode-http-return httpcon (format "<h1>redirecting you to %s</h1>\r\n" location)))
 
 (defun elnode-normalize-path (httpcon handler)
-  "A decorator for 'handler' that normalizes paths to have a trailing slash.
+  "A decorator for HANDLER that normalizes paths to have a trailing slash.
 
-This checks the path for a trailing slash and sends a 302 to the
-slash trailed url if there is none.
+This checks the HTTPCON path for a trailing slash and sends a 302
+to the slash trailed url if there is none.
 
-Otherwise it calls 'handler'"
+Otherwise it calls HANDLER."
   (if (not (save-match-data
              (string-match ".*\\(/\\|.*\\.[^/]*\\)$" (elnode-http-pathinfo httpcon))))
       (elnode-send-redirect httpcon (format "%s/" (elnode-http-pathinfo httpcon)))
