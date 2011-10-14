@@ -8,7 +8,7 @@ An attempt to make an EmacsLISP clone of node.js.
 Elnode is now packaged in [[http://marmalade-repo.org/packages/elnode|marmalade]]. 
 
 For dealing with package repositories check out the
-[http://www.emacswiki.org/emacs/ELPA|Emacs Wiki] but the short version
+[[http://www.emacswiki.org/emacs/ELPA|Emacs Wiki]] but the short version
 is to add the following to your {{{.emacs}}} or your
 {{{.emacs.d/init.el}}}:
 
