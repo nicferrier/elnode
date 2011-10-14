@@ -137,6 +137,8 @@ or:
   path/subpath/$
 }}}
 
+
+
 === elnode-error (MSG &REST ARGS) ===
 
 Log MSG with ARGS as an error.
@@ -163,6 +165,8 @@ HOSTPATH-MAPPING-TABLE has a regex of the host and the path slash separated, thu
 {{{
  ("^localhost/pastebin.*" . pastebin-handler)
 }}}
+
+
 
 === elnode-http-cookie (HTTPCON NAME) ===
 
@@ -202,6 +206,8 @@ would result in:
 {{{
  '(([[a]] [[b]] [[c]])([[x]] . [[y]]))
 }}}
+
+
 
 === elnode-http-pathinfo (HTTPCON) ===
 
@@ -243,6 +249,8 @@ For example:
 {{{
  (elnode-http-start httpcon "200" '("Content-type" . "text/html"))
 }}}
+
+
 
 === elnode-http-version (HTTPCON) ===
 
@@ -380,6 +388,7 @@ The webserver handler also creates file indexes.
 
 The webserver uses [[elnode-test-path]] to make sure that the
 request does not go above the [[docroot]].
+
 
 
 
