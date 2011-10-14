@@ -5,7 +5,7 @@ An attempt to make an EmacsLISP clone of node.js.
 
 == Installation ==
 
-Elnode is now packaged in [http://marmalade-repo.org/packages/elnode|marmalade]. 
+Elnode is now packaged in [[http://marmalade-repo.org/packages/elnode|marmalade]]. 
 
 For dealing with package repositories check out the
 [http://www.emacswiki.org/emacs/ELPA|Emacs Wiki] but the short version
