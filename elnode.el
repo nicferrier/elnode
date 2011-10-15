@@ -931,7 +931,7 @@ can add more file mappings more easily than editing
 
 
 (defun elnode--webserver-index (docroot targetfile pathinfo)
-  "Constructs index documents for a 'DOCROOT' and 'TARGETFILE' pointing to a dir."
+  "Constructs index documents for the DOCROOT and TARGETFILE pointing to a dir."
   ;; TODO make this usable by people generally
   (let ((dirlist (directory-files-and-attributes targetfile)))
     ;; TODO make some templating here so people can change this
@@ -1019,18 +1019,18 @@ handlers."
            (elnode-send-404 httpcon)))))))
 
 (defun elnode-webserver-handler-maker (&optional docroot extra-mime-types)
-  "Make a webserver handler possibly with the specific 'docroot' and 'extra-mime-types'.
+  "Make a webserver handler possibly with the DOCROOT and EXTRA-MIME-TYPES.
 
 Returns a proc which is the handler. The handler serves files out
 of the docroot and marks them with the content types that Emacs
 knows about. You can add extra content types for the webserver
 just by supplying an alist of mime-types and extensions for
-'extra-mime-types'.
+EXTRA-MIME-TYPES.
 
 The webserver handler also creates file indexes.
 
 The webserver uses 'elnode-test-path' to make sure that the
-request does not go above the 'docroot'."
+request does not go above the DOCROOT."
   ;;; REQUIRES LEXICAL SCOPE
   (let ((my-docroot (or docroot elnode-webserver-docroot))
         (my-mime-types (or extra-mime-types

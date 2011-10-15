@@ -221,12 +221,12 @@ Get the QUERY of the request.
 
 === elnode-http-return (HTTPCON &OPTIONAL DATA) ===
 
-End the http response on the specified [[httpcon]] optionally sending [[data]] first.
+End the response on HTTPCON optionally sending DATA first.
 
-[[httpcon]] is the http connection which must have had the headers
+HTTPCON is the http connection which must have had the headers
 sent with [[elnode-http-start]]
 
-'data[[ must be a string, it]]s just passed to [[elnode-http-send]].
+DATA must be a string, it's just passed to [[elnode-http-send]].
 
 
 === elnode-http-send-string (HTTPCON STR) ===
@@ -276,12 +276,12 @@ List the current buffers being managed by elnode.
 
 === elnode-normalize-path (HTTPCON HANDLER) ===
 
-A decorator for [[handler]] that normalizes paths to have a trailing slash.
+A decorator for HANDLER that normalizes paths to have a trailing slash.
 
-This checks the path for a trailing slash and sends a 302 to the
-slash trailed url if there is none.
+This checks the HTTPCON path for a trailing slash and sends a 302
+to the slash trailed url if there is none.
 
-Otherwise it calls [[handler]]
+Otherwise it calls HANDLER.
 
 
 === elnode-send-400 (HTTPCON) ===
@@ -376,18 +376,18 @@ HTTPCON is the HTTP connection to the user agent.
 
 === elnode-webserver-handler-maker (&OPTIONAL DOCROOT EXTRA-MIME-TYPES) ===
 
-Make a webserver handler possibly with the specific [[docroot]] and [[extra-mime-types]].
+Make a webserver handler possibly with the DOCROOT and EXTRA-MIME-TYPES.
 
 Returns a proc which is the handler. The handler serves files out
 of the docroot and marks them with the content types that Emacs
 knows about. You can add extra content types for the webserver
 just by supplying an alist of mime-types and extensions for
-[[extra-mime-types]].
+EXTRA-MIME-TYPES.
 
 The webserver handler also creates file indexes.
 
 The webserver uses [[elnode-test-path]] to make sure that the
-request does not go above the [[docroot]].
+request does not go above the DOCROOT.
 
 
 
@@ -415,3 +415,7 @@ If you're playing with elnode but you can't think of anything to do with it...
  ** it should interact with the emacs user in the same way that emacs server does
  * a simple wiki engine with elnode
  ** maybe using a command line wiki templating tool
+ * alter elnode-webserver-handler-maker to do indexing better
+ ** take an optional index producing function?
+ ** take keyword flags that set the behaviour? 
+ ** eg: {{{:doindexes 't }}}
