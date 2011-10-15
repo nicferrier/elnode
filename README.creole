@@ -415,7 +415,7 @@ If you're playing with elnode but you can't think of anything to do with it...
  ** it should interact with the emacs user in the same way that emacs server does
  * a simple wiki engine with elnode
  ** maybe using a command line wiki templating tool
- * alter elnode-webserver-handler-maker to do indexing better
+ * alter {{{elnode-webserver-handler-maker}}} to do indexing better
  ** take an optional index producing function?
  ** take keyword flags that set the behaviour? 
  ** eg: {{{:doindexes 't }}}
