@@ -73,6 +73,48 @@ This is an alist of proc->server-process:
 (defvar elnode-server-error-log "*elnode-server-error*"
   "The buffer where error log messages are sent.")
 
+
+;; Useful macros for testing
+
+(defmacro elnode--mock-process (process-bindings &rest body)
+  "Allow easier elnode testing by mock the process functions.
+
+For example:
+
+ (elnode--mock-process (:elnode-http-params
+                        (:elnode-http-method \"GET\")
+                        (:elnode-http-query \"a=10\"))
+   (should (equal 10 (elnode-http-param 't \"a\")))
+   )
+
+This is a work in progress - not sure what we'll return yet."
+  (declare (indent defun))
+  (let ((pvvar (make-symbol "pv")))
+    `(let 
+         ;; Turn the list of bindings into an alist
+         ((,pvvar (list ,@(loop for f in process-bindings
+                                 collect 
+                                 (if (listp f)
+                                     (list 'cons `(quote ,(car f)) (cadr f))
+                                   (list 'cons `,f nil))))))
+       (flet ((process-get 
+               (proc key)
+               (let ((pair (assoc key ,pvvar)))
+                 (if pair
+                     (cdr pair))))
+              (process-put 
+               (proc key value)
+               ;; do nothing
+               ;; really... we should collect any value here and return it?
+               )
+              ;; We shouldn't actually need this because you should
+              ;; arrange things so the buffer isn't read
+              (process-buffer 
+               (proc) 
+               (get-buffer-create "* dummy proc buffer *")))
+         ,@body
+         ))))
+
 ;; Error log handling
 
 (defun elnode-error (msg &rest args)
@@ -467,15 +509,10 @@ Returns a cons of the status line and the header association-list:
     )
   )
 
-
-
-
-
-
 (defun elnode--http-parse-status (httpcon &optional property)
   "Parse the status line.
 
-property if specified is the property to return"
+Property if specified is the property to return."
   (let ((http-line (or
                     (process-get httpcon :elnode-http-status)
                     (car (elnode--http-parse httpcon)))))
@@ -593,6 +630,7 @@ would result in:
      (let ((alist (if query
                       (elnode--http-query-to-alist query)
                     '())))
+       ;; If we're a POST we have to merge the params
        (if (equal "POST" (elnode-http-method httpcon))
            (progn
              (setq alist (elnode--alist-merge
@@ -601,8 +639,10 @@ would result in:
                           'assoc))
              (process-put httpcon :elnode-http-params alist)
              alist)
-         ;; Else just return nil
-         '())))))
+         ;; Else just return the query params
+         (process-put httpcon :elnode-http-params alist)
+         alist)))))
+
 
 (defun elnode-http-param (httpcon name)
   "Get the named parameter from the request."
@@ -612,6 +652,25 @@ would result in:
         (cdr param-pair))
     ;; Should we signal when we don't have a param?
     ))
+
+(ert-deftest elnode-test-http-params ()
+  "Test that the params are ok if they are on the process.
+
+Sets ':elnode-http-params' to nil to trigger 'elnode-http-params'
+parsing. That checks the ':elnode-http-method':
+
+- for GET it returns the parsed ':elnode-http-query'
+
+- for POST it returns the merger of the parsed POST body and
+  ':elnode-http-query'.
+
+*** WARNING:: This test so far only handles GET ***"
+  (elnode--mock-process (:elnode-http-params
+                         (:elnode-http-method "GET")
+                         (:elnode-http-query "a=10"))
+    (should (equal "10" (elnode-http-param 't "a")))
+    ))
+
 
 (defun elnode-http-method (httpcon)
   "Get the PATHINFO of the request."
