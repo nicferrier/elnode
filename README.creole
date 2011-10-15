@@ -81,38 +81,38 @@ M-x elnode-stop
 
 == API ==
 
-=== elnode-child-process (HTTPCON PROGRAM &REST ARGS) ===
+=== elnode-child-process //httpcon// //program// {{{&rest}}} //args// ===
 
 Run the specified process asynchronously and send it's output to the http connection.
 
-program is the program to run.
-args is a list of arguments to pass to the program.
+//program// is the //program// to run.
+//args// is a list of arguments to pass to the //program//.
 
 It is NOT POSSIBLE to run more than one process at a time
 directed at the same http connection.
 
 
-=== elnode-defer-now (HANDLER) ===
+=== elnode-defer-now //handler// ===
 
 The function you call to defer processing of the current socket.
 
-Pass in the current HANDLER.
+Pass in the current //handler//.
 
-FIXME: We could capture the current handler somehow? I think the
+FIXME: We could capture the current //handler// somehow? I think the
 point is that whatever signals elnode-defer should be getting
 control back when the deferred is re-processed.
 
 
-=== elnode-defer-or-do (GUARD &REST BODY) ===
+=== elnode-defer-or-do //guard// {{{&rest}}} //body// ===
 
-Test the GUARD and defer if it suceeds and BODY if it doesn't.
+Test the //guard// and defer if it suceeds and //body// if it doesn't.
 
 
-=== elnode-dispatcher (HTTPCON URL-MAPPING-TABLE &OPTIONAL FUNCTION-404) ===
+=== elnode-dispatcher //httpcon// //url-mapping-table// {{{&optional}}} //function-404// ===
 
-Dispatch the HTTPCON to the correct function based on the URL-MAPPING-TABLE.
+Dispatch the //httpcon// to the correct function based on the //url-mapping-table//.
 
-URL-MAPPING-TABLE is an alist of:
+//url-mapping-table// is an alist of:
 
 {{{
  (url-regex . function-to-dispatch)
@@ -139,9 +139,9 @@ or:
 
 
 
-=== elnode-error (MSG &REST ARGS) ===
+=== elnode-error //msg// {{{&rest}}} //args// ===
 
-Log MSG with ARGS as an error.
+Log //msg// with //args// as an error.
 
 This function is available for handlers to call.  It is also used
 by elnode iteslf.
@@ -149,18 +149,18 @@ by elnode iteslf.
 There is only one error log, in the future there may be more.
 
 
-=== elnode-hostpath-default-handler (HTTPCON) ===
+=== elnode-hostpath-default-handler //httpcon// ===
 
 A hostpath handler using the [[elnode-hostpath-default-table]] for the match table.
 
 This simply calls [[elnode-hostpath-dispatcher]] with [[elnode-hostpath-default-table]].
 
 
-=== elnode-hostpath-dispatcher (HTTPCON HOSTPATH-MAPPING-TABLE &OPTIONAL FUNCTION-404) ===
+=== elnode-hostpath-dispatcher //httpcon// //hostpath-mapping-table// {{{&optional}}} //function-404// ===
 
-Dispatch the HTTPCON to the correct handler based on the HOSTPATH-MAPPING-TABLE.
+Dispatch the //httpcon// to the correct handler based on the //hostpath-mapping-table//.
 
-HOSTPATH-MAPPING-TABLE has a regex of the host and the path slash separated, thus:
+//hostpath-mapping-table// has a regex of the host and the path slash separated, thus:
 
 {{{
  ("^localhost/pastebin.*" . pastebin-handler)
@@ -168,27 +168,27 @@ HOSTPATH-MAPPING-TABLE has a regex of the host and the path slash separated, thu
 
 
 
-=== elnode-http-cookie (HTTPCON NAME) ===
+=== elnode-http-cookie //httpcon// //name// ===
 
-Get the cookie value specified by the name.
-
-
-=== elnode-http-header (HTTPCON NAME) ===
-
-Get the header specified by name from the header.
+Get the cookie value specified by the //name//.
 
 
-=== elnode-http-method (HTTPCON) ===
+=== elnode-http-header //httpcon// //name// ===
+
+Get the header specified by //name// from the header.
+
+
+=== elnode-http-method //httpcon// ===
 
 Get the PATHINFO of the request.
 
 
-=== elnode-http-param (HTTPCON NAME) ===
+=== elnode-http-param //httpcon// //name// ===
 
-Get the named parameter from the request.
+Get the //name//d parameter from the request.
 
 
-=== elnode-http-params (HTTPCON) ===
+=== elnode-http-params //httpcon// ===
 
 Get an alist of the parameters in the request.
 
@@ -209,55 +209,55 @@ would result in:
 
 
 
-=== elnode-http-pathinfo (HTTPCON) ===
+=== elnode-http-pathinfo //httpcon// ===
 
 Get the PATHINFO of the request.
 
 
-=== elnode-http-query (HTTPCON) ===
+=== elnode-http-query //httpcon// ===
 
 Get the QUERY of the request.
 
 
-=== elnode-http-return (HTTPCON &OPTIONAL DATA) ===
+=== elnode-http-return //httpcon// {{{&optional}}} //data// ===
 
-End the response on HTTPCON optionally sending DATA first.
+End the response on //httpcon// optionally sending //data// first.
 
-HTTPCON is the http connection which must have had the headers
+//httpcon// is the http connection which must have had the headers
 sent with [[elnode-http-start]]
 
-DATA must be a string, it's just passed to [[elnode-http-send]].
+//data// must be a string, it's just passed to [[elnode-http-send]].
 
 
-=== elnode-http-send-string (HTTPCON STR) ===
+=== elnode-http-send-string //httpcon// //str// ===
 
-Send the string to the HTTP connection.
+Send the //str//ing to the HTTP connection.
 
 This is really only a placeholder function for doing transfer-encoding.
 
 
-=== elnode-http-start (HTTPCON STATUS &REST HEADER) ===
+=== elnode-http-start //httpcon// //status// {{{&rest}}} //header// ===
 
 Start the http response on the specified http connection.
 
-httpcon is the HTTP connection being handled.
-status is the HTTP status, eg: 200 or 404
-header is a sequence of (header-name . value) pairs.
+//httpcon// is the HTTP connection being handled.
+//status// is the HTTP //status//, eg: 200 or 404
+//header// is a sequence of (//header//-name . value) pairs.
 
 For example:
 
 {{{
- (elnode-http-start httpcon "200" '("Content-type" . "text/html"))
+ (elnode-http-start //httpcon// "200" '("Content-type" . "text/html"))
 }}}
 
 
 
-=== elnode-http-version (HTTPCON) ===
+=== elnode-http-version //httpcon// ===
 
 Get the PATHINFO of the request.
 
 
-=== elnode-init NIL ===
+=== elnode-init  ===
 
 Bootstraps the elnode environment when the Lisp is loaded.
 
@@ -269,45 +269,45 @@ The server is started with [[elnode-hostpath-default-handler]] as
 the handler and listening on [[elnode-init-host]]
 
 
-=== elnode-list-buffers NIL ===
+=== elnode-list-buffers  ===
 
 List the current buffers being managed by elnode.
 
 
-=== elnode-normalize-path (HTTPCON HANDLER) ===
+=== elnode-normalize-path //httpcon// //handler// ===
 
-A decorator for HANDLER that normalizes paths to have a trailing slash.
+A decorator for //handler// that normalizes paths to have a trailing slash.
 
-This checks the HTTPCON path for a trailing slash and sends a 302
+This checks the //httpcon// path for a trailing slash and sends a 302
 to the slash trailed url if there is none.
 
-Otherwise it calls HANDLER.
+Otherwise it calls //handler//.
 
 
-=== elnode-send-400 (HTTPCON) ===
+=== elnode-send-400 //httpcon// ===
 
 A generic 400 handler.
 
 
-=== elnode-send-404 (HTTPCON) ===
+=== elnode-send-404 //httpcon// ===
 
 A generic 404 handler.
 
 
-=== elnode-send-redirect (HTTPCON LOCATION) ===
+=== elnode-send-redirect //httpcon// //location// ===
 
-Sends a redirect to the specified location.
+Sends a redirect to the specified //location//.
 
 
-=== elnode-start (REQUEST-HANDLER PORT HOST) ===
+=== elnode-start //request-handler// //port// //host// ===
 
-Start the elnode server so that REQUEST-HANDLER handles requests on PORT on HOST.
+Start the elnode server so that //request-handler// handles requests on //port// on //host//.
 
 Most of the work done by the server is actually done by
 functions, the sentinel function, the log function and a filter
 function.
 
-request-handler is a function which is called with the
+//request-handler// is a function which is called with the
 request. The function is called with one argument, the
 http-connection.
 
@@ -325,43 +325,43 @@ Example:
  ;; End
 }}}
 
-You must also specify the port to start the server on.
+You must also specify the //port// to start the server on.
 
-You can optionally specify the hostname to start the server on,
+You can optionally specify the //host//name to start the server on,
 this must be bound to a local IP. Some names are special:
 
 {{{
-  localhost  means 127.0.0.1
+  local//host//  means 127.0.0.1
   * means 0.0.0.0
 }}}
 
 specifying an IP is also possible.
 
-Note that although host can be specified, elnode does not
-disambiguate on running servers by host. So you cannot start 2
-different elnode servers on the same port on different hosts.
+Note that although //host// can be specified, elnode does not
+disambiguate on running servers by //host//. So you cannot start 2
+different elnode servers on the same //port// on different //host//s.
 
 
-=== elnode-stop (PORT) ===
+=== elnode-stop //port// ===
 
-Stop the elnode server attached to PORT.
+Stop the elnode server attached to //port//.
 
 
-=== elnode-test-path (HTTPCON DOCROOT HANDLER &OPTIONAL 404-HANDLER) ===
+=== elnode-test-path //httpcon// //docroot// //handler// {{{&optional}}} //404-handler// ===
 
-Check that the path requested is above the docroot specified.
+Check that the path requested is above the //docroot// specified.
 
-Call 404-handler (or default 404 handler) on failure and handler
+Call //404-handler// (or default 404 //handler//) on failure and //handler//
 on success.
 
-handler is called: httpcon docroot targetfile
+//handler// is called: //httpcon// //docroot// targetfile
 
-This is used by [[elnode--webserver-handler-proc]] in the webservers
+This is used by [[elnode--webserver-//handler//-proc]] in the webservers
 that it creates... but it's also meant to be generally useful for
-other handler writers.
+other //handler// writers.
 
 
-=== elnode-webserver (HTTPCON) ===
+=== elnode-webserver //httpcon// ===
 
 A simple webserver that serves documents out of `elnode-webserver-docroot'.
 
@@ -371,23 +371,23 @@ that is needed most of the time.
 See [[elnode-webserver-handler-maker]] for more possibilities for
 making webserver functions.
 
-HTTPCON is the HTTP connection to the user agent.
+//httpcon// is the HTTP connection to the user agent.
 
 
-=== elnode-webserver-handler-maker (&OPTIONAL DOCROOT EXTRA-MIME-TYPES) ===
+=== elnode-webserver-handler-maker {{{&optional}}} //docroot// //extra-mime-types// ===
 
-Make a webserver handler possibly with the DOCROOT and EXTRA-MIME-TYPES.
+Make a webserver handler possibly with the //docroot// and //extra-mime-types//.
 
 Returns a proc which is the handler. The handler serves files out
-of the docroot and marks them with the content types that Emacs
+of the //docroot// and marks them with the content types that Emacs
 knows about. You can add extra content types for the webserver
 just by supplying an alist of mime-types and extensions for
-EXTRA-MIME-TYPES.
+//extra-mime-types//.
 
 The webserver handler also creates file indexes.
 
 The webserver uses [[elnode-test-path]] to make sure that the
-request does not go above the DOCROOT.
+request does not go above the //docroot//.
 
 
 
