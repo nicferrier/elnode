@@ -427,3 +427,6 @@ If you're playing with elnode but you can't think of anything to do with it...
  ** take an optional index producing function?
  ** take keyword flags that set the behaviour? 
  ** eg: {{{:doindexes 't }}}
+ * browse-current-buffer
+ ** start an elnode server on some random port exposing the current buffer
+ ** automatically open a browser on the server
