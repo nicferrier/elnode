@@ -7,7 +7,7 @@ Elnode is a node.js like webserver tool for Emacs. It let's you make
 and run web servers and services from inside Emacs.
 
 
-== Intalling Elnode ==
+== Installing Elnode ==
 
 Elnode is now packaged in [[http://marmalade-repo.org/packages/elnode|marmalade]]. 
 
