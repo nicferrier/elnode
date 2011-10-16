@@ -570,6 +570,33 @@ Property if specified is the property to return."
    (process-get httpcon :elnode-http-query)
    (elnode--http-parse-resource httpcon :elnode-http-query)))
 
+(defun elnode--http-param-part-decode (param-thing)
+  "Decode an HTTP URL parameter part.
+
+For example in:
+
+ http://nic.ferrier.me.uk/blog/elnode/?p=10&a+c=20&d=x+y&z=this%20is%09me+and%20this
+
+The following are param parts and the decoding that this function
+will do:
+
+ \"p\" ->  \"p\"
+
+ \"10\" -> \"10\"
+
+ \"a+c\" -> \"a c\" - an example of + encoding
+
+ \"d\" -> \"d\"
+
+ \"x+y\" -> \"x y\" - another example of + encoding, in a parameter name
+
+ \"z\" -> \"z\"
+
+ \"this%20is%09me+and%20this\" -> \"this is\tme and this\" -
+ percent encoding and plus encoding"
+  (url-unhex-string (replace-regexp-in-string "\\+" " " param-thing))
+  )
+
 (defun elnode--http-query-to-alist (query)
   "Crap parser for HTTP QUERY data.
 
@@ -578,9 +605,9 @@ Returns an association list."
                 (lambda (nv)
                   (string-match "\\([^=]+\\)\\(=\\(.*\\)\\)*" nv)
                   (cons
-                   (match-string 1 nv)
+                   (elnode--http-param-part-decode (match-string 1 nv))
                    (if (match-string 2 nv)
-                       (match-string 3 nv)
+                       (elnode--http-param-part-decode (match-string 3 nv))
                      nil)))
                 (split-string query "&"))
                ))
@@ -680,7 +707,15 @@ parsing. That checks the ':elnode-http-method':
                          (:elnode-http-method "GET")
                          (:elnode-http-query "a=10"))
     (should (equal "10" (elnode-http-param 't "a")))
-    ))
+    )
+  ;; Test some more complex params
+  (elnode--mock-process (:elnode-http-params
+                         (:elnode-http-method "GET")
+                         (:elnode-http-query "a=10&b=lah+dee+dah&c+a=blah+blah"))
+    (should (equal "lah dee dah" (elnode-http-param 't "b")))
+    (should (equal "blah blah" (elnode-http-param 't "c a")))
+    )
+  )
 
 
 (defun elnode-http-method (httpcon)
