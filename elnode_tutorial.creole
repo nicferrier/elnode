@@ -56,7 +56,7 @@ enter the LISP code for the handler, for that old time feel you could type this 
    (elnode-http-return 
        httpcon 
        "<html><body><h1>Hello World</h1></body></html>"))
-(elnode-start my-elnode-hello-world-handler 8028 "localhost")
+(elnode-start 'my-elnode-hello-world-handler 8028 "localhost")
 }}}
 
 make the LISP code //live//
@@ -130,7 +130,7 @@ Add this LISP:
 {{{
 (defvar my-elnode-webserver-handler
    (elnode-webserver-handler-maker "~/myspecialdocroot"))
-(elnode-start my-elnode-webserver-handler 8001 "localhost")
+(elnode-start 'my-elnode-webserver-handler 8001 "localhost")
 }}}
 
 Now evaluate that with: {{{M-x eval-buffer}}}
