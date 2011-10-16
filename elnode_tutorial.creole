@@ -280,10 +280,12 @@ Now we have two handlers we'll have to map them together
 somehow. Let's map one to the root ({{{/}}}) and one to
 {{{/update/}}}. Add the following code to {{{my-elnode-editor.el}}}:
 
+{{{
 (defvar my-elnode-editor-urls
   `(
     ("$" . my-elnode-editor-handler)
     ("update/.*$" . my-elnode-editor-update-handler)))
+}}}
 
 And now we need to add a handler to do the dispatching for these URLs,
 add this to {{{my-elnode-editor.el}}} as well:
