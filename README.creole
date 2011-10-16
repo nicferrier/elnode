@@ -18,6 +18,14 @@ is to add the following to your {{{.emacs}}} or your
    '("marmalade" . "http://marmalade-repo.org/packages/"))
 }}}
 
+And then do:
+
+{{{
+M-x list-packages
+}}}
+
+find Elnode in the list and press {{{i}}} or {{{ENTER}}} to install it.
+
 If you don't want to use packages you can just install {{{elnode.el}}}
 on your {{{load-path}}} somewhere and:
 
