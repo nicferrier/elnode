@@ -77,7 +77,7 @@ This is an alist of proc->server-process:
 ;; Useful macros for testing
 
 (defmacro elnode--mock-process (process-bindings &rest body)
-  "Allow easier elnode testing by mock the process functions.
+  "Allow easier elnode testing by mocking the process functions.
 
 For example:
 
@@ -86,6 +86,18 @@ For example:
                         (:elnode-http-query \"a=10\"))
    (should (equal 10 (elnode-http-param 't \"a\")))
    )
+
+Causes:
+
+ (process-get anything :elnode-http-method)
+
+to always return \"GET\".
+
+'process-put' is also remapped, currently to swallow any setting.
+
+'process-buffer' is also remapped, to deliver a fake (empty)
+buffer. This is probably not necessary and might go in the
+future.
 
 This is a work in progress - not sure what we'll return yet."
   (declare (indent defun))
@@ -103,10 +115,8 @@ This is a work in progress - not sure what we'll return yet."
                  (if pair
                      (cdr pair))))
               (process-put 
-               (proc key value)
-               ;; do nothing
-               ;; really... we should collect any value here and return it?
-               )
+               ;; FIXME This should probably update ,pvvar with the new value?
+               (proc key value))
               ;; We shouldn't actually need this because you should
               ;; arrange things so the buffer isn't read
               (process-buffer 
@@ -114,6 +124,7 @@ This is a work in progress - not sure what we'll return yet."
                (get-buffer-create "* dummy proc buffer *")))
          ,@body
          ))))
+
 
 ;; Error log handling
 
