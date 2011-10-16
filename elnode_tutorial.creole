@@ -174,7 +174,7 @@ Go back to hello world:
 C-x b my-elnode-hello-world.el
 }}}
 
-Remove the {{{elnode-server-start}}} line and add this:
+Remove the {{{elnode-start}}} line and add this:
 
 {{{
 (add-to-list 'elnode-hostpath-default-table '("/helloworld/" . my-elnode-hello-world-handler))
