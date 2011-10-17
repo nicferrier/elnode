@@ -3,6 +3,18 @@
 An attempt to make an EmacsLISP clone of node.js.
 
 
+== Rationale ==
+
+Elnode should be used for making small, personal web services or for
+developing a first draft of a web service you may later do in Clojure
+or Node.js or some other web framework.
+
+Emacs is a very good LISP programming environment as well as a great
+editor. Now that Emacs 24 has lexical scope EmacsLISP is a very
+powerful language. A webserver framework inside such a powerful LISP
+environment therefore makes sense.
+
+
 == Installation ==
 
 Elnode is now packaged in [[http://marmalade-repo.org/packages/elnode|marmalade]]. 
