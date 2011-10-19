@@ -269,9 +269,8 @@ Let's make another handler to handle updates, add this to your {{{my-elnode-edit
   (let ((change-text (elnode-http-param httpcon "change")))
     (with-current-buffer my-elnode-editor-buffer
       (goto-char (point-max))
-      (insert (if (stringp change-text)
-                  change-text
-                ""))))
+      (if (stringp change-text)
+          (insert change-text))))
   (elnode-http-start httpcon 302 '("Location" . "/"))
   (elnode-http-return httpcon))
 }}}
