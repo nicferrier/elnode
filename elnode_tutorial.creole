@@ -331,7 +331,7 @@ root url, so let's alter that binding to {{{/text/}}} as well:
    "The webserver handler.")
 
 (defconst my-elnode-editor-urls
-  `(("text/$" . my-elnode-editor-handler)
+  '(("text/$" . my-elnode-editor-handler)
     ("update/.*$" . my-elnode-editor-update-handler)
     ("[^/]+/.*" . my-elnode-editor-webserver-handler)))
 }}}
