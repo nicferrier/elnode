@@ -28,7 +28,7 @@ And then do:
 M-x list-packages
 }}}
 
-find Elnode in the list and press {{{i}}} or {{{ENTER}}} to install it.
+find Elnode in the list and press {{{i}}} or {{{RET}}} to install it.
 
 If you don't want to use packages you can just install {{{elnode.el}}}
 on your {{{load-path}}} somewhere and:
@@ -92,7 +92,7 @@ and drop a file or two in it.
 Alternately, try configuring the webserver root directory:
 
 {{{
-M-x customize-variable [ENTER] elnode-webserver-docroot [ENTER]
+M-x customize-variable RET elnode-webserver-docroot RET
 }}}
 
 to another directory. Then try hitting [[http://localhost:8000]]
@@ -146,8 +146,8 @@ We've started a couple of servers now. Let's stop the two servers that
 we've started:
 
 {{{
-M-x elnode-stop [ENTER] 8028 [ENTER]
-M-x elnode-stop [ENTER] 8001 [ENTER]
+M-x elnode-stop RET 8028 RET
+M-x elnode-stop RET 8001 RET
 }}}
 
 Those servers are now stopped and you won't be able to hit them.
