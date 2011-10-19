@@ -415,7 +415,7 @@ different elnode servers on the same port on different hosts."
 		  result))))))
 
 (defun elnode-list-buffers ()
-  "List the current buffers being managed by elnode."
+  "List the current buffers being managed by Elnode."
   (interactive)
   (with-current-buffer (get-buffer-create "*elnode-buffers*")
     (erase-buffer)
@@ -892,7 +892,12 @@ or:
      (elnode--dispatch-proc httpcon url-mapping-table function-404))))
 
 (defun elnode--hostpath-dispatch-proc (httpcon hostpath-mapping-table &optional function-404)
-  "Does the actual hostpath dispatch work."
+  "Does the actual hostpath dispatch work.
+
+Dispatches the request on HTTPCON via the HOSTPATH-MAPPING-TABLE.
+
+If the request cannot be dispatched it tries to dispatch the
+HTTPCON to FUNCTION-404."
   ;; TODO - find a way to abstract this and elnode--dispatch-proc
   (let* ((hostpath (format "%s%s"
                     (let ((host (elnode-http-header httpcon "Host")))
@@ -900,15 +905,20 @@ or:
                         (string-match "\\([^:]+\\)\\(:[0-9]+.*\\)" host)
                         (match-string 1 host)))
                     (elnode-http-pathinfo httpcon)))
-         (m (catch 'found
-             (mapcar
-              (lambda (mapping)
-                (let ((mapping-re (car mapping)))
-                  (if (string-match mapping-re hostpath)
-                      (throw 'found mapping))))
-              hostpath-mapping-table))))
-    (if (and m (functionp (cdr m)))
-        (funcall (cdr m) httpcon)
+         (m (loop for mapping in url-mapping-table
+                  until (let ((mapping-re (format "^/%s" (car mapping))))
+                          (string-match mapping-re path))
+                  finally return mapping)))
+    (if (and m 
+             (or (functionp (cdr m)) 
+                 (functionp (and (symbolp (cdr m))
+                                 (symbol-value (cdr m))))))
+        (cond
+         ;; Check if it's a function or a variable with a function
+         ((functionp (cdr m))
+          (funcall (cdr m) httpcon))
+         ((functionp (symbol-value (cdr m)))
+          (funcall (symbol-value (cdr m)) httpcon)))
       ;; We didn't match so fire a 404... possibly a custom 404
       (if (functionp function-404)
           (funcall function-404 httpcon)
@@ -916,9 +926,10 @@ or:
         (elnode-send-404 httpcon)))))
 
 (defun elnode-hostpath-dispatcher (httpcon hostpath-mapping-table &optional function-404)
-  "Dispatch the HTTPCON to the correct handler based on the HOSTPATH-MAPPING-TABLE.
+  "Dispatch the HTTPCON to a handler based on the HOSTPATH-MAPPING-TABLE.
 
-HOSTPATH-MAPPING-TABLE has a regex of the host and the path slash separated, thus:
+HOSTPATH-MAPPING-TABLE has a regex of the host and the path slash
+separated, thus:
 
  (\"^localhost/pastebin.*\" . pastebin-handler)"
   (elnode-normalize-path
@@ -1022,6 +1033,26 @@ directed at the same http connection."
     ;; Setup the filter and the sentinel to do the right thing with incomming data and signals
     (set-process-filter p 'elnode--child-process-filter)
     (set-process-sentinel p 'elnode--child-process-sentinel)))
+
+(defmacro elnode-method (&rest method-mappings)
+  "A method mapping macro.
+
+Write code like this:
+
+ (elnode-method
+  (\"GET\"
+   (code)
+   (morecode))
+  (\"POST\"
+   (differentcode)
+   (evenmorecode)))"
+  (declare (indent defun))
+  `(cond 
+    ,@(loop for m in method-mappings
+            collect
+            (cons (list 'equal '(elnode-http-method httpcon) (car m))
+                  (cdr m)))))
+
 
 ;; Webserver stuff
 
