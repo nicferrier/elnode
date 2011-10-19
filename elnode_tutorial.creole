@@ -48,7 +48,7 @@ open a new Emacs file
 C-x C-f my-elnode-hello-world.el
 }}}
 
-enter the LISP code for the handler, for that old time feel you could type this in, or if you're under 35, maybe just cut and paste 
+enter the Lisp code for the handler, for that old time feel you could type this in, or if you're under 35, maybe just cut and paste 
 
 {{{
 (defun my-elnode-hello-world-handler (httpcon)
@@ -59,7 +59,7 @@ enter the LISP code for the handler, for that old time feel you could type this 
 (elnode-start 'my-elnode-hello-world-handler 8028 "localhost")
 }}}
 
-make the LISP code //live//
+make the Lisp code //live//
 
 {{{
 M-x eval-buffer
@@ -125,7 +125,7 @@ Open a new Emacs file:
 C-x C-f my-elnode-webserver.el
 }}}
 
-Add this LISP:
+Add this Lisp:
 
 {{{
 (defconst my-elnode-webserver-handler
@@ -229,7 +229,7 @@ simple.
 
 Make a new file {{{C-x C-f my-elnode-editor.el}}}.
 
-Add the following LISP code:
+Add the following Lisp code:
 
 {{{
 (defvar my-elnode-editor-buffer (get-buffer-create "*my-elnode-editor-buffer*"))
