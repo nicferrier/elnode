@@ -856,6 +856,7 @@ Otherwise it calls HANDLER."
                  (functionp (and (symbolp (cdr m))
                                  (symbol-value (cdr m))))))
         (cond
+         ;; Check if it's a function or a variable with a function
          ((functionp (cdr m))
           (funcall (cdr m) httpcon))
          ((functionp (symbol-value (cdr m)))
