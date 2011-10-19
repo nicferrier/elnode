@@ -128,7 +128,7 @@ C-x C-f my-elnode-webserver.el
 Add this LISP:
 
 {{{
-(defvar my-elnode-webserver-handler
+(defconst my-elnode-webserver-handler
    (elnode-webserver-handler-maker "~/myspecialdocroot"))
 (elnode-start 'my-elnode-webserver-handler 8001 "localhost")
 }}}
@@ -281,9 +281,8 @@ somehow. Let's map one to the root ({{{/}}}) and one to
 {{{/update/}}}. Add the following code to {{{my-elnode-editor.el}}}:
 
 {{{
-(defvar my-elnode-editor-urls
-  `(
-    ("$" . my-elnode-editor-handler)
+(defconst my-elnode-editor-urls
+  `(("$" . my-elnode-editor-handler)
     ("update/.*$" . my-elnode-editor-update-handler)))
 }}}
 
@@ -316,10 +315,106 @@ and then visit
 [[http://localhost:8002/update/?change=%0dlah+dee+dah%0d]] and see the
 updated buffer.
 
+== More advanced again - Make a webapp around the service ==
+
+Let's take our editor on another step. Let's add some static files and
+have the Elnode handlers be called by client side Javascript.
+
+If we're going to add some static files, we'll need a webserver. We
+already know how to do that. Once we've got some javascript though,
+we'll probably not want to retrieve the text by {{{HTTP GET}}}ing the
+root url, so let's alter that binding to {{{/text/}}} as well:
+
+{{{
+(defconst my-elnode-editor-webserver-handler
+   (elnode-webserver-handler-maker "~/my-directory"))
+   "The webserver handler.")
+
+(defconst my-elnode-editor-urls
+  `(("text/$" . my-elnode-editor-handler)
+    ("update/.*$" . my-elnode-editor-update-handler)
+    ("[^/]+/.*" . my-elnode-editor-webserver-handler)))
+}}}
+
+Obviously {{{~/my-directory}}} needs to be the place where you are
+going to save your HTML and Javascript files.
+
+Now we need those HTML and Javascript files. Let's make the HTML
+first:
+
+{{{
+<html>
+    <head>
+        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.6.4/jquery.min.js" 
+                language="Javascript">
+        </script>
+        <script src="my-elnode-editor.js" language="Javascript">
+        </script>
+    </head>
+    <body>
+        <textarea id="text" cols="60" rows="10">
+        </textarea>
+    </body>
+</html>
+}}}
+
+We're going to pull jQuery from Google's Content Delivery
+Network. We've put in a placeholder for our own Javascript file and
+other than that the HTML is really just a {{{textarea}}}
+element. We'll use //that// for putting the buffer text in.
+
+Now, what should the Javascript do? 
+
+* when the page loads
+* make an AJAX call to Elnode for the buffer text
+* stick the received text into the {{{textarea}}}
+
+Ok. So here is {{{my-elnode-editor.js}}}:
+
+{{{
+var my_elnode_editor = (function () {
+  var self = {
+    /** Get the text from Emacs.
+     */
+    get_text: function () {
+      $.ajax("/text/", {
+        dataType: "text",
+        success: function (data, textStatus, jqXHR) {
+          $("#text").text(data);
+        }
+      });
+    }
+  };
+  return self;
+})();
+
+$(document).ready(
+  function () {
+    my_elnode_editor.get_text();
+  }
+);
+}}}
+
+Save this as {{{my-elnode-editor.js}}} (in whatever directory the
+webserver is serving) and save the HTML in the same directory, call it
+{{{my-elnode-editor.html}}}, say?
+
+You don't even have to restart the Elnode handler, because it already
+is pointing to the dispatcher handler. If you just:
+
+{{{
+M-x eval-buffer
+}}} 
+
+this will re-evaluate the URL mappings. Now if you visit
+[[http://localhost:8002/my-elnode-editor.html]] you should see the
+webpage with the {{{textarea}}} and the text of your buffer.
+
+
+
 == That's all for now! ==
 
 This is as far as Nic has got writing the tutorial. More will come soon I hope:
 
-* making the editor service better by adding static content
 * {{{defer}}} with an example based around the editor service
 * debugging a running Elnode service
