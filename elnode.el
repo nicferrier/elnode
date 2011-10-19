@@ -808,18 +808,15 @@ DATA must be a string, it's just passed to 'elnode-http-send'."
   "Try and find the 'PATH' inside the 'URL-MAPPING-TABLE'.
 
 This function exposes it's `match-data' on the 'path' variable so
-that you can access that in your handler with something like:
+that yolou can access that in your handler with something like:
 
  (match-string 1 (elnode-http-pathinfo httpcon))"
   (elnode-error "Elnode--mapper-find path: %s" path)
   ;; Implement a simple escaping find function
-  (catch 'found
-    (mapcar
-     (lambda (mapping)
-       (let ((mapping-re (format "^/%s" (car mapping))))
-         (if (string-match mapping-re path)
-             (throw 'found mapping))))
-     url-mapping-table)))
+  (loop for mapping in url-mapping-table
+        until (let ((mapping-re (format "^/%s" (car mapping))))
+                (string-match mapping-re path))
+        finally return mapping))
 
 
 (defun elnode-send-404 (httpcon)
@@ -854,8 +851,15 @@ Otherwise it calls HANDLER."
   "Does the actual dispatch work."
   (let* ((pi (elnode-http-pathinfo httpcon))
          (m (elnode--mapper-find pi url-mapping-table)))
-    (if (and m (functionp (cdr m)))
-        (funcall (cdr m) httpcon)
+    (if (and m 
+             (or (functionp (cdr m)) 
+                 (functionp (and (symbolp (cdr m))
+                                 (symbol-value (cdr m))))))
+        (cond
+         ((functionp (cdr m))
+          (funcall (cdr m) httpcon))
+         ((functionp (symbol-value (cdr m)))
+          (funcall (symbol-value (cdr m)) httpcon)))
       ;; We didn't match so fire a 404... possibly a custom 404
       (if (functionp function-404)
           (funcall function-404 httpcon)
