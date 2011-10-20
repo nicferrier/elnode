@@ -1023,15 +1023,21 @@ directed at the same http connection."
   "Send the TARGETFILE to the HTTPCON.
 
 If the TARGETFILE is relative then resolve it via the current
-'load-file-name' or 'buffer-file-name'.
+'load-file-name' or 'buffer-file-name' or 'default-directory'.
+
+WARNING: this resolution order is likely to change because,
+especially when developing 'default-directory' can be quite
+random (change buffer, change 'default-directory').
 
 MIME-TYPES is an optional alist of MIME type mappings to help
 resolve the type of a file."
   (let ((filename (if (not (file-name-absolute-p targetfile))
                       (file-relative-name 
                        targetfile 
-                       (directory-file-name 
-                        (or load-file-name buffer-file-name)))
+                       (let ((dir (or load-file-name buffer-file-name)))
+                         (if dir
+                             (directory-file-name dir)
+                           default-directory)))
                     targetfile)))
     (if (file-exists-p filename)
         (let ((mimetype (or (if (listp mime-types)
