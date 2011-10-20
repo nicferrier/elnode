@@ -154,6 +154,25 @@ There is only one error log, in the future there may be more."
              (with-current-buffer (get-buffer elnode-server-error-log)
                (buffer-substring (point-min) (point-max)))))))
 
+(defun elnode-log-access (logname httpcon)
+  "Log the HTTP access in buffer LOGNAME.
+
+This function is available for handlers to call.  It is also used
+by elnode iteslf."
+  ;; TODO I'd like this to work deeper than this, maybe a if a buffer
+  ;; is named after the handler (or the matched host or path or something)
+  ;; then automatically log to the buffer
+  ;;
+  ;; The buffer could have local variables specifying it's
+  ;; serialization, so Elnode could be told to save it all the time,
+  ;; or in an idle-timer or maybe to make the log file an actual
+  ;; process instead of a buffer (that would be *most* safe?)
+  (with-current-buffer (get-buffer-create (format "* elnode-access-%s *" logname))
+    (goto-char (point-max))
+    (insert (format "%s %s %s\n"
+		    (format-time-string "%Y%m%d%H%M%S")
+                    (elnode-http-method httpcon)
+                    (elnode-http-pathinfo httpcon)))))
 
 
 ;; Defer stuff
@@ -857,6 +876,29 @@ Returns the handler function that mapped, or 'nil'."
          ((functionp (symbol-value (cdr m)))
           (symbol-value (cdr m)))))))
 
+(defun elnode-http-mapping (httpcon)
+  "Return the match on the HTTPCON that resulted in the current handler.
+
+This results only from a call via 'elnode-dispatcher'.
+
+It returns the string which matched your url-mapping, with the
+match-data attached. So given the mapping:
+
+ (\"static/\\(.*\\)\" . my-handler)
+
+and the request:
+
+ /static/somedir/somefile.jpg
+
+The following is true inside the handler:
+
+ (equals \"/somedir/somefile.jpg\"
+         (match-string 1 (elnode-http-mapping httpcon)))
+
+The function 'elnode-test-path' uses this facility to work out a
+targetpath."
+  (process-get httpcon :elnode-http-mapping))
+
 (defun elnode--dispatch-proc (httpcon path url-mapping-table &optional function-404)
   "Dispatch to the matched handler for the PATH on the HTTPCON.
 
@@ -865,11 +907,16 @@ The handler for PATH is matched in the URL-MAPPING-TABLE via
 
 If no handler is found then a 404 is attempted via FUNCTION-404,
 it it's found to be a function, or as a last resort
-'elnode-send-404'."
+'elnode-send-404'.
+
+This function also establishes the ':elnode-http-mapping'
+property which can be accessed from inside your handler with
+'elnode-http-mapping'"
   (let ((handler-func (elnode--mapper-find path url-mapping-table)))
     (cond
      ;; If we have a handler, use it.
      ((functionp handler-func)
+      (process-put httpcon :elnode-http-mapping path)
       (funcall handler-func httpcon))
      ;; Maybe we should send the 404 function?
      ((functionp function-404)
@@ -1136,22 +1183,25 @@ PATHINFO."
       "\n"))))
 
 (defun elnode-test-path (httpcon docroot handler &optional 404-handler)
-  "Check that the path requested is above the docroot specified.
+  "Check that the PATH requested is above the DOCROOT specified.
 
-Call 404-handler (or default 404 handler) on failure and handler
-on success.
+Call 404-HANDLER (falling back to 'enode-send-404') on failure
+and HANDLER on success.
 
-handler is called: httpcon docroot targetfile
+HANDLER is called with these arguments: HTTPCON DOCROOT TARGETFILE
 
 This is used by 'elnode--webserver-handler-proc' in the webservers
 that it creates... but it's also meant to be generally useful for
-other handler writers."
+other handler writers.
+
+This function use 'elnode-http-mapping' to establish a
+targetfile, allowing URL mappings to look like this:
+
+ \"prefix/\\(.*\\)$\"
+
+Only the grouped part will be used to resolve the targetfile."
   (let* ((pathinfo (elnode-http-pathinfo httpcon))
-         ;; Let webserver users prefix the webserver path in a dispatcher regex
-         ;; use a regex like this:
-         ;;  "prefix/\\(.*\\)$"
-         ;; and we'll be able to prefix the path properl
-         (path (or (match-string 1 pathinfo) pathinfo))
+         (path (or (match-string 1 (elnode-http-mapping httpcon)) pathinfo))
          (targetfile (format "%s%s"
                              (expand-file-name docroot)
                              (format "/%s" (if (equal path "/")  "" path)))))
@@ -1183,13 +1233,15 @@ handlers."
    (lambda (httpcon docroot targetfile)
      ;; The file exists and is legal
      (let ((pathinfo (elnode-http-pathinfo httpcon)))
+       (match-string 1 pathinfo)
        (if (file-directory-p targetfile)
            (let ((index (elnode--webserver-index docroot targetfile pathinfo)))
              ;; What's the best way to do simple directory indexes?
              (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
              (elnode-http-return httpcon index))
          ;; Send a file.
-         (elnode-send-file httpcon targetfile))))))
+         (elnode-send-file httpcon targetfile)))
+     (elnode-log-access docroot httpcon))))
 
 (defun elnode-webserver-handler-maker (&optional docroot extra-mime-types)
   "Make a webserver handler possibly with the DOCROOT and EXTRA-MIME-TYPES.
