@@ -974,9 +974,9 @@ separated, thus:
   '(("[^/]+/.*" . elnode-webserver))
   "Customizable variable defining hostpath mappings for 'elnode-hostpath-default-handler'.
 
-This is the default mapping table for elnode, out of the box. If
+This is the default mapping table for Elnode, out of the box. If
 you customize this then elnode will serve these hostpath mappings
-by just loading elnode.
+by just loading Elnode.
 
 By default the table maps everything to
 'elnode-webserver'. Unless you're happy with the default you
@@ -991,7 +991,7 @@ This simply calls 'elnode-hostpath-dispatcher' with 'elnode-hostpath-default-tab
   (elnode-hostpath-dispatcher httpcon elnode-hostpath-default-table))
 
 
-;; elnode child process functions
+;; Elnode child process functions
 
 ;; TODO: handle errors better than messaging
 (defun elnode--child-process-sentinel (process status)
@@ -1182,10 +1182,10 @@ PATHINFO."
       dirlist
       "\n"))))
 
-(defun elnode-test-path (httpcon docroot handler &optional 404-handler)
+(defun elnode-test-path (httpcon docroot handler &optional failure)
   "Check that the PATH requested is above the DOCROOT specified.
 
-Call 404-HANDLER (falling back to 'enode-send-404') on failure
+Call FAILURE-HANDLER (falling back to 'enode-send-404') on failure
 and HANDLER on success.
 
 HANDLER is called with these arguments: HTTPCON DOCROOT TARGETFILE
@@ -1200,6 +1200,13 @@ targetfile, allowing URL mappings to look like this:
  \"prefix/\\(.*\\)$\"
 
 Only the grouped part will be used to resolve the targetfile."
+  ;; FIXME I am unhappy with this function as it stands - I am not
+  ;; sure that a user will ever use it, but it also adds to the
+  ;; contract of the next call (adding 'targetfile' from the mapping
+  ;; match data).
+  ;;
+  ;; The fact that it does that (adding the targetfile) also seems
+  ;; wrong but I can't think how to replace it.
   (let* ((pathinfo (elnode-http-pathinfo httpcon))
          (path (or (match-string 1 (elnode-http-mapping httpcon)) pathinfo))
          (targetfile (format "%s%s"
@@ -1213,9 +1220,9 @@ Only the grouped part will be used to resolve the targetfile."
             docroot 0 docrootlen
             (file-truename targetfile) 0 docrootlen)))
         (funcall handler httpcon docroot targetfile)
-      ;; Call the 404 handler
-      (if (functionp 404-handler)
-          (funcall 404-handler httpcon)
+      ;; Call the failure handler
+      (if (functionp failure)
+          (funcall failure httpcon)
         (elnode-send-404 httpcon)))))
 
 ;;;###autoload
@@ -1233,7 +1240,6 @@ handlers."
    (lambda (httpcon docroot targetfile)
      ;; The file exists and is legal
      (let ((pathinfo (elnode-http-pathinfo httpcon)))
-       (match-string 1 pathinfo)
        (if (file-directory-p targetfile)
            (let ((index (elnode--webserver-index docroot targetfile pathinfo)))
              ;; What's the best way to do simple directory indexes?
