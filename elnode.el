@@ -803,22 +803,6 @@ DATA must be a string, it's just passed to 'elnode-http-send'."
       (process-send-string httpcon "\r\n")
       (elnode--http-end httpcon))))
 
-
-(defun elnode--mapper-find (path url-mapping-table)
-  "Try and find the 'PATH' inside the 'URL-MAPPING-TABLE'.
-
-This function exposes it's `match-data' on the 'path' variable so
-that yolou can access that in your handler with something like:
-
- (match-string 1 (elnode-http-pathinfo httpcon))"
-  (elnode-error "Elnode--mapper-find path: %s" path)
-  ;; Implement a simple escaping find function
-  (loop for mapping in url-mapping-table
-        until (let ((mapping-re (format "^/%s" (car mapping))))
-                (string-match mapping-re path))
-        finally return mapping))
-
-
 (defun elnode-send-404 (httpcon)
   "A generic 404 handler."
   (elnode-http-start httpcon 404 '("Content-type" . "text/html"))
@@ -829,10 +813,11 @@ that yolou can access that in your handler with something like:
   (elnode-http-start httpcon 400 '("Content-type" . "text/html"))
   (elnode-http-return httpcon "<h1>Bad request</h1>\r\n"))
 
-(defun elnode-send-redirect (httpcon location)
+(defun elnode-send-redirect (httpcon location &optional type)
   "Sends a redirect to the specified location."
-  (elnode-http-start httpcon 302 `("Location" . ,location))
-  (elnode-http-return httpcon (format "<h1>redirecting you to %s</h1>\r\n" location)))
+  (let ((status-code (or type 302)))
+    (elnode-http-start httpcon status-code `("Location" . ,location))
+    (elnode-http-return httpcon (format "<h1>redirecting you to %s</h1>\r\n" location))))
 
 (defun elnode-normalize-path (httpcon handler)
   "A decorator for HANDLER that normalizes paths to have a trailing slash.
@@ -846,26 +831,52 @@ Otherwise it calls HANDLER."
       (elnode-send-redirect httpcon (format "%s/" (elnode-http-pathinfo httpcon)))
     (funcall handler httpcon)))
 
+(defun elnode--mapper-find (path mapping-table)
+  "Try and find the PATH inside the MAPPING-TABLE.
 
-(defun elnode--dispatch-proc (httpcon url-mapping-table &optional function-404)
-  "Does the actual dispatch work."
-  (let* ((pi (elnode-http-pathinfo httpcon))
-         (m (elnode--mapper-find pi url-mapping-table)))
+This function exposes it's `match-data' on the 'path' variable so
+that you can access that in your handler with something like:
+
+ (match-string 1 (elnode-http-pathinfo httpcon))
+
+Returns the handler function that mapped, or 'nil'."
+  ;; First find the mapping in the mapping table
+  (let ((m (loop for mapping in mapping-table
+                 until (let ((mapping-re (format "^/%s" (car mapping))))
+                         (string-match mapping-re path))
+                 finally return mapping)))
+    ;; Now work out if we found one and what it was mapped to
     (if (and m 
              (or (functionp (cdr m)) 
                  (functionp (and (symbolp (cdr m))
                                  (symbol-value (cdr m))))))
         (cond
-         ;; Check if it's a function or a variable with a function
+         ;; Check if it's a function or a variable pointing to a function
          ((functionp (cdr m))
-          (funcall (cdr m) httpcon))
+          (cdr m))
          ((functionp (symbol-value (cdr m)))
-          (funcall (symbol-value (cdr m)) httpcon)))
-      ;; We didn't match so fire a 404... possibly a custom 404
-      (if (functionp function-404)
-          (funcall function-404 httpcon)
-        ;; We don't have a custom 404 so send our own
-        (elnode-send-404 httpcon)))))
+          (symbol-value (cdr m)))))))
+
+(defun elnode--dispatch-proc (httpcon path url-mapping-table &optional function-404)
+  "Dispatch to the matched handler for the PATH on the HTTPCON.
+
+The handler for PATH is matched in the URL-MAPPING-TABLE via
+'elnode--mapper-find'.
+
+If no handler is found then a 404 is attempted via FUNCTION-404,
+it it's found to be a function, or as a last resort
+'elnode-send-404'."
+  (let ((handler-func (elnode--mapper-find path url-mapping-table)))
+    (cond
+     ;; If we have a handler, use it.
+     ((functionp handler-func)
+      (funcall handler-func httpcon))
+     ;; Maybe we should send the 404 function?
+     ((functionp function-404)
+      (funcall function-404 httpcon))
+     ;; We don't have a custom 404 so send our own
+     (t
+      (elnode-send-404 httpcon)))))
 
 (defun elnode-dispatcher (httpcon url-mapping-table &optional function-404)
   "Dispatch the HTTPCON to the correct function based on the URL-MAPPING-TABLE.
@@ -889,44 +900,11 @@ or:
   (elnode-normalize-path
    httpcon
    (lambda (httpcon)
-     (elnode--dispatch-proc httpcon url-mapping-table function-404))))
-
-(defun elnode--hostpath-dispatch-proc (httpcon hostpath-mapping-table &optional function-404)
-  "Does the actual hostpath dispatch work.
-
-Dispatches the request on HTTPCON via the HOSTPATH-MAPPING-TABLE.
-
-If the request cannot be dispatched it tries to dispatch the
-HTTPCON to FUNCTION-404."
-  ;; TODO - find a way to abstract this and elnode--dispatch-proc
-  (let* ((hostpath (format "%s%s"
-                    (let ((host (elnode-http-header httpcon "Host")))
-                      (save-match-data
-                        (string-match "\\([^:]+\\)\\(:[0-9]+.*\\)" host)
-                        (match-string 1 host)))
-                    (elnode-http-pathinfo httpcon)))
-         (m (loop for mapping in url-mapping-table
-                  until (let ((mapping-re (format "^/%s" (car mapping))))
-                          (string-match mapping-re path))
-                  finally return mapping)))
-    (if (and m 
-             (or (functionp (cdr m)) 
-                 (functionp (and (symbolp (cdr m))
-                                 (symbol-value (cdr m))))))
-        (cond
-         ;; Check if it's a function or a variable with a function
-         ((functionp (cdr m))
-          (funcall (cdr m) httpcon))
-         ((functionp (symbol-value (cdr m)))
-          (funcall (symbol-value (cdr m)) httpcon)))
-      ;; We didn't match so fire a 404... possibly a custom 404
-      (if (functionp function-404)
-          (funcall function-404 httpcon)
-        ;; We don't have a custom 404 so send our own
-        (elnode-send-404 httpcon)))))
+     (let ((pathinfo (elnode-http-pathinfo httpcon)))
+       (elnode--dispatch-proc httpcon pathinfo url-mapping-table function-404)))))
 
 (defun elnode-hostpath-dispatcher (httpcon hostpath-mapping-table &optional function-404)
-  "Dispatch the HTTPCON to a handler based on the HOSTPATH-MAPPING-TABLE.
+  "Dispatch HTTPCON to a handler based on the HOSTPATH-MAPPING-TABLE.
 
 HOSTPATH-MAPPING-TABLE has a regex of the host and the path slash
 separated, thus:
@@ -935,7 +913,14 @@ separated, thus:
   (elnode-normalize-path
    httpcon
    (lambda (httpcon)
-     (elnode--hostpath-dispatch-proc httpcon hostpath-mapping-table function-404))))
+     (let ((hostpath 
+            (format "%s%s"
+                    (let ((host (elnode-http-header httpcon "Host")))
+                      (save-match-data
+                        (string-match "\\([^:]+\\)\\(:[0-9]+.*\\)" host)
+                        (match-string 1 host)))
+                    (elnode-http-pathinfo httpcon))))
+       (elnode--dispatch-proc httpcon hostpath hostpath-mapping-table function-404)))))
 
 ;;;###autoload
 (defcustom elnode-hostpath-default-table
@@ -1034,6 +1019,33 @@ directed at the same http connection."
     (set-process-filter p 'elnode--child-process-filter)
     (set-process-sentinel p 'elnode--child-process-sentinel)))
 
+(defun elnode-send-file (httpcon targetfile &optional mime-types)
+  "Send the TARGETFILE to the HTTPCON.
+
+If the TARGETFILE is relative then resolve it via the current
+'load-file-name' or 'buffer-file-name'.
+
+MIME-TYPES is an optional alist of MIME type mappings to help
+resolve the type of a file."
+  (let ((filename (if (not (file-name-absolute-p targetfile))
+                      (file-relative-name 
+                       targetfile 
+                       (directory-file-name 
+                        (or load-file-name buffer-file-name)))
+                    targetfile)))
+    (if (file-exists-p filename)
+        (let ((mimetype (or (if (listp mime-types)
+                                (car (rassoc
+                                      (file-name-extension targetfile)
+                                      mime-types)))
+                            (mm-default-file-encoding targetfile)
+                            "application/octet-stream")))
+          (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
+          (elnode-child-process httpcon "cat" targetfile))
+      ;; FIXME: This needs improving so we can handle the 404
+      ;; This function should raise an exception?
+      (elnode-send-404 httpcon))))
+  
 (defmacro elnode-method (&rest method-mappings)
   "A method mapping macro.
 
@@ -1054,6 +1066,27 @@ Write code like this:
                   (cdr m)))))
 
 
+;; Make simple handlers automatically
+
+(defun elnode-make-redirecter (location &optional type)
+  "Make a handler that will redirect to LOCATION.
+
+Optionally, use the specified TYPE as the status code, eg:
+
+ (elnode-make-redirect \"http://somehost.com/\" 301)"
+  (lambda (httpcon)
+    (elnode-send-redirect httpcon location type)))
+
+(defun elnode-make-send-file  (filename)
+  "Make a handler that will serve a single FILENAME.
+
+If the FILENAME is relative then it is resolved against the
+package's 'load-file-name'."
+  ;; Reuse webserver stuff?
+  (lambda (httpcon)
+    (elnode-send-file httpcon filename)))
+
+
 ;; Webserver stuff
 
 (defcustom elnode-webserver-docroot "~/public_html"
@@ -1072,7 +1105,10 @@ can add more file mappings more easily than editing
 
 
 (defun elnode--webserver-index (docroot targetfile pathinfo)
-  "Constructs index documents for the DOCROOT and TARGETFILE pointing to a dir."
+  "Constructs index documents.
+
+The index is made for the DOCROOT and TARGETFILE. The web path is
+PATHINFO."
   ;; TODO make this usable by people generally
   (let ((dirlist (directory-files-and-attributes targetfile)))
     ;; TODO make some templating here so people can change this
@@ -1126,13 +1162,15 @@ other handler writers."
           (funcall 404-handler httpcon)
         (elnode-send-404 httpcon)))))
 
-
 ;;;###autoload
 (defun elnode--webserver-handler-proc (httpcon docroot mime-types)
   "Actual webserver implementation.
 
+Do webserving to HTTPCON from the DOCROOT using the MIME-TYPES
+for meta information.
+
 This is not a real handler (because it takes more than the
-httpcon) but it is called directly by the real webserver
+HTTPCON) but it is called directly by the real webserver
 handlers."
   (elnode-test-path
    httpcon docroot
@@ -1144,20 +1182,8 @@ handlers."
              ;; What's the best way to do simple directory indexes?
              (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
              (elnode-http-return httpcon index))
-         ;; It's a file... use 'cat' to send it to the user
-         (if (file-exists-p targetfile)
-             (progn
-               (mailcap-parse-mimetypes)
-               (let ((mimetype (or (car (rassoc
-                                         (cadr (split-string targetfile "\\."))
-                                         mime-types))
-                                   (mm-default-file-encoding targetfile)
-                                   "application/octet-stream")))
-                 (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
-                 (elnode-child-process httpcon "cat" targetfile)))
-           ;; FIXME: This needs improving so we can handle the 404
-           ;; This function should raise an exception?
-           (elnode-send-404 httpcon)))))))
+         ;; Send a file.
+         (elnode-send-file httpcon targetfile))))))
 
 (defun elnode-webserver-handler-maker (&optional docroot extra-mime-types)
   "Make a webserver handler possibly with the DOCROOT and EXTRA-MIME-TYPES.
