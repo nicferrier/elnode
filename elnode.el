@@ -995,13 +995,15 @@ This simply calls 'elnode-hostpath-dispatcher' with 'elnode-hostpath-default-tab
 
 ;; TODO: handle errors better than messaging
 (defun elnode--child-process-sentinel (process status)
-  "A generic sentinel for elnode child processes.
+  "A sentinel for Elnode child PROCESS.
 
-elnode child processes are just emacs asynchronous processes that
-send their output to an elnode http connection.
+Elnode child processes are just Emacs asynchronous processes that
+send their output to an Elnode HTTP connection.
 
-The main job of this sentinel is to send the end of the http
-stream when the child process finishes."
+The main job of this sentinel is to monitor when the STATUS of
+PROCESS indicates the end of the PROCESS and to do
+'elnode-http-end' on the associated HTTP connection when that
+happens."
   (cond
    ((equal status "finished\n")
     (let ((httpcon (process-get process :elnode-httpcon)))
@@ -1042,10 +1044,12 @@ and sending the data there."
 	(elnode-http-send-string httpcon data))))
 
 (defun elnode-child-process (httpcon program &rest args)
-  "Run the specified process asynchronously and send it's output to the http connection.
+  "Run the specified PROGRAM asynchronously sending output to HTTPCON.
 
-program is the program to run.
-args is a list of arguments to pass to the program.
+PROGRAM is the path to the program to run, to be resolved by
+'start-process' in the usual way.
+
+ARGS is a list of arguments to pass to the program.
 
 It is NOT POSSIBLE to run more than one process at a time
 directed at the same http connection."
@@ -1060,13 +1064,17 @@ directed at the same http connection."
     ;; Bind the http connection to the process
     (process-put p :elnode-httpcon httpcon)
     ;; Bind the process to the http connection
+    ;;
     ;; WARNING: this means you can only have 1 child process at a time
     (process-put httpcon :elnode-child-process p)
-    ;; Setup the filter and the sentinel to do the right thing with incomming data and signals
+    ;; Setup the filter and the sentinel to do the right thing with
+    ;; incomming data and signals
     (set-process-filter p 'elnode--child-process-filter)
     (set-process-sentinel p 'elnode--child-process-sentinel)))
 
-(defun elnode-send-file (httpcon targetfile &optional mime-types)
+(defun* elnode-send-file (httpcon targetfile 
+                                  &optional mime-types 
+                                  &key preamble)
   "Send the TARGETFILE to the HTTPCON.
 
 If the TARGETFILE is relative then resolve it via the current
@@ -1077,7 +1085,15 @@ especially when developing 'default-directory' can be quite
 random (change buffer, change 'default-directory').
 
 MIME-TYPES is an optional alist of MIME type mappings to help
-resolve the type of a file."
+resolve the type of a file.
+
+Optionally you may specify extra keyword arguments:
+
+ :PREAMBLE a string of data to send before the file.
+
+:PREAMBLE is most useful for prefixing syntax to some other file,
+for example you could prefix an XML file with XSL transformation
+statements so a compliant user-agent will transform the XML."
   (let ((filename (if (not (file-name-absolute-p targetfile))
                       (file-relative-name 
                        targetfile 
@@ -1094,11 +1110,12 @@ resolve the type of a file."
                             (mm-default-file-encoding targetfile)
                             "application/octet-stream")))
           (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
+          (if preamble (elnode-http-send-string httpcon preamble))
           (elnode-child-process httpcon "cat" targetfile))
       ;; FIXME: This needs improving so we can handle the 404
       ;; This function should raise an exception?
       (elnode-send-404 httpcon))))
-  
+
 (defmacro elnode-method (&rest method-mappings)
   "A method mapping macro.
 
@@ -1130,14 +1147,17 @@ Optionally, use the specified TYPE as the status code, eg:
   (lambda (httpcon)
     (elnode-send-redirect httpcon location type)))
 
-(defun elnode-make-send-file  (filename)
+(defun* elnode-make-send-file  (filename &key preamble mime-types )
   "Make a handler that will serve a single FILENAME.
 
 If the FILENAME is relative then it is resolved against the
-package's 'load-file-name'."
-  ;; Reuse webserver stuff?
+package's 'load-file-name'.
+
+Optionally mime-types and other additional keyword arguments may be
+specified and are passed through, see 'elnode-send-file' for
+details."
   (lambda (httpcon)
-    (elnode-send-file httpcon filename)))
+    (elnode-send-file httpcon filename mime-types :preamble preamble)))
 
 
 ;; Webserver stuff
