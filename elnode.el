@@ -284,27 +284,62 @@ This is initialized by `elnode--init-deferring'."
     (elnode-error "Elnode status: %s %s" process status))
    ))
 
+(defun elnode--process-send-string (proc data)
+  "Elnode adapter for 'process-send-string'.
+
+Sends DATA to the HTTP connection PROC (which is an HTTP
+connection) using 'elnode-http-send-string'.
+
+This is used by 'elnode-worker-elisp' to implement a protocol for
+sending data through an elnode connection transparently."
+  (elnode-http-send-string proc data))
+
+(defun elnode--process-send-eof (proc)
+  "Elnode adapter for 'process-send-eof'.
+
+Sends EOF to the HTTP connection PROC (which is an HTTP
+connection) in a way that chunked encoding is endeed properly.
+
+This is used by 'elnode-worker-elisp' to implement a protocol for
+sending data through an elnode connection transparently."
+  (elnode-http-send-string proc "")
+  (process-send-string proc "\r\n")
+  (elnode--http-end proc))
+
 (defun elnode--filter (process data)
-  "Filter for the clients.
+  "Filtering DATA sent from the client PROCESS..
 
-This does the work of finding and calling the user http
-connection handler for a request.
+This does the work of finding and calling the user HTTP
+connection handler for the request on PROCESS.
 
-A buffer for the http connection is created, uniquified by the
+A buffer for the HTTP connection is created, uniquified by the
 port number of the connection."
-  (let ((buf (or
-              (process-buffer process)
-              ;; Set the process buffer (because the server doesn't automatically allocate them)
-              ;; the name of the buffer has the client port in it
-              ;; the space in the name ensures that emacs does not list it
-              (let* ((port (cadr (process-contact process))))
-                (set-process-buffer
-                 process
-                 (get-buffer-create (format " *elnode-request-%s*" port)))
-                (process-buffer process)))))
+  (let ((buf
+         (or
+          (process-buffer process)
+          ;; Set the process buffer (because the server doesn't
+          ;; automatically allocate them)
+          ;;
+          ;; The name of the buffer has the client port in it
+          ;; the space in the name ensures that emacs does not list it
+          (let* ((port (cadr (process-contact process))))
+            ;; We also use this moment to setup functions required by
+            ;; elnode-worker-lisp
+            (process-put process :send-string-function
+                         'elnode--process-send-string)
+            ;; ... and this one does closing the connection properly
+            ;; with elnode's chunked encoding.
+            (process-put process :send-eof-function
+                         'elnode--process-send-eof)
+            ;; Now do the buffer creation
+            (set-process-buffer
+             process
+             (get-buffer-create (format " *elnode-request-%s*" port)))
+            (process-buffer process)))))
     (with-current-buffer buf
       (insert data)
-      ;; We need to check the buffer for \r\n\r\n which marks the end of HTTP header
+      ;; We need to check the buffer for \r\n\r\n which marks the end
+      ;; of HTTP header
       (save-excursion
         (goto-char (point-min))
         (if (re-search-forward "\r\n\r\n" nil 't)
@@ -985,13 +1020,147 @@ interfere with any other mappings you add."
   :group 'elnode)
 
 (defun elnode-hostpath-default-handler (httpcon)
-  "A hostpath handler using the 'elnode-hostpath-default-table' for the match table.
+  "A default hostpath handler.
 
-This simply calls 'elnode-hostpath-dispatcher' with 'elnode-hostpath-default-table'."
+This uses the 'elnode-hostpath-default-table' for the match
+table.  It calls 'elnode-hostpath-dispatcher' with
+'elnode-hostpath-default-table'."
   (elnode-hostpath-dispatcher httpcon elnode-hostpath-default-table))
 
 
 ;; Elnode child process functions
+
+(defmacro elnode-worker-elisp (output-stream bindings &rest body)
+  "Evaluate the BODY in a child Emacs connected to OUTPUT-STREAM.
+
+The BINDINGS are let-form variable assignments which are
+serialized for the child Emacs.  Unless a variable from the
+parent is explicitly stated here it will NOT be accessible in the
+child Emacs.
+
+The child Emacs has a 'load-path' exactly as the 'load-path' of
+the parent Emacs at execution.
+
+The created child Emacs process is returned.  It's possible to
+kill the child Emacs process or do other things to it directly.
+This could be very dangerous however, you should know what you
+are doing before attempting it.
+
+The OUTPUT-STREAM could be a buffer, a function or another
+process.
+
+If the OUTPUT-STREAM is another process it may have a process
+property ':send-string-function' evaluating to a function to send
+data to that process.  The function should take the same
+arguments as the standard Emacs Lisp 'process-send-string'.
+
+Furthermore, if the OUTPUT-STREAM is another process, when the
+child Emacs finishes an EOF is sent to that process.  If the
+OUTPUT-STREAM process has a process property ':send-eof-function'
+then that is used to send the EOF.  The function should take the
+same arguments as the standard Emacs Lisp 'process-send-eof'.
+
+An example:
+
+ (elnode-worker-elisp http-connection
+                      ((path (path-function)))
+   (require 'creole)
+   (creole-wiki path))
+
+Presuming http-connection is a process (in the manner of Elnode,
+for example) this will cause a child Emacs to be created, within
+which 'path', which is serialized from the value of the parent
+Emacs' 'path-function', will be loaded and converted from
+WikiCreole to HTML and then sent to the standard output stream.
+The child's standard output stream is connected directly to the
+'http-connection'.  In this case, presumably the
+'http-connection' would have functions attached to the properties
+'':send-string-function' and ':send-eof-function' to do HTTP
+chunk encoding and to end the HTTP connection correctly."
+  (declare (indent defun))
+  (let ((loadpathvar (make-symbol "load-path-form"))
+        (bindingsvar (make-symbol "bindings"))
+        (childlispvar (make-symbol "child-lisp"))
+        (filtervar (make-symbol "filter-function"))
+        (cmdvar (make-symbol "command"))
+        (procvar (make-symbol "process"))
+        (namevar (make-symbol "process-name"))
+        (bufvar (make-symbol "buffer"))
+        (outvar (make-symbol "output-stream")))
+    `(let* ((,outvar ,output-stream)
+            (,childlispvar  ; the lisp to run
+             (format "(progn (setq load-path (quote %S)) (let %S %S))\n"
+                     load-path
+                     (list ,@(loop for f in bindings collect
+                                   (list 'list
+                                         `(quote ,(car f))
+                                         `(format "%s" ,(cadr f)))))
+                     '(progn ,@body)))
+            (,cmdvar "emacs -q -batch --eval '(eval (read))' 2> /dev/null")
+            (,namevar (concat
+                       (number-to-string (random))
+                       (number-to-string (float-time))))
+            ;; We have to make a buffer unless the output-stream is a buffer
+            (,bufvar (cond
+                      ((bufferp ,outvar) ,outvar)
+                      (t
+                       (get-buffer-create (format "* %s *" ,namevar)))))
+            (,procvar (start-process-shell-command ,namevar ,bufvar ,cmdvar)))
+       (message ,childlispvar)
+       ;; If the output stream is not a buffer we need a filter function
+       (cond
+        ;; We wrap output to filters functions or buffers just a little
+        ((or (bufferp ,outvar)
+             (functionp ,outvar))
+         (set-process-filter
+          ,procvar
+          (lambda (process data)
+            (if (equal data "Lisp expression: ")
+                (process-send-string process ,childlispvar)
+              (if (bufferp ,outvar)
+                  (with-current-buffer ,outvar
+                    (insert data))
+                (funcall ,outvar process data))))))
+        ;; A process - setup a filter function
+        ((processp ,outvar)
+         (set-process-filter
+          ,procvar
+          (lambda (process data)
+            ;; We get this as a signal to read a lisp expression
+            (if (equal data "Lisp expression: ")
+                (process-send-string process ,childlispvar)
+              (if (not (equal "closed" (process-status ,procvar)))
+                  (when (processp ,outvar)
+                    (funcall
+                     ;; Does the output-stream have a specific function?
+                     (or (process-get ,outvar :send-string-function)
+                         'process-send-string)
+                     ;; The data to sent to the output-stream process
+                     ,outvar data))))))))
+       ;; Now setup the sentinel
+       (set-process-sentinel
+        ,procvar
+        (lambda (process status)
+          (let ((send-eof-function
+                 ;; Does the output-stream have a send-eof?
+                 (and (processp ,outvar)
+                      (or (process-get ,outvar :send-eof-function)
+                          'process-send-eof))))
+            (cond
+             ((equal status "finished\n")
+              (message "%s completed" ,namevar)
+              (when send-eof-function
+                  (funcall send-eof-function ,outvar)))
+             ((string-match "exited abnormally with code \\([0-9]+\\)\n" status)
+              (message "%s completed with an error" ,namevar)
+              (when send-eof-function
+                (funcall send-eof-function ,outvar))
+              (delete-process process)
+              (unless (bufferp ,outvar)
+                (kill-buffer (process-buffer process))))
+             ;; Any other signal status is ignored
+             (t)))))
+       ,procvar)))
 
 ;; TODO: handle errors better than messaging
 (defun elnode--child-process-sentinel (process status)
@@ -1229,9 +1398,15 @@ Only the grouped part will be used to resolve the targetfile."
   ;; wrong but I can't think how to replace it.
   (let* ((pathinfo (elnode-http-pathinfo httpcon))
          (path (or (match-string 1 (elnode-http-mapping httpcon)) pathinfo))
-         (targetfile (format "%s%s"
-                             (expand-file-name docroot)
-                             (format "/%s" (if (equal path "/")  "" path)))))
+         (targetfile
+          (format
+           "%s%s"
+           (expand-file-name docroot)
+           (format (or (and (save-match-data
+                              (string-match "^/" path))
+                            "%s")
+                       "/%s")
+                   (if (equal path "/")  "" path)))))
     (if (or
          (file-exists-p targetfile)
          ;; Test the targetfile is under the docroot
