@@ -5,8 +5,8 @@
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Maintainer: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Created: 5th October 2010
-;; Version: 0.9
-;; Keywords: lisp, http
+;; Version: 1.0
+;; Keywords: lisp, http, hypermedia
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -60,8 +60,7 @@
 
 (defgroup elnode nil
   "An extensible asynchronous web server for Emacs."
-  :group 'applications
-  )
+  :group 'applications)
 
 (defvar elnode-server-socket nil
   "Where we store the server sockets.
@@ -102,25 +101,25 @@ future.
 This is a work in progress - not sure what we'll return yet."
   (declare (indent defun))
   (let ((pvvar (make-symbol "pv")))
-    `(let 
+    `(let
          ;; Turn the list of bindings into an alist
          ((,pvvar (list ,@(loop for f in process-bindings
-                                 collect 
+                                 collect
                                  (if (listp f)
                                      (list 'cons `(quote ,(car f)) (cadr f))
                                    (list 'cons `,f nil))))))
-       (flet ((process-get 
+       (flet ((process-get
                (proc key)
                (let ((pair (assoc key ,pvvar)))
                  (if pair
                      (cdr pair))))
-              (process-put 
+              (process-put
                ;; FIXME This should probably update ,pvvar with the new value?
                (proc key value))
               ;; We shouldn't actually need this because you should
               ;; arrange things so the buffer isn't read
-              (process-buffer 
-               (proc) 
+              (process-buffer
+               (proc)
                (get-buffer-create "* dummy proc buffer *")))
          ,@body
          ))))
@@ -138,10 +137,10 @@ There is only one error log, in the future there may be more."
   (with-current-buffer (get-buffer-create elnode-server-error-log)
     (goto-char (point-max))
     (insert (format "elnode-%s: %s\n"
-		    (format-time-string "%Y%m%d%H%M%S")
-		    (if (car-safe args)
-			(apply 'format `(,msg ,@args))
-		      msg)))))
+                    (format-time-string "%Y%m%d%H%M%S")
+                    (if (car-safe args)
+                        (apply 'format `(,msg ,@args))
+                      msg)))))
 
 (ert-deftest elnode-test-error-log ()
   (let ((err-message "whoops!! something went wrong! %s" )
@@ -150,7 +149,8 @@ There is only one error log, in the future there may be more."
         (kill-buffer elnode-server-error-log))
     (apply 'elnode-error `(,err-message ,@err-include))
     (should (string-match
-             (format "^elnode-.*: %s\n$" (apply 'format `(,err-message ,@err-include)))
+             (format "^elnode-.*: %s\n$"
+                     (apply 'format `(,err-message ,@err-include)))
              (with-current-buffer (get-buffer elnode-server-error-log)
                (buffer-substring (point-min) (point-max)))))))
 
@@ -167,10 +167,11 @@ by elnode iteslf."
   ;; serialization, so Elnode could be told to save it all the time,
   ;; or in an idle-timer or maybe to make the log file an actual
   ;; process instead of a buffer (that would be *most* safe?)
-  (with-current-buffer (get-buffer-create (format "* elnode-access-%s *" logname))
+  (with-current-buffer (get-buffer-create
+                        (format "* elnode-access-%s *" logname))
     (goto-char (point-max))
     (insert (format "%s %s %s\n"
-		    (format-time-string "%Y%m%d%H%M%S")
+                    (format-time-string "%Y%m%d%H%M%S")
                     (elnode-http-method httpcon)
                     (elnode-http-pathinfo httpcon)))))
 
@@ -236,24 +237,17 @@ It's this that gives elnode the ability to be a COMET server."
              ;; basically it means not removing it from the list
              (throw 'next 't)))
           ;; We completed without a defer signal so we need to remove the pair
-          (set lst (cdr (eval lst)))
-          )
-        )
-      )
-    )
-  )
+          (set lst (cdr (eval lst))))))))
 
 (defvar elnode--defer-timer nil
   "The timer used by the elnode defer processing.
 
-This is initialized by `elnode--init-deferring'."
-  )
+This is initialized by `elnode--init-deferring'.")
 
 (defun elnode--init-deferring ()
   "Initialize elnode defer processing.  Necessary for running comet apps."
   (setq elnode--defer-timer
-        (run-with-idle-timer 0.1 't 'elnode--deferred-processor))
-  )
+        (run-with-idle-timer 0.1 't 'elnode--deferred-processor)))
 
 
 ;; Main control functions
@@ -271,18 +265,16 @@ This is initialized by `elnode--init-deferring'."
    ;; Client socket status
    ((equal status "connection broken by remote peer\n")
     (if (process-buffer process)
-	(progn
-	  (kill-buffer (process-buffer process))
-	  (elnode-error "Elnode connection dropped")))
-    )
+        (progn
+          (kill-buffer (process-buffer process))
+          (elnode-error "Elnode connection dropped"))))
 
    ((equal status "open\n") ;; this says "open from ..."
     (elnode-error "Elnode opened new connection"))
 
    ;; Default
    (t
-    (elnode-error "Elnode status: %s %s" process status))
-   ))
+    (elnode-error "Elnode status: %s %s" process status))))
 
 (defun elnode--process-send-string (proc data)
   "Elnode adapter for 'process-send-string'.
@@ -351,11 +343,15 @@ port number of the connection."
                   (funcall (process-get server :elnode-http-handler) process)
                 ('elnode-defer
                  ;; The handler's processing of the socket should be deferred
-                 ;; - the value of the signal is the current handler (see elnode-defer-now)
+                 ;;
+                 ;; - the value of the signal is the current handler
+                 ;; - (see elnode-defer-now)
                  (elnode--deferred-add process (cdr signal-value)))
                 ('t
                  ;; Try and send a 500 error response
-                 ;; FIXME: we need some sort of check to see if the header has been written
+                 ;;
+                 ;; FIXME: we need some sort of check to see if the
+                 ;; header has been written
                  (process-send-string
                   process
                   "HTTP/1.1 500 Server-Error\r\n<h1>Server Error</h1>\r\n")))))))))
@@ -365,8 +361,7 @@ port number of the connection."
   "Log function for elnode.
 
 Serves only to connect the server process to the client processes"
-  (process-put con :server server)
-  )
+  (process-put con :server server))
 
 (defvar elnode-handler-history '()
   "The history of handlers bound to servers.")
@@ -379,18 +374,14 @@ Serves only to connect the server process to the client processes"
 
 ;;;###autoload
 (defun elnode-start (request-handler port host)
-  "Start the elnode server so that REQUEST-HANDLER handles requests on PORT on HOST.
+  "Start a server so that REQUEST-HANDLER handles requests on PORT on HOST.
 
-Most of the work done by the server is actually done by
-functions, the sentinel function, the log function and a filter
-function.
-
-request-handler is a function which is called with the
-request. The function is called with one argument, the
+REQUEST-HANDLER is a function which is called with the
+request. The function is called with one argument, which is the
 http-connection.
 
-You can use functions such as elnode-http-start and
-elnode-http-send-body to send the http response.
+You can use functions such as 'elnode-http-start' and
+'elnode-http-send-body' to send the http response.
 
 Example:
 
@@ -401,10 +392,10 @@ Example:
  (elnode-start 'nic-server 8000)
  ;; End
 
-You must also specify the port to start the server on.
+You must also specify the PORT to start the server on.
 
-You can optionally specify the hostname to start the server on,
-this must be bound to a local IP. Some names are special:
+You can optionally specify the HOST to start the server on, this
+must be bound to a local IP.  Some names are special:
 
   localhost  means 127.0.0.1
   * means 0.0.0.0
@@ -412,8 +403,9 @@ this must be bound to a local IP. Some names are special:
 specifying an IP is also possible.
 
 Note that although host can be specified, elnode does not
-disambiguate on running servers by host. So you cannot start 2
-different elnode servers on the same port on different hosts."
+disambiguate on running servers by host.  So you cannot currently
+start 2 different elnode servers on the same port on different
+hosts."
   (interactive
    (let ((handler (completing-read "Handler function: "
                                    obarray 'fboundp t nil nil))
@@ -456,17 +448,17 @@ different elnode servers on the same port on different hosts."
         (progn
           (delete-process (cdr server))
           (setq elnode-server-socket
-		;; remove-if
-		(let ((test (lambda (elem)
-			      (= (car elem) port)))
-		      (l elnode-server-socket)
-		      result)
-		  (while (car l)
-		    (let ((p (pop l))
-			  (r (cdr l)))
-		      (if (not (funcall test p))
-			  (setq result (cons p result)))))
-		  result))))))
+                ;; remove-if
+                (let ((test (lambda (elem)
+                              (= (car elem) port)))
+                      (l elnode-server-socket)
+                      result)
+                  (while (car l)
+                    (let ((p (pop l))
+                          (r (cdr l)))
+                      (if (not (funcall test p))
+                          (setq result (cons p result)))))
+                  result))))))
 
 (defun elnode-list-buffers ()
   "List the current buffers being managed by Elnode."
@@ -502,9 +494,15 @@ Returns a cons of the status line and the header association-list:
         (if (not hdrend)
             (error "Elnode: the header was not found by the HTTP parsing routines"))
         ;; Split the lines from the beginning of the buffer to the
-        ;; header end, use the first as the status line and the rest as the header
-        ;; FIXME: we don't handle continuation lines of anything like that
-        (let* ((lines (split-string (buffer-substring (point-min) hdrend) "\r\n" 't))
+        ;; header end, use the first as the status line and the rest
+        ;; as the header
+        ;;
+        ;; FIXME: we don't handle continuation lines of anything like
+        ;; that
+        (let* ((lines (split-string
+                       (buffer-substring (point-min) hdrend)
+                       "\r\n"
+                       't))
                (status (car lines))
                (header (cdr lines)))
           (process-put httpcon :elnode-header-end hdrend)
@@ -535,44 +533,40 @@ Returns a cons of the status line and the header association-list:
                       ;; Split out the cookies
                       (let* ((cookie-hdr (elnode-http-header httpcon "Cookie"))
                              (parts (split-string cookie-hdr ";")))
-                        (let ((lst (mapcar (lambda (s)
-                                             (url-parse-args
-                                              (if (string-match "[ \t]*\\(.*\\)[ \t]*$" s)
-                                                  (replace-match "\\1" nil nil s)
-                                                s)))
-                                           parts)))
+                        (let ((lst
+                               (mapcar
+                                (lambda (s)
+                                  (url-parse-args
+                                   (if (string-match "[ \t]*\\(.*\\)[ \t]*$" s)
+                                       (replace-match "\\1" nil nil s)
+                                     s)))
+                                parts)))
                           (process-put httpcon :elnode-http-cookie-list lst)
                           lst)))))
     (loop for cookie in cookie-list
           do (if (assoc-string name cookie)
-                 (return cookie)))
-    )
-  )
+                 (return cookie)))))
 
 (ert-deftest elnode-test-cookie ()
   "Test the cookie retrieval"
   (flet (;; Define this so that the cookie list is not retrieved
          (process-get (proc key)
-           nil
-           )
+           nil)
          ;; Just define it to do nothing
          (process-put (proc key data)
-           )
+           nil)
          ;; Get an example cookie header
          (elnode-http-header (httpcon name)
-           "csrf=213u21321321412nsfnwlv; username=nicferrier"
-           )
-         )
+           "csrf=213u21321321412nsfnwlv; username=nicferrier"))
     (let ((con ""))
       (should (equal
                (pp-to-string (elnode-http-cookie con "username"))
                "((\"username\" . \"nicferrier\"))\n"))
       (should (equal
-               (cdr (assoc-string "username" (elnode-http-cookie con "username")))
-               "nicferrier"))
-      )
-    )
-  )
+               (cdr (assoc-string
+                     "username"
+                     (elnode-http-cookie con "username")))
+               "nicferrier")))))
 
 (defun elnode--http-parse-status (httpcon &optional property)
   "Parse the status line.
@@ -608,7 +602,10 @@ Property if specified is the property to return."
           (let ((query (match-string 2 resource)))
             (string-match "\\?\\(.+\\)" query)
             (if (match-string 1 query)
-                (process-put httpcon :elnode-http-query (match-string 1 query)))))))
+                (process-put
+                 httpcon
+                 :elnode-http-query
+                 (match-string 1 query)))))))
   (if property
       (process-get httpcon property)))
 
@@ -757,19 +754,18 @@ parsing. That checks the ':elnode-http-method':
   ':elnode-http-query'.
 
 *** WARNING:: This test so far only handles GET ***"
-  (elnode--mock-process (:elnode-http-params
-                         (:elnode-http-method "GET")
-                         (:elnode-http-query "a=10"))
-    (should (equal "10" (elnode-http-param 't "a")))
-    )
+  (elnode--mock-process
+    (:elnode-http-params
+     (:elnode-http-method "GET")
+     (:elnode-http-query "a=10"))
+    (should (equal "10" (elnode-http-param 't "a"))))
   ;; Test some more complex params
-  (elnode--mock-process (:elnode-http-params
-                         (:elnode-http-method "GET")
-                         (:elnode-http-query "a=10&b=lah+dee+dah&c+a=blah+blah"))
+  (elnode--mock-process
+    (:elnode-http-params
+     (:elnode-http-method "GET")
+     (:elnode-http-query "a=10&b=lah+dee+dah&c+a=blah+blah"))
     (should (equal "lah dee dah" (elnode-http-param 't "b")))
-    (should (equal "blah blah" (elnode-http-param 't "c a")))
-    )
-  )
+    (should (equal "blah blah" (elnode-http-param 't "c a")))))
 
 
 (defun elnode-http-method (httpcon)
@@ -791,9 +787,7 @@ This is really only a placeholder function for doing transfer-encoding."
   ;; We should check that we are actually doing chunked encoding...
   ;; ... but for now we just presume we're doing it.
   (let ((len (length str)))
-    (process-send-string httpcon (format "%x\r\n%s\r\n" len (or str "")))
-    )
-  )
+    (process-send-string httpcon (format "%x\r\n%s\r\n" len (or str "")))))
 
 (defun elnode-http-start (httpcon status &rest header)
   "Start the http response on the specified http connection.
@@ -807,13 +801,14 @@ For example:
  (elnode-http-start httpcon \"200\" '(\"Content-type\" . \"text/html\"))"
   (if (process-get httpcon :elnode-http-started)
       (elnode-error "Http already started")
-    (let ((http-codes-strings '(("200" . "Ok")           (200 . "Ok")
-                                ("302" . "Redirect")     (302 . "Redirect")
-                                ("400" . "Bad Request")  (400 . "Bad Request")
-                                ("401" . "Authenticate") (401 . "Authenticate")
-                                ("404" . "Not Found")    (404 . "Not Found")
-                                ("500" . "Server Error") (500 . "Server Error")
-                                )))
+    (let ((http-codes-strings
+           '(("200" . "Ok")           (200 . "Ok")
+             ("302" . "Redirect")     (302 . "Redirect")
+             ("400" . "Bad Request")  (400 . "Bad Request")
+             ("401" . "Authenticate") (401 . "Authenticate")
+             ("404" . "Not Found")    (404 . "Not Found")
+             ("500" . "Server Error") (500 . "Server Error")
+             )))
       ;; Send the header
       (let ((header-alist (cons '("Transfer-encoding" . "chunked") header)))
         (process-send-string
@@ -837,8 +832,7 @@ For example:
   "We need a special end function to do the emacs clear up."
   (process-send-eof httpcon)
   (delete-process httpcon)
-  (kill-buffer (process-buffer httpcon))
-  )
+  (kill-buffer (process-buffer httpcon)))
 
 (defun elnode-http-return (httpcon &optional data)
   "End the response on HTTPCON optionally sending DATA first.
@@ -857,21 +851,70 @@ DATA must be a string, it's just passed to 'elnode-http-send'."
       (process-send-string httpcon "\r\n")
       (elnode--http-end httpcon))))
 
-(defun elnode-send-404 (httpcon)
-  "A generic 404 handler."
-  (elnode-http-start httpcon 404 '("Content-type" . "text/html"))
-  (elnode-http-return httpcon "<h1>Not Found</h1>\r\n"))
+(defcustom elnode-default-response-table
+  '((201 . "Created")
+    (400 . "Bad request")
+    (404 . "Not found")
+    (500 . "Server error")
+    (t . "Ok"))
+  "The status code -> default message mappings.
 
-(defun elnode-send-400 (httpcon)
-  "A generic 400 handler."
-  (elnode-http-start httpcon 400 '("Content-type" . "text/html"))
-  (elnode-http-return httpcon "<h1>Bad request</h1>\r\n"))
+When Elnode sends a default response these are the text used.
+
+Alter this if you want to change the messages that Elnode sends
+with the following functions:
+
+ 'elnode-send-400'
+ 'elnode-send-404'
+ 'elnode-send-500'
+
+The function 'elnode-send-status' also uses these."
+  :group 'elnode
+  :type '(alist :key-type integer
+                :value-type string))
+
+(defun elnode-send-status (httpcon status &optional message)
+  "A generic handler to send STATUS to HTTPCON.
+
+Sends an HTTP response with STATUS to the HTTPCON.  An HTML body
+is sent by looking up the STATUS in the 'elnode-default-response'
+table.
+
+Optionally include MESSAGE."
+  (elnode-http-start httpcon status '("Content-type" . "text/html"))
+  (elnode-http-return
+   httpcon
+   (format "<h1>%s</h1>%s\r\n"
+           (cdr (or (assoc status elnode-default-response-table)
+                    (assoc t elnode-default-response-table)))
+           (if message (format "<p>%s</p>" message) ""))))
+
+(defun elnode-send-404 (httpcon &optional message)
+  "Sends a Not Found error to the HTTPCON.
+
+Optionally include MESSAGE."
+  (elnode-send-status httpcon 404 message))
+
+(defun elnode-send-400 (httpcon &optional message)
+  "Sends a Bad Request error to the HTTPCON.
+
+Optionally include MESSAGE."
+  (elnode-send-status httpcon 404 message))
+
+(defun elnode-send-500 (httpcon &optional message)
+  "Sends a Server Error to the HTTPCON.
+
+Optionally include MESSAGE."
+  (elnode-send-status httpcon 500 message))
+
 
 (defun elnode-send-redirect (httpcon location &optional type)
   "Sends a redirect to the specified location."
   (let ((status-code (or type 302)))
     (elnode-http-start httpcon status-code `("Location" . ,location))
-    (elnode-http-return httpcon (format "<h1>redirecting you to %s</h1>\r\n" location))))
+    (elnode-http-return
+     httpcon
+     (format "<h1>redirecting you to %s</h1>\r\n" location))))
 
 (defun elnode-normalize-path (httpcon handler)
   "A decorator for HANDLER that normalizes paths to have a trailing slash.
@@ -880,12 +923,16 @@ This checks the HTTPCON path for a trailing slash and sends a 302
 to the slash trailed url if there is none.
 
 Otherwise it calls HANDLER."
-  (if (not (save-match-data
-             (string-match ".*\\(/\\|.*\\.[^/]*\\)$" (elnode-http-pathinfo httpcon))))
-      (elnode-send-redirect httpcon (format "%s/" (elnode-http-pathinfo httpcon)))
+  (if (save-match-data
+        (string-match
+         ".*\\(/\\|.*\\.[^/]*\\)$"
+         (elnode-http-pathinfo httpcon)))
+      (elnode-send-redirect
+       httpcon
+       (format "%s/" (elnode-http-pathinfo httpcon)))
     (funcall handler httpcon)))
 
-(defun elnode--mapper-find (path mapping-table)
+(defun elnode--mapper-find (httpcon path mapping-table)
   "Try and find the PATH inside the MAPPING-TABLE.
 
 This function exposes it's `match-data' on the 'path' variable so
@@ -893,23 +940,36 @@ that you can access that in your handler with something like:
 
  (match-string 1 (elnode-http-pathinfo httpcon))
 
-Returns the handler function that mapped, or 'nil'."
+Returns the handler function that mapped, or 'nil'.
+
+This function also establishes the ':elnode-http-mapping'
+property, adding it to the HTTPCON so it can be accessed from
+inside your handler with 'elnode-http-mapping'."
   ;; First find the mapping in the mapping table
-  (let ((m (loop for mapping in mapping-table
-                 until (let ((mapping-re (format "^/%s" (car mapping))))
-                         (string-match mapping-re path))
-                 finally return mapping)))
+  (let* ((match-path (save-match-data
+                       (if (string-match "^/\\(.*\\)" path)
+                           (match-string 1 path)
+                         path)))
+         (m (loop for mapping in mapping-table
+                  until (string-match (car mapping) match-path)
+                  finally return mapping)))
     ;; Now work out if we found one and what it was mapped to
-    (if (and m 
-             (or (functionp (cdr m)) 
-                 (functionp (and (symbolp (cdr m))
-                                 (symbol-value (cdr m))))))
-        (cond
-         ;; Check if it's a function or a variable pointing to a function
-         ((functionp (cdr m))
-          (cdr m))
-         ((functionp (symbol-value (cdr m)))
-          (symbol-value (cdr m)))))))
+    (when (and m
+               (or (functionp (cdr m))
+                   (functionp (and (symbolp (cdr m))
+                                   (symbol-value (cdr m))))))
+      (process-put httpcon :elnode-http-mapping match-path)
+      (cond
+       ;; Check if it's a function or a variable pointing to a
+       ;; function
+       ((functionp (cdr m))
+        (cdr m))
+       ((functionp (symbol-value (cdr m)))
+        (symbol-value (cdr m)))))))
+
+(ert-deftest elnode--mapper-find ()
+  "Test the mapper find function."
+  )
 
 (defun elnode-http-mapping (httpcon)
   "Return the match on the HTTPCON that resulted in the current handler.
@@ -934,7 +994,10 @@ The function 'elnode-test-path' uses this facility to work out a
 targetpath."
   (process-get httpcon :elnode-http-mapping))
 
-(defun elnode--dispatch-proc (httpcon path url-mapping-table &optional function-404)
+(defun elnode--dispatch-proc (httpcon
+                              path
+                              url-mapping-table
+                              &optional function-404)
   "Dispatch to the matched handler for the PATH on the HTTPCON.
 
 The handler for PATH is matched in the URL-MAPPING-TABLE via
@@ -942,16 +1005,11 @@ The handler for PATH is matched in the URL-MAPPING-TABLE via
 
 If no handler is found then a 404 is attempted via FUNCTION-404,
 it it's found to be a function, or as a last resort
-'elnode-send-404'.
-
-This function also establishes the ':elnode-http-mapping'
-property which can be accessed from inside your handler with
-'elnode-http-mapping'"
-  (let ((handler-func (elnode--mapper-find path url-mapping-table)))
+'elnode-send-404'."
+  (let ((handler-func (elnode--mapper-find httpcon path url-mapping-table)))
     (cond
      ;; If we have a handler, use it.
      ((functionp handler-func)
-      (process-put httpcon :elnode-http-mapping path)
       (funcall handler-func httpcon))
      ;; Maybe we should send the 404 function?
      ((functionp function-404)
@@ -978,36 +1036,47 @@ end in / so to map another url you should use:
 
 or:
 
-  path/subpath/$"
+  path/sub-path/$"
   (elnode-normalize-path
    httpcon
    (lambda (httpcon)
      (let ((pathinfo (elnode-http-pathinfo httpcon)))
-       (elnode--dispatch-proc httpcon pathinfo url-mapping-table function-404)))))
+       (elnode--dispatch-proc
+        httpcon
+        pathinfo
+         url-mapping-table
+        function-404)))))
 
-(defun elnode-hostpath-dispatcher (httpcon hostpath-mapping-table &optional function-404)
+(defun elnode-hostpath-dispatcher (httpcon
+                                   hostpath-mapping-table
+                                   &optional function-404)
   "Dispatch HTTPCON to a handler based on the HOSTPATH-MAPPING-TABLE.
 
 HOSTPATH-MAPPING-TABLE has a regex of the host and the path slash
 separated, thus:
 
  (\"^localhost/pastebin.*\" . pastebin-handler)"
-  (elnode-normalize-path
-   httpcon
-   (lambda (httpcon)
-     (let ((hostpath 
-            (format "%s%s"
-                    (let ((host (elnode-http-header httpcon "Host")))
-                      (save-match-data
-                        (string-match "\\([^:]+\\)\\(:[0-9]+.*\\)" host)
-                        (match-string 1 host)))
-                    (elnode-http-pathinfo httpcon))))
-       (elnode--dispatch-proc httpcon hostpath hostpath-mapping-table function-404)))))
+  ;;(elnode-normalize-path
+  ;; httpcon
+  ;; (lambda (httpcon)
+  (let ((hostpath
+         (format "%s%s"
+                 (let ((host (elnode-http-header httpcon "Host")))
+                   (save-match-data
+                     (string-match "\\([^:]+\\)\\(:[0-9]+.*\\)" host)
+                     (match-string 1 host)))
+                 (elnode-http-pathinfo httpcon))))
+    (elnode--dispatch-proc
+     httpcon
+     hostpath
+     hostpath-mapping-table
+     function-404)))
 
 ;;;###autoload
 (defcustom elnode-hostpath-default-table
-  '(("[^/]+/.*" . elnode-webserver))
-  "Customizable variable defining hostpath mappings for 'elnode-hostpath-default-handler'.
+  '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver)
+    ("[^/]+/.*" . elnode-webserver))
+  "Defines mappings for 'elnode-hostpath-default-handler'.
 
 This is the default mapping table for Elnode, out of the box. If
 you customize this then elnode will serve these hostpath mappings
@@ -1017,7 +1086,9 @@ By default the table maps everything to
 'elnode-webserver'. Unless you're happy with the default you
 should probably get rid of the everything path because it will
 interfere with any other mappings you add."
-  :group 'elnode)
+  :group 'elnode
+  :type '(alist :key-type string
+                :value-type symbol))
 
 (defun elnode-hostpath-default-handler (httpcon)
   "A default hostpath handler.
@@ -1029,6 +1100,13 @@ table.  It calls 'elnode-hostpath-dispatcher' with
 
 
 ;; Elnode child process functions
+
+(defcustom elnode-log-worker-elisp nil
+  "If true then worker Elisp (Elisp run in a child-Emacs process) is logged.
+
+The buffer '* elnode-worker-elisp *' is used for the log."
+  :group 'elnode
+  :type '(boolean))
 
 (defmacro elnode-worker-elisp (output-stream bindings &rest body)
   "Evaluate the BODY in a child Emacs connected to OUTPUT-STREAM.
@@ -1077,7 +1155,7 @@ The child's standard output stream is connected directly to the
 'http-connection' would have functions attached to the properties
 '':send-string-function' and ':send-eof-function' to do HTTP
 chunk encoding and to end the HTTP connection correctly."
-  (declare (indent defun))
+  (declare (indent 2))
   (let ((loadpathvar (make-symbol "load-path-form"))
         (bindingsvar (make-symbol "bindings"))
         (childlispvar (make-symbol "child-lisp"))
@@ -1106,7 +1184,10 @@ chunk encoding and to end the HTTP connection correctly."
                       (t
                        (get-buffer-create (format "* %s *" ,namevar)))))
             (,procvar (start-process-shell-command ,namevar ,bufvar ,cmdvar)))
-       (message ,childlispvar)
+       ;; Log the lisp
+       (if elnode-log-worker-elisp
+           (with-current-buffer (get-buffer-create "* elnode-worker-elisp *")
+             (insert ,childlispvar)))
        ;; If the output stream is not a buffer we need a filter function
        (cond
         ;; We wrap output to filters functions or buffers just a little
@@ -1176,19 +1257,22 @@ happens."
   (cond
    ((equal status "finished\n")
     (let ((httpcon (process-get process :elnode-httpcon)))
-      (elnode-error "Status @ finished: %s -> %s" (process-status httpcon) (process-status process))
+      (elnode-error
+       "Status @ finished: %s -> %s"
+       (process-status httpcon)
+       (process-status process))
       (if (not (eq 'closed (process-status httpcon)))
-	  (progn
-	    (elnode-http-send-string httpcon  "")
-	    (process-send-string httpcon "\r\n")
-	    (elnode--http-end httpcon)))))
+          (progn
+            (elnode-http-send-string httpcon  "")
+            (process-send-string httpcon "\r\n")
+            (elnode--http-end httpcon)))))
    ((string-match "exited abnormally with code \\([0-9]+\\)\n" status)
     (let ((httpcon (process-get process :elnode-httpcon)))
       (if (not (eq 'closed (process-status httpcon)))
-	  (progn
-	    (elnode-http-send-string httpcon "")
-	    (process-send-string httpcon "\r\n")
-	    (elnode--http-end httpcon)))
+          (progn
+            (elnode-http-send-string httpcon "")
+            (process-send-string httpcon "\r\n")
+            (elnode--http-end httpcon)))
       (delete-process process)
       (kill-buffer (process-buffer process))
       (elnode-error "Elnode-child-process-sentinel: %s" status)))
@@ -1206,11 +1290,11 @@ async process and finding the associated elnode http connection
 and sending the data there."
   (let ((httpcon (process-get process :elnode-httpcon)))
     (elnode-error "Elnode-child-process-filter http state: %s data length: %s"
-		  (process-status httpcon)
-		  (length data)
-		  )
+                  (process-status httpcon)
+                  (length data)
+                  )
     (if (not (equal "closed" (process-status httpcon)))
-	(elnode-http-send-string httpcon data))))
+        (elnode-http-send-string httpcon data))))
 
 (defun elnode-child-process (httpcon program &rest args)
   "Run the specified PROGRAM asynchronously sending output to HTTPCON.
@@ -1228,7 +1312,7 @@ directed at the same http connection."
                  ,@args
                 ))
          (p (let ((process-connection-type nil))
-	      (apply 'start-process args))))
+              (apply 'start-process args))))
     (set-process-coding-system p 'raw-text-unix)
     ;; Bind the http connection to the process
     (process-put p :elnode-httpcon httpcon)
@@ -1241,8 +1325,8 @@ directed at the same http connection."
     (set-process-filter p 'elnode--child-process-filter)
     (set-process-sentinel p 'elnode--child-process-sentinel)))
 
-(defun* elnode-send-file (httpcon targetfile 
-                                  &optional mime-types 
+(defun* elnode-send-file (httpcon targetfile
+                                  &optional mime-types
                                   &key preamble)
   "Send the TARGETFILE to the HTTPCON.
 
@@ -1264,8 +1348,8 @@ Optionally you may specify extra keyword arguments:
 for example you could prefix an XML file with XSL transformation
 statements so a compliant user-agent will transform the XML."
   (let ((filename (if (not (file-name-absolute-p targetfile))
-                      (file-relative-name 
-                       targetfile 
+                      (file-relative-name
+                       targetfile
                        (let ((dir (or load-file-name buffer-file-name)))
                          (if dir
                              (directory-file-name dir)
@@ -1293,16 +1377,17 @@ Write code like this:
  (elnode-method
   (\"GET\"
    (code)
-   (morecode))
+   (more code))
   (\"POST\"
-   (differentcode)
+   (different code)
    (evenmorecode)))"
   (declare (indent defun))
-  `(cond 
+  `(cond
     ,@(loop for m in method-mappings
             collect
-            (cons (list 'equal '(elnode-http-method httpcon) (car m))
-                  (cdr m)))))
+            (cons
+             (list 'equal '(elnode-http-method httpcon) (car m))
+             (cdr m)))))
 
 
 ;; Make simple handlers automatically
@@ -1336,14 +1421,17 @@ details."
 
 Webserver functions are free to use this or not.  The
 'elnode-webserver' function does use it."
-  :group 'elnode)
+  :group 'elnode
+  :type 'file)
 
 (defcustom elnode-webserver-extra-mimetypes '(("text/plain" . "creole")
                                                ("text/plain" . "el"))
   "this is just a way of hacking the mime type discovery so we
 can add more file mappings more easily than editing
 /etc/mime.types"
-  :group 'elnode)
+  :group 'elnode
+  :type '(alist :key-type string
+                :value-type string))
 
 
 (defun elnode--webserver-index (docroot targetfile pathinfo)
@@ -1355,7 +1443,16 @@ PATHINFO."
   (let ((dirlist (directory-files-and-attributes targetfile)))
     ;; TODO make some templating here so people can change this
     (format
-     "<html><head><title>%s</title></head><body><h1>%s</h1><div>%s</div></body></html>\n"
+     "<html>
+ <head>
+  <title>%s</title>
+ </head>
+ <body>
+  <h1>%s</h1>
+  <div>%s</div>
+ </body>
+</html>
+"
      pathinfo
      pathinfo
      (mapconcat
@@ -1372,12 +1469,15 @@ PATHINFO."
       "\n"))))
 
 (defun elnode-test-path (httpcon docroot handler &optional failure)
-  "Check that the PATH requested is above the DOCROOT specified.
+  "Check that the path in the HTTPCON is above the DOCROOT.
 
 Call FAILURE-HANDLER (falling back to 'enode-send-404') on failure
 and HANDLER on success.
 
-HANDLER is called with these arguments: HTTPCON DOCROOT TARGETFILE
+HANDLER is called with these arguments: HTTPCON, DOCROOT and
+TARGETFILE.  TARGETFILE is the absolute filename for the
+resource being requested (and is, obviously, safely below the
+DOCROOT).
 
 This is used by 'elnode--webserver-handler-proc' in the webservers
 that it creates... but it's also meant to be generally useful for
@@ -1482,6 +1582,65 @@ HTTPCON is the HTTP connection to the user agent."
    elnode-webserver-extra-mimetypes))
 
 
+;;; Wiki stuff
+
+;; If we have creole we can offer wiki
+(require 'creole nil 't)
+
+(defgroup elnode-wikiserver nil
+  "A Wiki server written with Elnode."
+  :group 'elnode)
+
+(defcustom elnode-wikiserver-wikiroot "~/wiki"
+  "The default root for the Elnode wiki files."
+  :type '(directory)
+  :group 'elnode-wikiserver)
+
+
+(defun elnode-wiki-send (httpcon wikipage)
+  "A very low level Wiki handler.
+
+Sends the WIKIPAGE to the HTTPCON."
+  (elnode-http-start httpcon 200 `("Content-type" . "text/html"))
+  (elnode-worker-elisp
+      httpcon
+      ((target wikipage))
+    (require 'creole)
+    (creole-wiki target :destination t)))
+
+(defun elnode-wiki-handler (httpcon wikiroot)
+  "A low level handler for Wiki operations.
+
+Send the Wiki page requested, which must be a file existing under
+the WIKIROOT, back to the HTTPCON."
+  (elnode-test-path
+   httpcon wikiroot
+   (lambda (httpcon docroot target-path)
+     (elnode-method
+       ("GET"
+        (elnode-wiki-send httpcon target-path))
+       ("POST"
+        ;; Might be a preview request in which case send back the WIKI
+        ;; text that's been sent.
+        ;;
+        ;; Might be a save request in which case save the new text and
+        ;; then send the wiki text.
+        (elnode-wiki-send httpcon target-path))))))
+
+(defun elnode-wikiserver (httpcon)
+  "Serve Wiki pages from 'elnode-wikiserver-wikiroot'.
+
+HTTPCON is the request.
+
+The Wiki server is only available if the 'creole' package is
+provided. Otherwise it will just error."
+  (if (featurep 'creole)
+      (elnode-wiki-handler httpcon elnode-wikiserver-wikiroot)
+    (elnode-send-500 httpcon "The Emacs feature 'creole is required.")))
+
+
+;;; Main customization stuff
+
 ;;;###autoload
 (defcustom elnode-init-port 8000
   "The port that 'elnode-init' starts the default server on."
@@ -1504,10 +1663,14 @@ the handler and listening on 'elnode-init-host'"
   (interactive)
   (if elnode-init-port
       (condition-case nil
-          (elnode-start 'elnode-hostpath-default-handler elnode-init-port elnode-init-host)
-        (error (message
-                "elnode can't start because port %d has something attached already"
-                elnode-init-port))))
+          (elnode-start
+           'elnode-hostpath-default-handler
+           elnode-init-port
+           elnode-init-host)
+        (error
+         (message
+          "elnode can't start because port %d has something attached already"
+          elnode-init-port))))
   ;;(if (not elnode--defer-timer)
   ;;    (elnode--init-deferring))
   )
@@ -1534,7 +1697,7 @@ This is autoloading mechanics, see the eval-after-load for doing init.")
 
 ;; Auto start elnode if we're ever loaded
 ;;;###autoload
-(eval-after-load 'elnode 
+(eval-after-load 'elnode
   (if (and elnode-do-init (not elnode--inited))
       (progn
         (elnode-init)
