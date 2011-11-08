@@ -58,6 +58,9 @@
 
 (eval-when-compile (require 'cl))
 
+(defconst ELNODE-FORM-DATA-TYPE "application/x-www-form-urlencoded"
+  "The type of HTTP Form POSTs")
+
 (defgroup elnode nil
   "An extensible asynchronous web server for Emacs."
   :group 'applications)
@@ -94,35 +97,46 @@ to always return \"GET\".
 
 'process-put' is also remapped, currently to swallow any setting.
 
-'process-buffer' is also remapped, to deliver a fake (empty)
-buffer. This is probably not necessary and might go in the
-future.
+'process-buffer' is also remapped, to deliver the value of the
+key ':buffer' if present and a dummy buffer otherwise.
 
 This is a work in progress - not sure what we'll return yet."
   (declare (indent defun))
-  (let ((pvvar (make-symbol "pv")))
+  (let ((pvvar (make-symbol "pv"))
+        (pvbuf (make-symbol "buf"))
+        (assocset (make-symbol "assocset")))
     `(let
          ;; Turn the list of bindings into an alist
          ((,pvvar (list ,@(loop for f in process-bindings
                                  collect
                                  (if (listp f)
                                      (list 'cons `(quote ,(car f)) (cadr f))
-                                   (list 'cons `,f nil))))))
+                                   (list 'cons `,f nil)))))
+          ;; Make a dummy buffer for the process.
+          (,pvbuf (get-buffer-create
+                   (generate-new-buffer-name "* elnode mock proc buf *"))))
+       ;; If we've got a buffer value then insert it.
+       (when (assoc :buffer ,pvvar)
+         (with-current-buffer ,pvbuf
+           (insert (cdr (assoc :buffer ,pvvar)))))
+       ;; Rebind the process function interface
        (flet ((process-get
                (proc key)
                (let ((pair (assoc key ,pvvar)))
                  (if pair
                      (cdr pair))))
-              (process-put
-               ;; FIXME This should probably update ,pvvar with the new value?
-               (proc key value))
-              ;; We shouldn't actually need this because you should
-              ;; arrange things so the buffer isn't read
+              (process-put ; Only adds, doesn't edit.
+               (proc key value)
+               (nconc ,pvvar (list (cons key value))))
               (process-buffer
-               (proc)
-               (get-buffer-create "* dummy proc buffer *")))
-         ,@body
-         ))))
+                 (proc)
+                 ,pvbuf))
+         ,@body)
+       ;; Now clean up
+       (with-current-buffer ,pvbuf
+         (set-buffer-modified-p nil))
+       (kill-buffer ,pvbuf)
+       )))
 
 
 ;; Error log handling
@@ -197,11 +211,11 @@ control back when the deferred is re-processed."
 
 (defmacro elnode-defer-or-do (guard &rest body)
   "Test the GUARD and defer if it suceeds and BODY if it doesn't."
+  (declare (indent defun))
   `(if ,guard
        (elnode-defer-now (lambda (httpcon) ,@body))
      (progn
-       ,@body))
-  )
+       ,@body)))
 
 (defun elnode--deferred-add (httpcon handler)
   "Add the specified HTTPCON HANDLER pair to the list to be processed later.
@@ -248,6 +262,38 @@ This is initialized by `elnode--init-deferring'.")
   "Initialize elnode defer processing.  Necessary for running comet apps."
   (setq elnode--defer-timer
         (run-with-idle-timer 0.1 't 'elnode--deferred-processor)))
+
+
+;;; Basic response mangling
+
+(defcustom elnode-default-response-table
+  '((201 . "Created")
+    (400 . "Bad request")
+    (404 . "Not found")
+    (500 . "Server error")
+    (t . "Ok"))
+  "The status code -> default message mappings.
+
+When Elnode sends a default response these are the text used.
+
+Alter this if you want to change the messages that Elnode sends
+with the following functions:
+
+ 'elnode-send-400'
+ 'elnode-send-404'
+ 'elnode-send-500'
+
+The function 'elnode-send-status' also uses these."
+  :group 'elnode
+  :type '(alist :key-type integer
+                :value-type string))
+
+(defun elnode--format-response (status &optional message)
+  "Format the STATUS and optionally MESSAGE as an HTML return."
+  (format "<h1>%s</h1>%s\r\n"
+          (cdr (or (assoc status elnode-default-response-table)
+                   (assoc t elnode-default-response-table)))
+          (if message (format "<p>%s</p>" message) "")))
 
 
 ;; Main control functions
@@ -298,6 +344,195 @@ sending data through an elnode connection transparently."
   (process-send-string proc "\r\n")
   (elnode--http-end proc))
 
+(defun elnode--http-parse (httpcon)
+  "Parse the HTTP header for the process.
+
+If the request is not fully complete (if the header has not
+arrived yet or we don't have all the content-length yet for
+example) this can throw 'elnode-parse-http'.  The thing being
+waited for is indicated.
+
+Important side effects of this function are to add certain
+process properties to the HTTP connection.  These are the result
+of succesfull parsing."
+  (with-current-buffer (process-buffer httpcon)
+    (save-excursion
+      (goto-char (point-min))
+      (let ((hdrend (re-search-forward "\r\n\r\n" nil 't)))
+        (when (not hdrend)
+          (throw 'elnode-parse-http 'header))
+        ;; FIXME: we don't handle continuation lines of anything like
+        ;; that
+        (let* ((lines
+                (split-string
+                 (buffer-substring (point-min) hdrend)
+                 "\r\n"
+                 't))
+               (status (car lines)) ;; the first line is the status line
+               (header (cdr lines)) ;; the rest of the lines are the header
+               (header-alist-strings
+                (mapcar
+                 (lambda (hdrline)
+                   (if (string-match "\\([A-Za-z0-9_-]+\\): \\(.*\\)" hdrline)
+                       (cons
+                        (match-string 1 hdrline)
+                        (match-string 2 hdrline))))
+                 header))
+               (header-alist-syms
+                (mapcar
+                 (lambda (hdr)
+                   (cons (intern (downcase (car hdr)))
+                         (cdr hdr)))
+                 header-alist-strings))
+               (content-len (assq 'content-length header-alist-syms)))
+          ;; Check the content if we have it.
+          (when content-len
+            (let* ((available-content (- (point-max) hdrend)))
+              (when (> (string-to-number (cdr content-len))
+                       available-content)
+                (throw 'elnode-parse-http 'content))))
+          (process-put httpcon :elnode-header-end hdrend)
+          (process-put httpcon :elnode-http-status status)
+          (process-put httpcon :elnode-http-header-syms header-alist-syms)
+          (process-put httpcon :elnode-http-header header-alist-strings)))))
+  ;; Return a symbol to indicate done-ness
+  'done)
+
+(defun elnode--http-make-hdr (method resource &rest headers)
+  "Convieniance tool to make an HTTP header.
+
+METHOD is the method to use.  RESOURCE is the path to use.
+HEADERS should be pairs of strings indicating the header values:
+
+ (elnode--http-make-hdr 'get \"/\" '(host . \"localhost\"))
+
+Where symbols are encountered they are turned into strings.
+Inside headers they are capitalized.
+
+A header pair with the key 'body' can be used to make a content body:
+
+ (elnode--http-make-hdr 'get \"/\" '(body . \"some text\"))
+ =>
+ GET / HTTP/1.1
+
+ some text
+
+No other transformations are done on the body, no content type
+added or content length computed."
+  (let (body)
+    (format "%s %s HTTP/1.1\r\n%s\r\n%s"
+            (upcase (if (symbolp method) (symbol-name method) method))
+            resource
+            (mapconcat
+             (lambda (header)
+               (let ((name (if (symbolp (car header))
+                               (symbol-name (car header))
+                             (car header))))
+                 (if (not (equal name "body"))
+                     (format "%s: %s\r\n"
+                             (capitalize name)
+                             (cdr header))
+                   (setq body (cdr header))
+                   "")))
+             headers
+             "")
+            ;; If we have a body then add that as well
+            (or body ""))))
+
+(ert-deftest elnode--make-http-hdr ()
+  "Test the construction of headers"
+  (should
+   (equal
+    (elnode--http-make-hdr
+     'get "/"
+     '(host . "host1")
+     '(user-agent . "test-agent"))
+    "GET / HTTP/1.1\r\nHost: host1\r\nUser-Agent: test-agent\r\n\r\n"))
+  (should
+   (equal
+    (elnode--http-make-hdr
+     'get "/"
+     '(host . "host2")
+     '(user-agent . "test-agent")
+     '(body . "my data"))
+    "GET / HTTP/1.1\r
+Host: host2\r
+User-Agent: test-agent\r
+\r
+my data")))
+
+(ert-deftest elnode--http-parse-header-complete ()
+  "Test the HTTP parsing."
+  (elnode--mock-process
+    ((:buffer
+      (elnode--http-make-hdr
+       'get "/"
+       '(host . "localhost")
+       '(user-agent . "test-agent"))))
+    ;; Parse the header
+    (should
+     (equal 'done
+            (catch 'elnode-parse-http
+              (elnode--http-parse nil))))
+    ;; Now check the side effects
+    (should
+     (equal
+      (process-get nil :elnode-http-header)
+      '(("Host" . "localhost")
+        ("User-Agent" . "test-agent"))))))
+
+(ert-deftest elnode--http-parse-header-incomplete ()
+  "Test the HTTP parsing of an incomplete header.
+
+An HTTP request with an incomplete header is setup and tested,
+then we finish the request (fill out the header) and then test
+again."
+  (elnode--mock-process
+    ((:buffer
+      "GET / HTTP/1.1\r\nHost: localh"))
+    ;; Now parse
+    (should
+     (equal 'header
+            (catch 'elnode-parse-http
+              (elnode--http-parse nil))))
+    ;; Now put the rest of the header in the buffer
+    (with-current-buffer (process-buffer nil)
+      (goto-char (point-max))
+      (insert "ost\r\n\r\n"))
+    (should
+     (equal 'done
+            (catch 'elnode-parse-http
+              (elnode--http-parse nil))))))
+
+(ert-deftest elnode--http-parse-body-incomplete ()
+  "Tests the HTTP parsing of an incomplete body.
+
+An HTTP request with an incomplete body is setup and tested, then
+we finish the request (fill out the content to content-length)
+and then test again."
+  (elnode--mock-process
+    ((:buffer
+      (elnode--http-make-hdr
+       'get "/"
+       '(host . "localhost")
+       '(user-agent . "test-agent")
+       `(content-length . ,(format "%d" (length "this is not finished")))
+       '(body . "this is not fin"))))
+    ;; Now parse
+    (should
+     (equal 'content
+            (catch 'elnode-parse-http
+              (elnode--http-parse nil))))
+    ;; Now put the rest of the text in the buffer
+    (with-current-buffer (process-buffer nil)
+      (goto-char (point-max))
+      (insert "ished"))
+    ;; And test again
+    (should
+     (equal 'done
+            (catch 'elnode-parse-http
+              (elnode--http-parse nil))))))
+
 (defun elnode--filter (process data)
   "Filtering DATA sent from the client PROCESS..
 
@@ -330,32 +565,35 @@ port number of the connection."
             (process-buffer process)))))
     (with-current-buffer buf
       (insert data)
-      ;; We need to check the buffer for \r\n\r\n which marks the end
-      ;; of HTTP header
-      (save-excursion
-        (goto-char (point-min))
-        (if (re-search-forward "\r\n\r\n" nil 't)
-            (let ((server (process-get process :server)))
-              ;; This is where we call the user handler
-              ;; TODO: this needs error protection so we can return an error?
-              (condition-case signal-value
-                  ;; Defer handling - for comet style operations
-                  (funcall (process-get server :elnode-http-handler) process)
-                ('elnode-defer
-                 ;; The handler's processing of the socket should be deferred
-                 ;;
-                 ;; - the value of the signal is the current handler
-                 ;; - (see elnode-defer-now)
-                 (elnode--deferred-add process (cdr signal-value)))
-                ('t
-                 ;; Try and send a 500 error response
-                 ;;
-                 ;; FIXME: we need some sort of check to see if the
-                 ;; header has been written
-                 (process-send-string
-                  process
-                  "HTTP/1.1 500 Server-Error\r\n<h1>Server Error</h1>\r\n")))))))))
-
+      ;; Try and parse...
+      (case (catch 'elnode-parse-http
+              (elnode--http-parse process))
+        ;; If this fails with one of these specific codes it's
+        ;; ok... we'll finish it when the data arrives
+        ('(header content)
+         (message "Elnode: partial header data received"))
+        ;; We were successful so we can call the user handler.
+        ('done
+         (save-excursion
+           (goto-char (process-get process :elnode-header-end))
+           (let ((server (process-get process :server)))
+             ;; This is where we call the user handler
+             ;; TODO: this needs error protection so we can return an error?
+             (condition-case signal-value
+                 ;; Defer handling - for comet style operations
+                 (funcall (process-get server :elnode-http-handler) process)
+               ('elnode-defer
+                ;; The handler's processing of the socket should be deferred
+                ;;
+                ;; - the value of the signal is the current handler
+                ;; - (see elnode-defer-now)
+                (elnode--deferred-add process (cdr signal-value)))
+               ('t
+                ;; FIXME: we need some sort of check to see if the
+                ;; header has been written
+                (process-send-string
+                 process
+                 (elnode--format-response 500)))))))))))
 
 (defun elnode--log-fn (server con msg)
   "Log function for elnode.
@@ -476,55 +714,57 @@ hosts."
              (string-lessp (buffer-name b) (buffer-name a))))))
   (display-buffer (get-buffer "*elnode-buffers*")))
 
+
 ;; HTTP API methods
 
-(defun elnode--http-parse (httpcon)
-  "Parse the HTTP header for the process.
+(defun elnode--http-hdr (httpcon)
+  "Return the header cons for the HTTPCON.
 
-Returns a cons of the status line and the header association-list:
-
- (http-status . http-header-alist)"
-  (with-current-buffer (process-buffer httpcon)
-    (save-excursion
-      (goto-char (point-min))
-      (let ((hdrend (re-search-forward "\r\n\r\n" nil 't)))
-        ;; It's an error if we can't find the end of header because
-        ;; elnode--filter should not have called the user handler
-        ;; until the header has ended
-        (if (not hdrend)
-            (error "Elnode: the header was not found by the HTTP parsing routines"))
-        ;; Split the lines from the beginning of the buffer to the
-        ;; header end, use the first as the status line and the rest
-        ;; as the header
-        ;;
-        ;; FIXME: we don't handle continuation lines of anything like
-        ;; that
-        (let* ((lines (split-string
-                       (buffer-substring (point-min) hdrend)
-                       "\r\n"
-                       't))
-               (status (car lines))
-               (header (cdr lines)))
-          (process-put httpcon :elnode-header-end hdrend)
-          (process-put httpcon :elnode-http-status status)
-          (process-put
-           httpcon
-           :elnode-http-header
-           (mapcar
-            (lambda (hdrline)
-              (if (string-match "\\([A-Za-z0-9_-]+\\): \\(.*\\)" hdrline)
-                  (cons (match-string 1 hdrline) (match-string 2 hdrline))))
-            header))))
-      (cons
-       (process-get httpcon :elnode-http-status)
-       (process-get httpcon :elnode-http-header)))))
+The status-line and the header alist."
+  (cons
+   (process-get httpcon :elnode-http-status)
+   (process-get httpcon :elnode-http-header)))
 
 (defun elnode-http-header (httpcon name)
-  "Get the header specified by name from the header."
-  (let ((hdr (or
-              (process-get httpcon :elnode-http-header)
-              (cdr (elnode--http-parse httpcon)))))
-    (cdr (assoc name hdr))))
+  "Get the header specified by NAME from the HTTPCON.
+
+HEADER may be a string or a symbol.  If NAME is a symbol it is
+case insensitve."
+  (let* ((key (if (symbolp name)
+                  (intern (downcase (symbol-name name)))
+                name))
+         (hdr (process-get
+               httpcon
+               (if (symbolp key)
+                   :elnode-http-header-syms
+                 :elnode-http-header))))
+    (cdr (assoc key hdr))))
+
+(ert-deftest elnode-http-header ()
+  "Test that we have headers."
+  (elnode--mock-process
+    ((:buffer
+      (elnode--http-make-hdr
+       'get "/"
+       '(host . "localhost")
+       '(user-agent . "test-agent")
+       `(content-length . ,(format "%d" (length "this is finished")))
+       '(body . "this is finished"))))
+    ;; Now parse
+    (should
+     (equal 'done
+            (catch 'elnode-parse-http
+              (elnode--http-parse nil))))
+    (should
+     (equal "test-agent"
+            (elnode-http-header nil "User-Agent")))
+    (should
+     (equal "test-agent"
+            (elnode-http-header nil 'user-agent)))
+    (should
+     (equal "test-agent"
+            (elnode-http-header nil 'User-Agent)))))
+
 
 (defun elnode-http-cookie (httpcon name)
   "Get the cookie value specified by the name."
@@ -572,9 +812,7 @@ Returns a cons of the status line and the header association-list:
   "Parse the status line.
 
 Property if specified is the property to return."
-  (let ((http-line (or
-                    (process-get httpcon :elnode-http-status)
-                    (car (elnode--http-parse httpcon)))))
+  (let ((http-line (process-get httpcon :elnode-http-status)))
     (string-match
      "\\(GET\\|POST\\|HEAD\\) \\(.*\\) HTTP/\\(1.[01]\\)"
      http-line)
@@ -689,9 +927,9 @@ A is considered the priority (it's elements go in first)."
         res)))
 
 (defun elnode--http-post-to-alist (httpcon)
-  "Parse the POST body.
-
-This is not a strong parser. Replace with something better."
+  "Parse the POST body."
+  ;; FIXME: this is ONLY a content length header parser it should also
+  ;; cope with transfer encodings.
   (let ((postdata
          (with-current-buffer (process-buffer httpcon)
            (buffer-substring
@@ -732,18 +970,16 @@ would result in:
          (process-put httpcon :elnode-http-params alist)
          alist)))))
 
-
 (defun elnode-http-param (httpcon name)
   "Get the named parameter from the request."
   (let* ((params (elnode-http-params httpcon))
          (param-pair (assoc name params)))
-    (if param-pair
-        (cdr param-pair))
     ;; Should we signal when we don't have a param?
-    ))
+    (when param-pair
+      (cdr param-pair))))
 
-(ert-deftest elnode-test-http-params ()
-  "Test that the params are ok if they are on the process.
+(ert-deftest elnode-test-http-get-params ()
+  "Test that the params are ok if they are on the status line.
 
 Sets ':elnode-http-params' to nil to trigger 'elnode-http-params'
 parsing. That checks the ':elnode-http-method':
@@ -767,6 +1003,28 @@ parsing. That checks the ':elnode-http-method':
     (should (equal "lah dee dah" (elnode-http-param 't "b")))
     (should (equal "blah blah" (elnode-http-param 't "c a")))))
 
+(ert-deftest elnode-test-http-post-params ()
+  "Test that the params are ok if they are in the body.
+
+Does a full http parse of a dummy buffer."
+  (let ((post-body "a=10&b=20&c=this+is+finished"))
+    (elnode--mock-process
+      ((:buffer
+        (elnode--http-make-hdr
+         'post "/"
+         '(host . "localhost")
+         '(user-agent . "test-agent")
+         `(content-length . ,(format "%d" (length post-body)))
+         `(body . ,post-body))))
+      ;; Now parse
+      (should
+       (equal 'done
+              (catch 'elnode-parse-http
+                (elnode--http-parse nil))))
+      ;; Now test some params
+      (should (equal "10" (elnode-http-param nil "a")))
+      (should (equal "20" (elnode-http-param nil "b")))
+      (should (equal "this is finished" (elnode-http-param nil "c"))))))
 
 (defun elnode-http-method (httpcon)
   "Get the PATHINFO of the request."
@@ -851,28 +1109,6 @@ DATA must be a string, it's just passed to 'elnode-http-send'."
       (process-send-string httpcon "\r\n")
       (elnode--http-end httpcon))))
 
-(defcustom elnode-default-response-table
-  '((201 . "Created")
-    (400 . "Bad request")
-    (404 . "Not found")
-    (500 . "Server error")
-    (t . "Ok"))
-  "The status code -> default message mappings.
-
-When Elnode sends a default response these are the text used.
-
-Alter this if you want to change the messages that Elnode sends
-with the following functions:
-
- 'elnode-send-400'
- 'elnode-send-404'
- 'elnode-send-500'
-
-The function 'elnode-send-status' also uses these."
-  :group 'elnode
-  :type '(alist :key-type integer
-                :value-type string))
-
 (defun elnode-send-status (httpcon status &optional message)
   "A generic handler to send STATUS to HTTPCON.
 
@@ -882,12 +1118,8 @@ table.
 
 Optionally include MESSAGE."
   (elnode-http-start httpcon status '("Content-type" . "text/html"))
-  (elnode-http-return
-   httpcon
-   (format "<h1>%s</h1>%s\r\n"
-           (cdr (or (assoc status elnode-default-response-table)
-                    (assoc t elnode-default-response-table)))
-           (if message (format "<p>%s</p>" message) ""))))
+  (elnode-http-return httpcon
+                      (elnode--format-response status message)))
 
 (defun elnode-send-404 (httpcon &optional message)
   "Sends a Not Found error to the HTTPCON.
@@ -991,7 +1223,7 @@ The following is true inside the handler:
          (match-string 1 (elnode-http-mapping httpcon)))
 
 The function 'elnode-test-path' uses this facility to work out a
-targetpath."
+target path."
   (process-get httpcon :elnode-http-mapping))
 
 (defun elnode--dispatch-proc (httpcon
@@ -1108,6 +1340,13 @@ The buffer '* elnode-worker-elisp *' is used for the log."
   :group 'elnode
   :type '(boolean))
 
+(defcustom elnode-log-worker-responses nil
+  "If true then worker Elisp logs responses in a buffer.
+
+The buffer '* elnode-worker-response *' is used for the log."
+  :group 'elnode
+  :type '(boolean))
+
 (defmacro elnode-worker-elisp (output-stream bindings &rest body)
   "Evaluate the BODY in a child Emacs connected to OUTPUT-STREAM.
 
@@ -1167,13 +1406,23 @@ chunk encoding and to end the HTTP connection correctly."
         (outvar (make-symbol "output-stream")))
     `(let* ((,outvar ,output-stream)
             (,childlispvar  ; the lisp to run
-             (format "(progn (setq load-path (quote %S)) (let %S %S))\n"
-                     load-path
-                     (list ,@(loop for f in bindings collect
-                                   (list 'list
-                                         `(quote ,(car f))
-                                         `(format "%s" ,(cadr f)))))
-                     '(progn ,@body)))
+             (concat
+              ;; There is a very strange thing with sending lisp to
+              ;; (read) over a piped stream... (read) can't cope with
+              ;; multiple lines; so we encode newline here.
+              (replace-regexp-in-string
+               "\n"
+               "\\\\n"
+               (format "(progn (setq load-path (quote %S)) (let %S %S))"
+                       load-path
+                       (list
+                        ,@(loop
+                           for f in bindings collect
+                           (list 'list
+                                 `(quote ,(car f))
+                                 `(format "%s" ,(cadr f)))))
+                       '(progn ,@body)))
+              "\n"))
             (,cmdvar "emacs -q -batch --eval '(eval (read))' 2> /dev/null")
             (,namevar (concat
                        (number-to-string (random))
@@ -1196,6 +1445,11 @@ chunk encoding and to end the HTTP connection correctly."
          (set-process-filter
           ,procvar
           (lambda (process data)
+            (if elnode-log-worker-responses
+                (with-current-buffer
+                    (get-buffer-create "* elnode-worker-response *")
+                  (goto-char (point-max))
+                  (insert data)))
             (if (equal data "Lisp expression: ")
                 (process-send-string process ,childlispvar)
               (if (bufferp ,outvar)
@@ -1207,6 +1461,11 @@ chunk encoding and to end the HTTP connection correctly."
          (set-process-filter
           ,procvar
           (lambda (process data)
+            (if elnode-log-worker-responses
+                (with-current-buffer
+                    (get-buffer-create "* elnode-worker-response *")
+                  (goto-char (point-max))
+                  (insert data)))
             ;; We get this as a signal to read a lisp expression
             (if (equal data "Lisp expression: ")
                 (process-send-string process ,childlispvar)
@@ -1233,7 +1492,7 @@ chunk encoding and to end the HTTP connection correctly."
               (when send-eof-function
                   (funcall send-eof-function ,outvar)))
              ((string-match "exited abnormally with code \\([0-9]+\\)\n" status)
-              (message "%s completed with an error" ,namevar)
+              (message "%s completed with an error: %s" ,namevar status)
               (when send-eof-function
                 (funcall send-eof-function ,outvar))
               (delete-process process)
@@ -1375,19 +1634,15 @@ statements so a compliant user-agent will transform the XML."
 Write code like this:
 
  (elnode-method
-  (\"GET\"
+  ('GET
    (code)
    (more code))
-  (\"POST\"
+  ('POST
    (different code)
    (evenmorecode)))"
   (declare (indent defun))
-  `(cond
-    ,@(loop for m in method-mappings
-            collect
-            (cons
-             (list 'equal '(elnode-http-method httpcon) (car m))
-             (cdr m)))))
+  `(case (intern (elnode-http-method httpcon))
+    ,@method-mappings))
 
 
 ;; Make simple handlers automatically
@@ -1596,36 +1851,96 @@ HTTPCON is the HTTP connection to the user agent."
   :type '(directory)
   :group 'elnode-wikiserver)
 
+(defcustom elnode-wikiserver-body-header
+  "<div id='top'></div>"
+  "HTML BODY preamable of a rendered Wiki page."
+  :type '(string)
+  :group 'elnode-wikiserver)
 
-(defun elnode-wiki-send (httpcon wikipage)
+(defcustom elnode-wikiserver-body-footer
+  "<div id='footer'>
+<form action='{{page}}' method='POST'>
+<fieldset>
+<legend>Edit this page</legend>
+<textarea  cols='80' rows='20' name='wikitext'>
+{{text}}
+</textarea><br/>
+<input type='text' name='comment' value=''/>
+<input type='submit' name='save' value='save'/>
+<input type='submit' name='preview' value='preview'/>
+</fieldset>
+</form>
+</div>"
+  "HTML BODY footter for a rendered Wiki page."
+  :type '(string)
+  :group 'elnode-wikiserver)
+
+(defun elnode-wiki-send (httpcon wikipage &optional pageinfo)
   "A very low level Wiki handler.
 
-Sends the WIKIPAGE to the HTTPCON."
+Sends the WIKIPAGE to the HTTPCON.
+
+If PAGEINFO is specified it's the HTTP path to the Wiki page."
   (elnode-http-start httpcon 200 `("Content-type" . "text/html"))
-  (elnode-worker-elisp
-      httpcon
-      ((target wikipage))
-    (require 'creole)
-    (creole-wiki target :destination t)))
+  (let ((page (or pageinfo (elnode-http-pathinfo httpcon))))
+    (elnode-worker-elisp
+        httpcon
+        ((target wikipage)
+         (page-info page)
+         (header elnode-wikiserver-body-header)
+         (footer elnode-wikiserver-body-footer))
+      (require 'creole)
+      (creole-wiki
+       target
+       :destination t
+       :variables `((page . ,page-info))
+       :body-header header
+       :body-footer footer))))
 
 (defun elnode-wiki-handler (httpcon wikiroot)
   "A low level handler for Wiki operations.
 
 Send the Wiki page requested, which must be a file existing under
 the WIKIROOT, back to the HTTPCON."
-  (elnode-test-path
-   httpcon wikiroot
-   (lambda (httpcon docroot target-path)
-     (elnode-method
-       ("GET"
-        (elnode-wiki-send httpcon target-path))
-       ("POST"
-        ;; Might be a preview request in which case send back the WIKI
-        ;; text that's been sent.
-        ;;
-        ;; Might be a save request in which case save the new text and
-        ;; then send the wiki text.
-        (elnode-wiki-send httpcon target-path))))))
+  (elnode-method
+    ('GET
+     (elnode-test-path
+      httpcon wikiroot
+      (lambda (httpcon docroot target-path)
+        (elnode-wiki-send httpcon target-path))))
+    ('POST
+     (let* ((path (elnode-http-pathinfo httpcon))
+            (comment (elnode-http-param httpcon "comment"))
+            (text (replace-regexp-in-string
+                   "\r" "" ; browsers send text in DOS line ending format
+                   (elnode-http-param httpcon "wikitext")))
+            (page (if path
+                      (save-match-data
+                        (string-match "/wiki/\\(.*\\)$" path)
+                        (match-string 1 path)))))
+       (if (not (elnode-http-param httpcon "preview"))
+           ;; A save request in which case save the new text and then
+           ;; send the wiki text.
+           (let* ((file-name (concat wikiroot "/" page))
+                  (buffer (find-file-noselect file-name)))
+             (with-current-buffer buffer
+               (erase-buffer)
+               (insert text)
+               (save-buffer)
+               (let ((git-buf
+                      (get-buffer-create
+                       (generate-new-buffer-name
+                        "* elnode wiki commit buf *"))))
+                 (shell-command
+                  (format "git commit -m '%s' %s" comment file-name)
+                  git-buf)
+                 (kill-buffer git-buf))
+               (elnode-wiki-send httpcon file-name)))
+         ;; Might be a preview request in which case send back the WIKI
+         ;; text that's been sent.
+         (with-temp-file "/tmp/preview"
+           (insert text))
+         (elnode-wiki-send httpcon "/tmp/preview" path))))))
 
 (defun elnode-wikiserver (httpcon)
   "Serve Wiki pages from 'elnode-wikiserver-wikiroot'.
