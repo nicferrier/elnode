@@ -767,7 +767,7 @@ case insensitve."
 
 
 (defun elnode-http-cookie (httpcon name)
-  "Get the cookie value specified by the name."
+  "Return the cookie value for HTTPCON specified by NAME."
   (let ((cookie-list (or
                       (process-get httpcon :elnode-http-coookie-list)
                       ;; Split out the cookies
