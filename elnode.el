@@ -611,7 +611,7 @@ Serves only to connect the server process to the client processes"
   "The history of hosts that servers are started on.")
 
 ;;;###autoload
-(defun elnode-start (request-handler port host)
+(defun elnode-start (request-handler &optional port host)
   "Start a server so that REQUEST-HANDLER handles requests on PORT on HOST.
 
 REQUEST-HANDLER is a function which is called with the request.
@@ -630,27 +630,28 @@ Example:
  (elnode-start 'nic-server 8000)
  ;; End
 
-You must also specify the PORT to start the server on.
+If PORT is non-nil, then run server on PORT.
 
-You can optionally specify the HOST to start the server on, this
-must be bound to a local IP.  Some names are special:
+if HOST is non-nil, then run the server on the specified local IP
+address.  A few names are predefined:
 
-  localhost  means 127.0.0.1
-  * means 0.0.0.0
+  \"localhost\" is 127.0.0.1
+  \"*\" is 0.0.0.0
 
-specifying an IP is also possible.
+Additionally, you may specifiy an IP address, e.g \"1.2.3.4\"
 
-Note that although host can be specified, elnode does not
-disambiguate on running servers by host.  So you cannot currently
-start 2 different elnode servers on the same port on different
-hosts."
+Note that although HOST may be specified, elnode does not
+disambiguate on running servers by HOST.  So you cannot start two
+elnode servers on the same port on different hosts."
   (interactive
    (let ((handler (completing-read "Handler function: "
                                    obarray 'fboundp t nil nil))
-         (port (read-number "Port: " nil))
+         (port (read-number "Port: " 8000))
          (host (read-string "Host: " "localhost" 'elnode-host-history)))
      (list (intern handler) port host)))
-  (if (not (assoc port elnode-server-socket))
+  (let ((port (or port 8000))
+        (host (or host "localhost")))
+    (unless (assoc port elnode-server-socket)
       ;; Add a new server socket to the list
       (setq elnode-server-socket
             (cons
@@ -675,7 +676,7 @@ hosts."
                       :sentinel 'elnode--sentinel
                       :log 'elnode--log-fn
                       :plist `(:elnode-http-handler ,request-handler))))
-             elnode-server-socket))))
+             elnode-server-socket)))))
 
 ;; TODO: make this take an argument for the
 (defun elnode-stop (port)
