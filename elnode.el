@@ -1051,9 +1051,9 @@ This is really only a placeholder function for doing transfer-encoding."
 (defun elnode-http-start (httpcon status &rest header)
   "Start the http response on the specified http connection.
 
-httpcon is the HTTP connection being handled.
-status is the HTTP status, eg: 200 or 404
-header is a sequence of (header-name . value) pairs.
+HTTPCON is the HTTP connection being handled.
+STATUS is the HTTP status, eg: 200 or 404
+HEADER is a sequence of (header-name . value) pairs.
 
 For example:
 
