@@ -809,9 +809,9 @@ case insensitve."
                "nicferrier")))))
 
 (defun elnode--http-parse-status (httpcon &optional property)
-  "Parse the status line.
+  "Parse the status line of HTTPCON.
 
-Property if specified is the property to return."
+If PROPERTY is non-nil, then return that property."
   (let ((http-line (process-get httpcon :elnode-http-status)))
     (string-match
      "\\(GET\\|POST\\|HEAD\\) \\(.*\\) HTTP/\\(1.[01]\\)"
