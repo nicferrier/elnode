@@ -196,7 +196,7 @@ by elnode iteslf."
 
 (defvar elnode--deferred
   '()
-  "list of deferred pairs: (socket . handler)")
+  "List of deferred pairs: (socket . handler).")
 
 (defun elnode-defer-now (handler)
   "The function you call to defer processing of the current socket.
