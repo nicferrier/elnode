@@ -59,7 +59,7 @@
 (eval-when-compile (require 'cl))
 
 (defconst ELNODE-FORM-DATA-TYPE "application/x-www-form-urlencoded"
-  "The type of HTTP Form POSTs")
+  "The type of HTTP Form POSTs.")
 
 (defgroup elnode nil
   "An extensible asynchronous web server for Emacs."
