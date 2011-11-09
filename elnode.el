@@ -614,12 +614,12 @@ Serves only to connect the server process to the client processes"
 (defun elnode-start (request-handler port host)
   "Start a server so that REQUEST-HANDLER handles requests on PORT on HOST.
 
-REQUEST-HANDLER is a function which is called with the
-request. The function is called with one argument, which is the
+REQUEST-HANDLER is a function which is called with the request.
+The function is called with one argument, which is the
 http-connection.
 
-You can use functions such as 'elnode-http-start' and
-'elnode-http-send-body' to send the http response.
+You can use functions such as `elnode-http-start' and
+`elnode-http-send-body' to send the http response.
 
 Example:
 
