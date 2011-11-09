@@ -399,7 +399,7 @@ of succesfull parsing."
   'done)
 
 (defun elnode--http-make-hdr (method resource &rest headers)
-  "Convieniance tool to make an HTTP header.
+  "Convenience function to make an HTTP header.
 
 METHOD is the method to use.  RESOURCE is the path to use.
 HEADERS should be pairs of strings indicating the header values:
