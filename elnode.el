@@ -354,7 +354,7 @@ waited for is indicated.
 
 Important side effects of this function are to add certain
 process properties to the HTTP connection.  These are the result
-of succesfull parsing."
+of succesful parsing."
   (with-current-buffer (process-buffer httpcon)
     (save-excursion
       (goto-char (point-min))
