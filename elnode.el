@@ -1279,11 +1279,12 @@ or:
   (elnode-normalize-path
    httpcon
    (lambda (httpcon)
+     ;; Get pathinfo again because we may have redirected.
      (let ((pathinfo (elnode-http-pathinfo httpcon)))
        (elnode--dispatch-proc
         httpcon
         pathinfo
-         url-mapping-table
+        url-mapping-table
         function-404)))))
 
 (defun elnode-hostpath-dispatcher (httpcon
