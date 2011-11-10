@@ -1161,14 +1161,15 @@ This checks the HTTPCON path for a trailing slash and sends a 302
 to the slash trailed url if there is none.
 
 Otherwise it calls HANDLER."
-  (if (save-match-data
-        (string-match
-         ".*\\(/\\|.*\\.[^/]*\\)$"
-         (elnode-http-pathinfo httpcon)))
-      (elnode-send-redirect
-       httpcon
-       (format "%s/" (elnode-http-pathinfo httpcon)))
-    (funcall handler httpcon)))
+  (let ((ends-in-slash-or-extension-regex ".*\\(/\\|.*\\.[^/]*\\)$")
+        (path (elnode-http-pathinfo httpcon)))
+    (if (not (save-match-data
+               (string-match ends-in-slash-or-extension-regex
+                             path)))
+        (elnode-send-redirect
+         httpcon
+         (format "%s/" path))
+      (funcall handler httpcon))))
 
 (defun elnode--mapper-find (httpcon path mapping-table)
   "Try and find the PATH inside the MAPPING-TABLE.
