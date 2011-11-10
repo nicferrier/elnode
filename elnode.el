@@ -1171,6 +1171,11 @@ Otherwise it calls HANDLER."
          (format "%s/" path))
       (funcall handler httpcon))))
 
+(defun elnode--mapper-find-mapping (match-path mapping-table)
+  "Return the mapping that matches MATCH-PATH in MAPPING-TABLE."
+  (loop for mapping in mapping-table
+        if (string-match (car mapping) match-path) return mapping))
+
 (defun elnode--mapper-find (httpcon path mapping-table)
   "Try and find the PATH inside the MAPPING-TABLE.
 
@@ -1186,12 +1191,11 @@ property, adding it to the HTTPCON so it can be accessed from
 inside your handler with 'elnode-http-mapping'."
   ;; First find the mapping in the mapping table
   (let* ((match-path (save-match-data
+                       ;; remove leading slash
                        (if (string-match "^/\\(.*\\)" path)
                            (match-string 1 path)
                          path)))
-         (m (loop for mapping in mapping-table
-                  until (string-match (car mapping) match-path)
-                  finally return mapping)))
+         (m (elnode--mapper-find-mapping match-path mapping-table)))
     ;; Now work out if we found one and what it was mapped to
     (when (and m
                (or (functionp (cdr m))
