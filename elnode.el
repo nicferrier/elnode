@@ -1240,11 +1240,11 @@ target path."
   "Dispatch to the matched handler for the PATH on the HTTPCON.
 
 The handler for PATH is matched in the URL-MAPPING-TABLE via
-'elnode--mapper-find'.
+`elnode--mapper-find'.
 
 If no handler is found then a 404 is attempted via FUNCTION-404,
 it it's found to be a function, or as a last resort
-'elnode-send-404'."
+`elnode-send-404'."
   (let ((handler-func (elnode--mapper-find httpcon path url-mapping-table)))
     (cond
      ;; If we have a handler, use it.
