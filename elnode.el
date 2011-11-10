@@ -1270,16 +1270,23 @@ URL-MAPPING-TABLE is an alist of:
 
 To map the root url you should use:
 
-  $
+  \"^$\"
 
-'elnode-dispatcher' uses 'elnode-normalize-path' to ensure paths
-end in / so to map another url you should use:
+To ensure paths end in /, `elnode-dispatcher' uses
+`elnode-normalize-path'.  To map another url you should use:
 
-  path/$
+  \"^path/$\" or \"^path/sub-path/$\"
 
-or:
+An example server setup:
 
-  path/sub-path/$"
+  (defun my-server (httpcon)
+    (elnode-dispatcher
+     httpcon
+     '((\"^$\" . root-view)
+       (\"^1/$\" . view-1))))
+
+If FUNCTION-404 is non-nil then it is called when no regexp is
+matched."
   (elnode-normalize-path
    httpcon
    (lambda (httpcon)
