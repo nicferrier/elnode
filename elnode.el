@@ -623,17 +623,19 @@ You can use functions such as `elnode-http-start' and
 
 Example:
 
- (defun nic-server (httpcon)
-   (elnode-http-start 200 '((\"Content-Type\": \"text/html\")))
-   (elnode-http-return \"<html><b>BIG!</b></html>\")
-   )
- (elnode-start 'nic-server 8000)
- ;; End
+  (defun nic-server (httpcon)
+    (elnode-http-start httpcon 200 '((\"Content-Type: text/html\")))
+    (elnode-http-return httpcon \"<html><b>BIG!</b></html>\")
+  )
+  (elnode-start 'nic-server)
 
-If PORT is non-nil, then run server on PORT.
+Now visit http://127.0.0.1:8000
 
-if HOST is non-nil, then run the server on the specified local IP
-address.  A few names are predefined:
+If PORT is non-nil, then run server on PORT, otherwise default to
+8000.
+
+If HOST is non-nil, then run the server on the specified local IP
+address, otherwise use localhost.  A few names are predefined:
 
   \"localhost\" is 127.0.0.1
   \"*\" is 0.0.0.0
