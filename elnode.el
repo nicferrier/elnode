@@ -1213,7 +1213,7 @@ inside your handler with 'elnode-http-mapping'."
 (defun elnode-http-mapping (httpcon)
   "Return the match on the HTTPCON that resulted in the current handler.
 
-This results only from a call via 'elnode-dispatcher'.
+This results only from a call via `elnode-dispatcher'.
 
 It returns the string which matched your url-mapping, with the
 match-data attached. So given the mapping:
