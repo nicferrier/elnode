@@ -1144,7 +1144,10 @@ Optionally include MESSAGE."
 
 
 (defun elnode-send-redirect (httpcon location &optional type)
-  "Sends a redirect to the specified location."
+  "Sends a redirect to LOCATION.
+
+If TYPE is non-nil, use it as a status code.  Defaults to 302 -
+permanent redirect."
   (let ((status-code (or type 302)))
     (elnode-http-start httpcon status-code `("Location" . ,location))
     (elnode-http-return
