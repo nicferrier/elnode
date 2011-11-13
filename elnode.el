@@ -59,7 +59,7 @@
 (eval-when-compile (require 'cl))
 
 (defconst ELNODE-FORM-DATA-TYPE "application/x-www-form-urlencoded"
-  "The type of HTTP Form POSTs")
+  "The type of HTTP Form POSTs.")
 
 (defgroup elnode nil
   "An extensible asynchronous web server for Emacs."
@@ -196,7 +196,7 @@ by elnode iteslf."
 
 (defvar elnode--deferred
   '()
-  "list of deferred pairs: (socket . handler)")
+  "List of deferred pairs: (socket . handler).")
 
 (defun elnode-defer-now (handler)
   "The function you call to defer processing of the current socket.
@@ -354,7 +354,7 @@ waited for is indicated.
 
 Important side effects of this function are to add certain
 process properties to the HTTP connection.  These are the result
-of succesfull parsing."
+of succesful parsing."
   (with-current-buffer (process-buffer httpcon)
     (save-excursion
       (goto-char (point-min))
@@ -399,7 +399,7 @@ of succesfull parsing."
   'done)
 
 (defun elnode--http-make-hdr (method resource &rest headers)
-  "Convieniance tool to make an HTTP header.
+  "Convenience function to make an HTTP header.
 
 METHOD is the method to use.  RESOURCE is the path to use.
 HEADERS should be pairs of strings indicating the header values:
@@ -611,46 +611,49 @@ Serves only to connect the server process to the client processes"
   "The history of hosts that servers are started on.")
 
 ;;;###autoload
-(defun elnode-start (request-handler port host)
+(defun elnode-start (request-handler &optional port host)
   "Start a server so that REQUEST-HANDLER handles requests on PORT on HOST.
 
-REQUEST-HANDLER is a function which is called with the
-request. The function is called with one argument, which is the
+REQUEST-HANDLER is a function which is called with the request.
+The function is called with one argument, which is the
 http-connection.
 
-You can use functions such as 'elnode-http-start' and
-'elnode-http-send-body' to send the http response.
+You can use functions such as `elnode-http-start' and
+`elnode-http-send-body' to send the http response.
 
 Example:
 
- (defun nic-server (httpcon)
-   (elnode-http-start 200 '((\"Content-Type\": \"text/html\")))
-   (elnode-http-return \"<html><b>BIG!</b></html>\")
-   )
- (elnode-start 'nic-server 8000)
- ;; End
+  (defun nic-server (httpcon)
+    (elnode-http-start httpcon 200 '((\"Content-Type: text/html\")))
+    (elnode-http-return httpcon \"<html><b>BIG!</b></html>\")
+  )
+  (elnode-start 'nic-server)
 
-You must also specify the PORT to start the server on.
+Now visit http://127.0.0.1:8000
 
-You can optionally specify the HOST to start the server on, this
-must be bound to a local IP.  Some names are special:
+If PORT is non-nil, then run server on PORT, otherwise default to
+8000.
 
-  localhost  means 127.0.0.1
-  * means 0.0.0.0
+If HOST is non-nil, then run the server on the specified local IP
+address, otherwise use localhost.  A few names are predefined:
 
-specifying an IP is also possible.
+  \"localhost\" is 127.0.0.1
+  \"*\" is 0.0.0.0
 
-Note that although host can be specified, elnode does not
-disambiguate on running servers by host.  So you cannot currently
-start 2 different elnode servers on the same port on different
-hosts."
+Additionally, you may specifiy an IP address, e.g \"1.2.3.4\"
+
+Note that although HOST may be specified, elnode does not
+disambiguate on running servers by HOST.  So you cannot start two
+elnode servers on the same port on different hosts."
   (interactive
    (let ((handler (completing-read "Handler function: "
                                    obarray 'fboundp t nil nil))
-         (port (read-number "Port: " nil))
+         (port (read-number "Port: " 8000))
          (host (read-string "Host: " "localhost" 'elnode-host-history)))
      (list (intern handler) port host)))
-  (if (not (assoc port elnode-server-socket))
+  (let ((port (or port 8000))
+        (host (or host "localhost")))
+    (unless (assoc port elnode-server-socket)
       ;; Add a new server socket to the list
       (setq elnode-server-socket
             (cons
@@ -675,7 +678,7 @@ hosts."
                       :sentinel 'elnode--sentinel
                       :log 'elnode--log-fn
                       :plist `(:elnode-http-handler ,request-handler))))
-             elnode-server-socket))))
+             elnode-server-socket)))))
 
 ;; TODO: make this take an argument for the
 (defun elnode-stop (port)
@@ -767,7 +770,7 @@ case insensitve."
 
 
 (defun elnode-http-cookie (httpcon name)
-  "Get the cookie value specified by the name."
+  "Return the cookie value for HTTPCON specified by NAME."
   (let ((cookie-list (or
                       (process-get httpcon :elnode-http-coookie-list)
                       ;; Split out the cookies
@@ -809,9 +812,9 @@ case insensitve."
                "nicferrier")))))
 
 (defun elnode--http-parse-status (httpcon &optional property)
-  "Parse the status line.
+  "Parse the status line of HTTPCON.
 
-Property if specified is the property to return."
+If PROPERTY is non-nil, then return that property."
   (let ((http-line (process-get httpcon :elnode-http-status)))
     (string-match
      "\\(GET\\|POST\\|HEAD\\) \\(.*\\) HTTP/\\(1.[01]\\)"
@@ -1050,9 +1053,9 @@ This is really only a placeholder function for doing transfer-encoding."
 (defun elnode-http-start (httpcon status &rest header)
   "Start the http response on the specified http connection.
 
-httpcon is the HTTP connection being handled.
-status is the HTTP status, eg: 200 or 404
-header is a sequence of (header-name . value) pairs.
+HTTPCON is the HTTP connection being handled.
+STATUS is the HTTP status, eg: 200 or 404
+HEADER is a sequence of (header-name . value) pairs.
 
 For example:
 
@@ -1141,7 +1144,10 @@ Optionally include MESSAGE."
 
 
 (defun elnode-send-redirect (httpcon location &optional type)
-  "Sends a redirect to the specified location."
+  "Sends a redirect to LOCATION.
+
+If TYPE is non-nil, use it as a status code.  Defaults to 302 -
+permanent redirect."
   (let ((status-code (or type 302)))
     (elnode-http-start httpcon status-code `("Location" . ,location))
     (elnode-http-return
@@ -1155,14 +1161,20 @@ This checks the HTTPCON path for a trailing slash and sends a 302
 to the slash trailed url if there is none.
 
 Otherwise it calls HANDLER."
-  (if (save-match-data
-        (string-match
-         ".*\\(/\\|.*\\.[^/]*\\)$"
-         (elnode-http-pathinfo httpcon)))
-      (elnode-send-redirect
-       httpcon
-       (format "%s/" (elnode-http-pathinfo httpcon)))
-    (funcall handler httpcon)))
+  (let ((ends-in-slash-or-extension-regex ".*\\(/\\|.*\\.[^/]*\\)$")
+        (path (elnode-http-pathinfo httpcon)))
+    (if (not (save-match-data
+               (string-match ends-in-slash-or-extension-regex
+                             path)))
+        (elnode-send-redirect
+         httpcon
+         (format "%s/" path))
+      (funcall handler httpcon))))
+
+(defun elnode--mapper-find-mapping (match-path mapping-table)
+  "Return the mapping that matches MATCH-PATH in MAPPING-TABLE."
+  (loop for mapping in mapping-table
+        if (string-match (car mapping) match-path) return mapping))
 
 (defun elnode--mapper-find (httpcon path mapping-table)
   "Try and find the PATH inside the MAPPING-TABLE.
@@ -1179,12 +1191,11 @@ property, adding it to the HTTPCON so it can be accessed from
 inside your handler with 'elnode-http-mapping'."
   ;; First find the mapping in the mapping table
   (let* ((match-path (save-match-data
+                       ;; remove leading slash
                        (if (string-match "^/\\(.*\\)" path)
                            (match-string 1 path)
                          path)))
-         (m (loop for mapping in mapping-table
-                  until (string-match (car mapping) match-path)
-                  finally return mapping)))
+         (m (elnode--mapper-find-mapping match-path mapping-table)))
     ;; Now work out if we found one and what it was mapped to
     (when (and m
                (or (functionp (cdr m))
@@ -1206,7 +1217,7 @@ inside your handler with 'elnode-http-mapping'."
 (defun elnode-http-mapping (httpcon)
   "Return the match on the HTTPCON that resulted in the current handler.
 
-This results only from a call via 'elnode-dispatcher'.
+This results only from a call via `elnode-dispatcher'.
 
 It returns the string which matched your url-mapping, with the
 match-data attached. So given the mapping:
@@ -1233,11 +1244,11 @@ target path."
   "Dispatch to the matched handler for the PATH on the HTTPCON.
 
 The handler for PATH is matched in the URL-MAPPING-TABLE via
-'elnode--mapper-find'.
+`elnode--mapper-find'.
 
 If no handler is found then a 404 is attempted via FUNCTION-404,
 it it's found to be a function, or as a last resort
-'elnode-send-404'."
+`elnode-send-404'."
   (let ((handler-func (elnode--mapper-find httpcon path url-mapping-table)))
     (cond
      ;; If we have a handler, use it.
@@ -1259,24 +1270,32 @@ URL-MAPPING-TABLE is an alist of:
 
 To map the root url you should use:
 
-  $
+  \"^$\"
 
-'elnode-dispatcher' uses 'elnode-normalize-path' to ensure paths
-end in / so to map another url you should use:
+To ensure paths end in /, `elnode-dispatcher' uses
+`elnode-normalize-path'.  To map another url you should use:
 
-  path/$
+  \"^path/$\" or \"^path/sub-path/$\"
 
-or:
+An example server setup:
 
-  path/sub-path/$"
+  (defun my-server (httpcon)
+    (elnode-dispatcher
+     httpcon
+     '((\"^$\" . root-view)
+       (\"^1/$\" . view-1))))
+
+If FUNCTION-404 is non-nil then it is called when no regexp is
+matched."
   (elnode-normalize-path
    httpcon
    (lambda (httpcon)
+     ;; Get pathinfo again because we may have redirected.
      (let ((pathinfo (elnode-http-pathinfo httpcon)))
        (elnode--dispatch-proc
         httpcon
         pathinfo
-         url-mapping-table
+        url-mapping-table
         function-404)))))
 
 (defun elnode-hostpath-dispatcher (httpcon
