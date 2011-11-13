@@ -1907,7 +1907,9 @@ the WIKIROOT, back to the HTTPCON."
      (elnode-test-path
       httpcon wikiroot
       (lambda (httpcon docroot target-path)
-        (elnode-wiki-send httpcon target-path))))
+        (if (equal target-path (concat docroot "/"))
+            (elnode-wiki-send httpcon (concat docroot "/index.creole"))
+          (elnode-wiki-send httpcon target-path)))))
     ('POST
      (let* ((path (elnode-http-pathinfo httpcon))
             (comment (elnode-http-param httpcon "comment"))
