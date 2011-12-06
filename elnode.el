@@ -447,7 +447,11 @@ added or content length computed."
      'get "/"
      '(host . "host1")
      '(user-agent . "test-agent"))
-    "GET / HTTP/1.1\r\nHost: host1\r\nUser-Agent: test-agent\r\n\r\n"))
+    "GET / HTTP/1.1\r
+Host: host1\r
+User-Agent: test-agent\r
+\r
+"))
   (should
    (equal
     (elnode--http-make-hdr
@@ -492,6 +496,7 @@ again."
       "GET / HTTP/1.1\r\nHost: localh"))
     ;; Now parse
     (should
+     ;; It fails with incomplete 'header signal
      (equal 'header
             (catch 'elnode-parse-http
               (elnode--http-parse nil))))
@@ -500,6 +505,7 @@ again."
       (goto-char (point-max))
       (insert "ost\r\n\r\n"))
     (should
+     ;; Now it succeeds with the 'done signal
      (equal 'done
             (catch 'elnode-parse-http
               (elnode--http-parse nil))))))
@@ -532,6 +538,16 @@ and then test again."
      (equal 'done
             (catch 'elnode-parse-http
               (elnode--http-parse nil))))))
+
+(defun elnode--get-server-handler (process)
+  "Retrieve the server handler from PROCESS.
+
+The server handler is bound with 'elnode-start which sets up
+'elnode--log-fn to ensure that all sockets created have a link
+back to the server."
+  (let* ((server (process-get process :server))
+         (handler (process-get server :elnode-http-handler)))
+    handler))
 
 (defun elnode--filter (process data)
   "Filtering DATA sent from the client PROCESS..
@@ -576,12 +592,12 @@ port number of the connection."
         ('done
          (save-excursion
            (goto-char (process-get process :elnode-header-end))
-           (let ((server (process-get process :server)))
+           (let ((handler (elnode--get-server-handler process)))
              ;; This is where we call the user handler
              ;; TODO: this needs error protection so we can return an error?
              (condition-case signal-value
                  ;; Defer handling - for comet style operations
-                 (funcall (process-get server :elnode-http-handler) process)
+                 (funcall handler process)
                ('elnode-defer
                 ;; The handler's processing of the socket should be deferred
                 ;;
@@ -594,6 +610,63 @@ port number of the connection."
                 (process-send-string
                  process
                  (elnode--format-response 500)))))))))))
+
+(defmacro with-elnode-mock-server (handler &rest body)
+  "Execute BODY with a fake server which is bound to HANDLER.
+
+This is useful for doing end to end client testing:
+
+ (ert-deftest elnode-wiki-page ()
+  (with-elnode-mock-server 'elnode-hostpath-default-handler
+    (elnode-test-call \"/wiki/test.creole\")))
+
+The test call with be passed to the
+'elnode-hostpath-default-handler via the normal HTTP parsing
+routines."
+  (declare (indent defun))
+  `(flet ((elnode--get-server-handler
+           (proc)
+           ,handler))
+     ,@body))
+
+(defun* elnode-test-call (path
+                          &key
+                          (method "GET")
+                          (parameters '())
+                          (headers '()))
+  "Fake a call to elnode with the PATH.
+
+In addition you can specify some extra HTTP stuff:
+
+ :method  one of GET, POST, DELETE, etc...
+ :parameters POST parameters, will be turned into a POST body
+ :headers any specific headers you require, you may override
+   test-call headers.
+
+For example:
+
+ (elnode-test-call \"/wiki/test\")
+
+or:
+
+ (elnode-test-call \"/wiki/test\"
+                   :method \"POST\"
+                   :parameters '((\"a\" . 10)))
+
+For header and parameter names, strings MUST be used currently."
+  (elnode--mock-process ()
+    (let ((hdrtext (elnode--http-make-hdr
+                    method path
+                    ,@headers
+                    '(body "")))
+          (http-connection t))
+      (elnode--filter http-connection hdrtext)
+      )))
+
+(ert-deftest elnode-wiki-page ()
+  (with-elnode-mock-server 'elnode-hostpath-default-handler
+    (let ((r (elnode-test-call "/wiki/test.creole")))
+      (should (equal 200 status-code)))))
 
 (defun elnode--log-fn (server con msg)
   "Log function for elnode.
