@@ -1123,6 +1123,59 @@ This is really only a placeholder function for doing transfer-encoding."
   (let ((len (length str)))
     (process-send-string httpcon (format "%x\r\n%s\r\n" len (or str "")))))
 
+(defvar elnode-http-codes-alist
+  (loop for p in '((200 . "Ok")
+                   (302 . "Redirect")
+                   (400 . "Bad Request")
+                   (401 . "Authenticate")
+                   (404 . "Not Found")
+                   (500 . "Server Error"))
+        collect
+        p
+        collect
+        (cons (number-to-string (car p))
+              (cdr p)))
+  "HTTP codes with string keys and integer keys.")
+
+(defun elnode--http-result-header (hdr-alist)
+  "Turn the HDR-ALIST into a result header string.
+
+The HDR-ALIST is an alist of symbol or string keys which are
+header names, against values which should be strings."
+  (let ((hdr hdr-alist))
+    (loop
+     for p in (if hdr
+                  (aput 'hdr 'transfer-encoding "chunked")
+                (list (cons 'transfer-encoding "chunked")))
+     concat
+     (format
+      "%s: %s\r\n"
+      (let ((hname (car p)))
+        (capitalize
+         (cond
+          ((symbolp hname)
+           (symbol-name hname))
+          ((stringp hname)
+           hname)
+          (t
+           (error "unsupported header type")))))
+      (cdr p)))))
+
+(ert-deftest elnode--http-result-header ()
+  "Test that we can make result headers."
+  (let ((l '((content-type . "text/html"))))
+    (should
+     (equal
+      (elnode--http-result-header l)
+      "Transfer-Encoding: chunked\r
+Content-Type: text/html\r
+")))
+  (let ((l '()))
+    (should
+     (equal
+      (elnode--http-result-header l)
+      nil))))
+
 (defun elnode-http-start (httpcon status &rest header)
   "Start the http response on the specified http connection.
 
@@ -1132,35 +1185,29 @@ HEADER is a sequence of (header-name . value) pairs.
 
 For example:
 
- (elnode-http-start httpcon \"200\" '(\"Content-type\" . \"text/html\"))"
+ (elnode-http-start httpcon \"200\" '(\"Content-type\" . \"text/html\"))
+
+The status and the header are also stored on the process as meta
+data.  This is done mainly for testing infrastructure."
   (if (process-get httpcon :elnode-http-started)
       (elnode-error "Http already started")
-    (let ((http-codes-strings
-           '(("200" . "Ok")           (200 . "Ok")
-             ("302" . "Redirect")     (302 . "Redirect")
-             ("400" . "Bad Request")  (400 . "Bad Request")
-             ("401" . "Authenticate") (401 . "Authenticate")
-             ("404" . "Not Found")    (404 . "Not Found")
-             ("500" . "Server Error") (500 . "Server Error")
-             )))
-      ;; Send the header
-      (let ((header-alist (cons '("Transfer-encoding" . "chunked") header)))
-        (process-send-string
-         httpcon
-         (format
-          "HTTP/1.1 %s %s\r\n%s\r\n\r\n"
-          status
-          ;; The status text
-          (cdr (assoc status http-codes-strings))
-          ;; The header
-          (or
-           (mapconcat
-            (lambda (p)
-              (format "%s: %s" (car p) (cdr p)))
-            header-alist
-            "\r\n")
-           "\r\n")))
-        (process-put httpcon :elnode-http-started 't)))))
+    ;; Send the header
+    (let ((header-alist (cons '("Transfer-encoding" . "chunked") header)))
+      ;; Store the meta data about the response.
+      (process-put httpcon :elnode-httpresponse-status status)
+      (process-put httpcon :elnode-httpresponse-header header)
+      (process-send-string
+       httpcon
+       (format
+        "HTTP/1.1 %s %s\r\n%s\r\n\r\n"
+        status
+        ;; The status text
+        (aget elnode-http-codes-alist status)
+        ;; The header
+        (or
+         (elnode--http-result-header header)
+         "\r\n")))
+      (process-put httpcon :elnode-http-started 't))))
 
 (defun elnode--http-end (httpcon)
   "We need a special end function to do the emacs clear up."
