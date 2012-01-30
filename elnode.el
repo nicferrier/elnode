@@ -1142,24 +1142,21 @@ This is really only a placeholder function for doing transfer-encoding."
 
 The HDR-ALIST is an alist of symbol or string keys which are
 header names, against values which should be strings."
-  (let ((hdr hdr-alist))
-    (loop
-     for p in (if hdr
-                  (aput 'hdr 'transfer-encoding "chunked")
-                (list (cons 'transfer-encoding "chunked")))
-     concat
-     (format
-      "%s: %s\r\n"
-      (let ((hname (car p)))
-        (capitalize
-         (cond
-          ((symbolp hname)
-           (symbol-name hname))
-          ((stringp hname)
-           hname)
-          (t
-           (error "unsupported header type")))))
-      (cdr p)))))
+  (loop
+   for p in (append (list (cons 'transfer-encoding "chunked")) hdr-alist)
+   concat
+   (format
+    "%s: %s\r\n"
+    (let ((hname (car p)))
+      (capitalize
+       (cond
+        ((symbolp hname)
+         (symbol-name hname))
+        ((stringp hname)
+         hname)
+        (t
+         (error "unsupported header type")))))
+    (cdr p))))
 
 (ert-deftest elnode--http-result-header ()
   "Test that we can make result headers."
@@ -1174,7 +1171,8 @@ Content-Type: text/html\r
     (should
      (equal
       (elnode--http-result-header l)
-      nil))))
+      "Transfer-Encoding: chunked\r
+"))))
 
 (defun elnode-http-start (httpcon status &rest header)
   "Start the http response on the specified http connection.
