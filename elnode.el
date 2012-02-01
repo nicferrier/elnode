@@ -1430,7 +1430,10 @@ separated, thus:
   ;; (lambda (httpcon)
   (let ((hostpath
          (format "%s%s"
-                 (let ((host (elnode-http-header httpcon "Host")))
+                 (let ((host
+                        (or
+                         (elnode-http-header httpcon "Host")
+                         "")))
                    (save-match-data
                      (string-match "\\([^:]+\\)\\(:[0-9]+.*\\)" host)
                      (match-string 1 host)))
