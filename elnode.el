@@ -5,7 +5,7 @@
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Maintainer: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Created: 5th October 2010
-;; Version: 0.9.1
+;; Version: 0.9.2
 ;; Keywords: lisp, http, hypermedia
 
 ;; This file is NOT part of GNU Emacs.
@@ -55,7 +55,6 @@
 (require 'mailcap)
 (require 'url-util)
 (require 'ert)
-
 (eval-when-compile (require 'cl))
 
 (defconst ELNODE-FORM-DATA-TYPE "application/x-www-form-urlencoded"
@@ -77,6 +76,14 @@ This is an alist of proc->server-process:
 
 
 ;; Useful macros for testing
+
+(defvar elnode-require-specified-buffer nil
+  "Tell 'elnode--mock-process that you require a buffer to be set.
+
+This is used to make elnode--filter testing work
+properly. Normally, tests do not need to set the process-buffer
+directly, they can just expect it to be there. 'elnode--filter,
+though, needs to set the process-buffer to work properly.")
 
 (defmacro elnode--mock-process (process-bindings &rest body)
   "Allow easier elnode testing by mocking the process functions.
@@ -104,39 +111,83 @@ This is a work in progress - not sure what we'll return yet."
   (declare (indent defun))
   (let ((pvvar (make-symbol "pv"))
         (pvbuf (make-symbol "buf"))
-        (assocset (make-symbol "assocset")))
+        (result (make-symbol "result")))
     `(let
          ;; Turn the list of bindings into an alist
-         ((,pvvar (list ,@(loop for f in process-bindings
-                                 collect
-                                 (if (listp f)
-                                     (list 'cons `(quote ,(car f)) (cadr f))
-                                   (list 'cons `,f nil)))))
-          ;; Make a dummy buffer for the process.
-          (,pvbuf (get-buffer-create
-                   (generate-new-buffer-name "* elnode mock proc buf *"))))
-       ;; If we've got a buffer value then insert it.
-       (when (assoc :buffer ,pvvar)
-         (with-current-buffer ,pvbuf
-           (insert (cdr (assoc :buffer ,pvvar)))))
+         (,result
+          (,pvvar
+           (list
+            ,@(loop
+               for f in
+               ;; We need to make sure there is always something in this alist
+               (append
+                (list :elnode-mock-process t)
+                process-bindings)
+               collect
+               (if (listp f)
+                   (list 'cons `(quote ,(car f)) (cadr f))
+                 (list 'cons `,f nil)))))
+          ;; Make a dummy buffer variable for the process - we fill
+          ;; this in dynamically in 'process-buffer
+          (,pvbuf))
        ;; Rebind the process function interface
        (flet ((process-get
                (proc key)
+               ;;(message "override pget called %s" key)
                (let ((pair (assoc key ,pvvar)))
+                 ;;(message "override pget called %s %s" key pair)
                  (if pair
                      (cdr pair))))
               (process-put ; Only adds, doesn't edit.
                (proc key value)
-               (nconc ,pvvar (list (cons key value))))
-              (process-buffer
-                 (proc)
+               ;;(message "override pput called %s %s" key value)
+               (nconc ,pvvar (list (cons key value)))
+               ;;(message "pput -> %s" ,pvvar)
+               )
+              (get-or-create-pvbuf
+               (proc &optional specified-buf)
+               (message "get-or-create proc buffer called")
+               (if (bufferp ,pvbuf)
+                   (progn
+                     (message "returning buffer %s" ,pvbuf)
+                     ,pvbuf)
+                 (setq ,pvbuf
+                       (if elnode-require-specified-buffer
+                           (if (bufferp specified-buf)
+                               specified-buf
+                             nil)
+                         (or specified-buf
+                             (get-buffer-create
+                              (generate-new-buffer-name
+                               "* elnode mock proc buf *")))))
+                 ;; If we've got a buffer value then insert it.
+                 (when (assoc :buffer ,pvvar)
+                   (with-current-buffer ,pvbuf
+                     (insert (cdr (assoc :buffer ,pvvar)))))
                  ,pvbuf))
-         ,@body)
+              (process-send-string
+               (proc str)
+               (with-current-buffer (get-or-create-pvbuf proc)
+                 (save-excursion
+                   (goto-char (point-max))
+                   (insert str))))
+              (process-contact
+               (proc &optional arg)
+               (list "localhost" 8000))
+              (process-buffer
+               (proc)
+               (get-or-create-pvbuf proc))
+              (set-process-buffer
+               (proc buffer)
+               (get-or-create-pvbuf proc buffer)))
+         (setq ,result (progn ,@body)))
        ;; Now clean up
-       (with-current-buffer ,pvbuf
-         (set-buffer-modified-p nil))
-       (kill-buffer ,pvbuf)
-       )))
+       (when (bufferp ,pvbuf)
+         (with-current-buffer ,pvbuf
+           (set-buffer-modified-p nil)
+           (kill-buffer ,pvbuf)))
+       ;; Now return whatever the body returned
+       ,result)))
 
 
 ;; Error log handling
@@ -549,6 +600,20 @@ back to the server."
          (handler (process-get server :elnode-http-handler)))
     handler))
 
+(defun elnode--make-send-string ()
+  "Make a function to send a string to an HTTP connection."
+  (lambda (httpcon str)
+    "Send STR to the HTTPCON.
+Does any necessary encoding."
+    (elnode--process-send-string httpcon str)))
+
+(defun elnode--make-send-eof ()
+  "Make a function to send EOF to an HTTP connection."
+  (lambda (con)
+    "Send EOF to the HTTPCON.
+Does any necessary encoding."
+    (elnode--process-send-eof con)))
+
 (defun elnode--filter (process data)
   "Filtering DATA sent from the client PROCESS..
 
@@ -565,15 +630,20 @@ port number of the connection."
           ;;
           ;; The name of the buffer has the client port in it
           ;; the space in the name ensures that emacs does not list it
-          (let* ((port (cadr (process-contact process))))
-            ;; We also use this moment to setup functions required by
-            ;; elnode-worker-lisp
-            (process-put process :send-string-function
-                         'elnode--process-send-string)
+          ;;
+          ;; We also use this moment to setup functions required by
+          ;; elnode-worker-lisp
+          (let* ((port (cadr (process-contact process)))
+                 (send-string-func (elnode--make-send-string))
+                 (send-eof-func (elnode--make-send-eof)))
+            (process-put
+             process :send-string-function
+             send-string-func)
             ;; ... and this one does closing the connection properly
             ;; with elnode's chunked encoding.
-            (process-put process :send-eof-function
-                         'elnode--process-send-eof)
+            (process-put
+             process :send-eof-function
+             send-eof-func)
             ;; Now do the buffer creation
             (set-process-buffer
              process
@@ -616,14 +686,16 @@ port number of the connection."
 
 This is useful for doing end to end client testing:
 
- (ert-deftest elnode-wiki-page ()
+ (ert-deftest elnode-some-page ()
   (with-elnode-mock-server 'elnode-hostpath-default-handler
-    (elnode-test-call \"/wiki/test.creole\")))
+    (elnode-test-call \"/something/test\")))
 
 The test call with be passed to the
 'elnode-hostpath-default-handler via the normal HTTP parsing
 routines."
-  (declare (indent defun))
+  (declare
+   (indent defun)
+   (debug t))
   `(flet ((elnode--get-server-handler
            (proc)
            ,handler))
@@ -654,19 +726,84 @@ or:
                    :parameters '((\"a\" . 10)))
 
 For header and parameter names, strings MUST be used currently."
-  (elnode--mock-process ()
-    (let ((hdrtext (elnode--http-make-hdr
-                    method path
-                    ,@headers
-                    '(body "")))
-          (http-connection t))
-      (elnode--filter http-connection hdrtext)
-      )))
+  (let ((elnode-require-specified-buffer t))
+    (elnode--mock-process ()
+      (let ((hdrtext
+             (apply
+              'elnode--http-make-hdr
+              `(,method
+                ,path
+                ,@headers
+                (body ""))))
+            (http-connection t))
+        ;; Capture the real eof-func and then override it to do fake ending.
+        (let ((eof-func (elnode--make-send-eof))
+              (the-end 0)
+              result-data)
+          (flet
+              ((elnode--make-send-eof
+                ()
+                (message "override elnode--make-send-eof called")
+                (lambda (httpcon)
+                  (message "override send-eof called")
+                  ;; Flet everything in elnode--http-end
+                  (flet ((process-send-eof
+                          (proc)
+                          (message "override process-send-eof called")
+                          ;; Signal the end
+                          (setq the-end 't))
+                         (delete-process
+                          (proc)
+                          ;; Do nothing - we want the test proc
+                          )
+                         (kill-buffer
+                          (buffer)
+                          ;; Again, do nothing, we want this buffer
+                          (with-current-buffer buffer
+                            (setq
+                             result-data
+                             (buffer-substring (point-min) (point-max))))
+                          ;; Return true, don't really kill the buffer
+                          t))
+                    ;; Now call the captured eof-func
+                    (funcall eof-func httpcon)))))
+            (elnode--filter http-connection hdrtext)
+            ;; Now we sleep till the-end is true
+            (while (not the-end)
+              (message "sleeping")
+              (sleep-for 0 10))
+            (when the-end
+              (list
+               :result-data
+               result-data
+               :buffer
+               (process-buffer http-connection)
+               ;; These properties are set by elnode-http-start
+               :status
+               (process-get
+                http-connection
+                :elnode-httpresponse-status)
+               :header
+               (process-get
+                http-connection
+                :elnode-httpresponse-header)))))))))
 
-(ert-deftest elnode-wiki-page ()
-  (with-elnode-mock-server 'elnode-hostpath-default-handler
-    (let ((r (elnode-test-call "/wiki/test.creole")))
-      (should (equal 200 status-code)))))
+(defun elnode-test-handler (httpcon)
+  "A simple handler for testing 'elnode-test-call"
+  (elnode-http-start httpcon 200 '("Content-Type" . "text/html"))
+  (elnode-http-return
+   httpcon
+   "<html><body><h1>Hello World</h1></body></html>"))
+
+(ert-deftest elnode-test-call-page ()
+  (with-elnode-mock-server
+    ;; Test dispatcher
+    (lambda (httpcon)
+      (elnode-hostpath-dispatcher
+       httpcon
+       '(("[^/]+/test/.*" . elnode-test-handler))))
+    (let ((r (elnode-test-call "/test/test.creole")))
+      (should (equal (plist-get r :status) 200)))))
 
 (defun elnode--log-fn (server con msg)
   "Log function for elnode.
@@ -1208,6 +1345,13 @@ data.  This is done mainly for testing infrastructure."
       (process-put httpcon :elnode-http-started 't))))
 
 (defun elnode--http-end (httpcon)
+  ;; problematic function for testing
+  ;;
+  ;; when it's called by child-elisp plumbing the flets might have
+  ;; gone out of scope
+  ;;
+  ;; we we to find a way for something to specify it wants this done,
+  ;; or not (tests need to stop it happening)
   "We need a special end function to do the emacs clear up."
   (process-send-eof httpcon)
   (delete-process httpcon)
@@ -1228,7 +1372,7 @@ DATA must be a string, it's just passed to 'elnode-http-send'."
       ;; Need to close the chunked encoding here
       (elnode-http-send-string httpcon "")
       (process-send-string httpcon "\r\n")
-      (elnode--http-end httpcon))))
+      (funcall (process-get httpcon :send-eof-function) httpcon))))
 
 (defun elnode-send-status (httpcon status &optional message)
   "A generic handler to send STATUS to HTTPCON.
@@ -1487,6 +1631,54 @@ The buffer '* elnode-worker-response *' is used for the log."
   :group 'elnode
   :type '(boolean))
 
+(defun elnode--worker-filter-helper (process
+                                     data
+                                     child-lisp
+                                     child-proc
+                                     out-stream)
+  "A helper function for 'elnode-worker-elisp.
+
+Sends DATA being sent from PROCESS to OUT-STREAM.
+
+CHILD-LISP is sent in response to Emacs' query for the Lisp on stdin.
+
+CHILD-PROC is the sub-Emacs process."
+  (if elnode-log-worker-responses
+      (with-current-buffer
+          (get-buffer-create "* elnode-worker-response *")
+        (goto-char (point-max))
+        (insert data)))
+  (message
+   "elnode--worker-filter-helper %s %s"
+   data
+   out-stream)
+  ;; We get this as a signal to read a lisp expression
+  (if (equal data "Lisp expression: ")
+      (process-send-string process child-lisp)
+    (cond
+     ((bufferp out-stream)
+      (with-current-buffer out-stream
+        (insert data)))
+     ((functionp out-stream)
+      (funcall out-stream process data))
+     ((processp out-stream)
+      (if (not (equal "closed" (process-status child-proc)))
+          (funcall
+           ;; Does the output-stream have a specific function?
+           (or (process-get out-stream :send-string-function)
+               'process-send-string)
+           ;; The data to sent to the output-stream process
+           out-stream data))))))
+
+(defun elnode--worker-lisp-helper (child-lisp)
+  "Called with CHILD-LISP it returns a version of CHILD-LISP.
+
+By default this function does nothing except return it's argument.
+
+The function exists so that other functions CAN flet it and thus
+override the Lisp being passed to the child Emacs."
+  child-lisp)
+
 (defmacro elnode-worker-elisp (output-stream bindings &rest body)
   "Evaluate the BODY in a child Emacs connected to OUTPUT-STREAM.
 
@@ -1526,15 +1718,16 @@ An example:
 
 Presuming http-connection is a process (in the manner of Elnode,
 for example) this will cause a child Emacs to be created, within
-which 'path', which is serialized from the value of the parent
-Emacs' 'path-function', will be loaded and converted from
+which 'path' (which is serialized from the value of the parent
+Emacs' 'path-function') will be loaded and converted from
 WikiCreole to HTML and then sent to the standard output stream.
 The child's standard output stream is connected directly to the
 'http-connection'.  In this case, presumably the
 'http-connection' would have functions attached to the properties
 '':send-string-function' and ':send-eof-function' to do HTTP
 chunk encoding and to end the HTTP connection correctly."
-  (declare (indent 2))
+  (declare (indent 2)
+           (debug t))
   (let ((loadpathvar (make-symbol "load-path-form"))
         (bindingsvar (make-symbol "bindings"))
         (childlispvar (make-symbol "child-lisp"))
@@ -1561,7 +1754,7 @@ chunk encoding and to end the HTTP connection correctly."
                            (list 'list
                                  `(quote ,(car f))
                                  `(format "%s" ,(cadr f)))))
-                       '(progn ,@body)))
+                       '(progn ,@(elnode--worker-lisp-helper body))))
               "\n"))
             (,cmdvar "emacs -q -batch --eval '(eval (read))' 2> /dev/null")
             (,namevar (concat
@@ -1577,70 +1770,79 @@ chunk encoding and to end the HTTP connection correctly."
        (if elnode-log-worker-elisp
            (with-current-buffer (get-buffer-create "* elnode-worker-elisp *")
              (insert ,childlispvar)))
-       ;; If the output stream is not a buffer we need a filter function
-       (cond
-        ;; We wrap output to filters functions or buffers just a little
-        ((or (bufferp ,outvar)
-             (functionp ,outvar))
-         (set-process-filter
-          ,procvar
-          (lambda (process data)
-            (if elnode-log-worker-responses
-                (with-current-buffer
-                    (get-buffer-create "* elnode-worker-response *")
-                  (goto-char (point-max))
-                  (insert data)))
-            (if (equal data "Lisp expression: ")
-                (process-send-string process ,childlispvar)
-              (if (bufferp ,outvar)
-                  (with-current-buffer ,outvar
-                    (insert data))
-                (funcall ,outvar process data))))))
-        ;; A process - setup a filter function
-        ((processp ,outvar)
-         (set-process-filter
-          ,procvar
-          (lambda (process data)
-            (if elnode-log-worker-responses
-                (with-current-buffer
-                    (get-buffer-create "* elnode-worker-response *")
-                  (goto-char (point-max))
-                  (insert data)))
-            ;; We get this as a signal to read a lisp expression
-            (if (equal data "Lisp expression: ")
-                (process-send-string process ,childlispvar)
-              (if (not (equal "closed" (process-status ,procvar)))
-                  (when (processp ,outvar)
-                    (funcall
-                     ;; Does the output-stream have a specific function?
-                     (or (process-get ,outvar :send-string-function)
-                         'process-send-string)
-                     ;; The data to sent to the output-stream process
-                     ,outvar data))))))))
+       ;; Setup a filter funcion on the child lisp to map output back
+       ;; to whatever the output is
+       (set-process-filter
+        ,procvar
+        (lambda (process data)
+          (elnode--worker-filter-helper
+           process
+           data
+           ,childlispvar
+           ,procvar
+           ,outvar)))
        ;; Now setup the sentinel
        (set-process-sentinel
         ,procvar
         (lambda (process status)
+          ;; Choose or fake a send-eof func
           (let ((send-eof-function
-                 ;; Does the output-stream have a send-eof?
-                 (and (processp ,outvar)
-                      (or (process-get ,outvar :send-eof-function)
-                          'process-send-eof))))
+                 (or (and (processp ,outvar)
+                          (or (process-get ,outvar :send-eof-function)
+                              'process-send-eof))
+                     (lambda (con)
+                       (message
+                        "elnode-worker-elisp fake eof func %s"
+                        ,namevar)))))
             (cond
+             ;; Normal end
              ((equal status "finished\n")
-              (message "%s completed" ,namevar)
-              (when send-eof-function
-                  (funcall send-eof-function ,outvar)))
+              (message
+               "elnode-worker-elisp %s completed %s"
+               ,namevar
+               ,outvar)
+              (funcall send-eof-function ,outvar))
+             ;; Error end
              ((string-match "exited abnormally with code \\([0-9]+\\)\n" status)
-              (message "%s completed with an error: %s" ,namevar status)
-              (when send-eof-function
-                (funcall send-eof-function ,outvar))
+              (message
+               "elnode-worker-elisp %s completed with an error: %s"
+               ,namevar
+               status)
+              (funcall send-eof-function ,outvar)
               (delete-process process)
               (unless (bufferp ,outvar)
                 (kill-buffer (process-buffer process))))
              ;; Any other signal status is ignored
              (t)))))
        ,procvar)))
+
+(defun elnode-wait-for-exit (process)
+  "Wait for PROCESS status to go to 'exit."
+  (while (not (eq (process-status process) 'exit))
+    (sleep-for 1)))
+
+(ert-deftest elnode-worker-elisp ()
+  "Test the 'elmode-worker-elisp macro.
+
+Runs some lisp in a child Emacs and tests that it outputs the
+right thing."
+  (let* ((bufname (generate-new-buffer-name "elnode-worker-elisp-test"))
+         (buf (get-buffer-create bufname)))
+    (elnode-wait-for-exit
+     ;; Nice simple bit of elisp to run in the child
+     (elnode-worker-elisp
+                   buf
+                   ((a 10))
+                 (setq x a)
+                 (princ x)))
+    (should
+     (equal
+      "10"
+      (let ((output
+             (with-current-buffer buf
+               (buffer-substring (point-min) (point-max)))))
+        (kill-buffer buf)
+        output)))))
 
 ;; TODO: handle errors better than messaging
 (defun elnode--child-process-sentinel (process status)
@@ -1780,7 +1982,8 @@ Write code like this:
   ('POST
    (different code)
    (evenmorecode)))"
-  (declare (indent defun))
+  (declare (indent defun)
+           (debug t))
   `(case (intern (elnode-http-method httpcon))
     ,@method-mappings))
 
@@ -2015,6 +2218,54 @@ HTTPCON is the HTTP connection to the user agent."
   :type '(string)
   :group 'elnode-wikiserver)
 
+(ert-deftest elnode-wiki-worker ()
+  "Test the worker elisp.
+
+Basically this is the same test as in the creole library but done
+via a child process."
+  (let* ((page "~/creole/index.creole")
+         (outbuf (get-buffer-create
+                  (generate-new-buffer-name
+                   "elnode-worker-wiki-test"))))
+    ;; Setup the the Creole file handler mocking.
+    (flet
+        ((elnode--worker-lisp-helper
+          (child-lisp)
+          `((progn
+              (require 'creole)
+              (require 'cl)
+              (flet ((creole--get-file
+                      (filename)
+                      (let ((buf (get-buffer-create "wikibuf")))
+                        (with-current-buffer buf
+                          (insert "= A Creole file ="))
+                        buf)))
+                ,@child-lisp)))))
+      (elnode-wait-for-exit
+       (elnode-worker-elisp
+           outbuf
+           ((target page)
+            (page-info page)
+            (header elnode-wikiserver-body-header)
+            (footer elnode-wikiserver-body-footer))
+         (require 'creole)
+         (creole-wiki
+          target
+          :destination t
+          :variables `((page . ,page-info))
+          :body-header header
+          :body-footer footer)))
+      ;; What are our assertions??
+      (with-current-buffer outbuf
+        (should
+         (progn
+           (goto-char (point-min))
+           (re-search-forward
+            "<div id='top'></div><h1>A Creole file</h1>"
+            nil
+            t))))
+      (kill-buffer outbuf))))
+
 (defun elnode-wiki-send (httpcon wikipage &optional pageinfo)
   "A very low level Wiki handler.
 
@@ -2037,6 +2288,12 @@ If PAGEINFO is specified it's the HTTP path to the Wiki page."
        :body-header header
        :body-footer footer))))
 
+(defun elnode--wiki-get (httpcon wikiroot path)
+  "Wiki-GET handler."
+  (if (equal path (concat wikiroot "/"))
+      (elnode-wiki-send httpcon (concat wikiroot "/index.creole"))
+    (elnode-wiki-send httpcon path)))
+
 (defun elnode-wiki-handler (httpcon wikiroot)
   "A low level handler for Wiki operations.
 
@@ -2047,9 +2304,7 @@ the WIKIROOT, back to the HTTPCON."
      (elnode-test-path
       httpcon wikiroot
       (lambda (httpcon docroot target-path)
-        (if (equal target-path (concat docroot "/"))
-            (elnode-wiki-send httpcon (concat docroot "/index.creole"))
-          (elnode-wiki-send httpcon target-path)))))
+        (elnode--wiki-get httpcon docroot target-path))))
     ('POST
      (let* ((path (elnode-http-pathinfo httpcon))
             (comment (elnode-http-param httpcon "comment"))
@@ -2095,6 +2350,35 @@ provided. Otherwise it will just error."
       (elnode-wiki-handler httpcon elnode-wikiserver-wikiroot)
     (elnode-send-500 httpcon "The Emacs feature 'creole is required.")))
 
+(ert-deftest elnode-wiki-page ()
+  "Full stack Wiki test."
+  (with-elnode-mock-server
+    ;; The dispatcher function
+    (lambda (httpcon)
+      (elnode-hostpath-dispatcher
+       httpcon
+       '(("[^/]+/wiki/.*" . elnode-wikiserver))))
+    ;; Setup the the Creole file handler mocking.
+    (flet
+        ((elnode--worker-lisp-helper
+          (child-lisp)
+          `((progn
+              (require 'creole)
+              (require 'cl)
+              (flet ((creole--get-file
+                      (filename)
+                      (let ((buf (get-buffer-create "wikibuf")))
+                        (with-current-buffer buf
+                          (insert "= A Creole file ="))
+                        buf)))
+                ,@child-lisp)))))
+      ;; Now the actual test
+      (let ((r (elnode-test-call "/wiki/test.creole")))
+        (message "result -> %s" r)
+        (should
+         (equal
+          (plist-get r :status)
+          200))))))
 
 ;;; Main customization stuff
 
