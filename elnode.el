@@ -71,9 +71,6 @@ This is an alist of proc->server-process:
 
   (port . process)")
 
-(defvar elnode-server-error-log "*elnode-server-error*"
-  "The buffer where error log messages are sent.")
-
 
 ;; Useful macros for testing
 
@@ -146,11 +143,8 @@ This is a work in progress - not sure what we'll return yet."
                )
               (get-or-create-pvbuf
                (proc &optional specified-buf)
-               (message "get-or-create proc buffer called")
                (if (bufferp ,pvbuf)
-                   (progn
-                     (message "returning buffer %s" ,pvbuf)
-                     ,pvbuf)
+                   ,pvbuf
                  (setq ,pvbuf
                        (if elnode-require-specified-buffer
                            (if (bufferp specified-buf)
@@ -201,34 +195,67 @@ This is a work in progress - not sure what we'll return yet."
    "[\r\n]" "."
    (substring data 0 (if (> 20 (length data)) (length data) 20))))
 
-(defun elnode-error (msg &rest args)
+(defcustom elnode-error-log-to-messages t
+  "Wether to send elnode logging through the messaging system."
+  :group 'elnode
+  :type '(boolean))
+
+(defvar elnode-server-error-log "*elnode-server-error*"
+  "The buffer where error log messages are sent.")
+
+(defun elnode--get-error-log-buffer ()
+  "Returns the buffer for the error-log."
+  (get-buffer-create elnode-server-error-log))
+
+(defmacro elnode-error (msg &rest args)
   "Log MSG with ARGS as an error.
 
 This function is available for handlers to call.  It is also used
 by elnode iteslf.
 
 There is only one error log, in the future there may be more."
-  (let ((fmtmsg (format "elnode-%s: %s"
-                    (format-time-string "%Y%m%d%H%M%S")
-                    (if (car-safe args)
-                        (apply 'format `(,msg ,@args))
-                      msg))))
-    (with-current-buffer (get-buffer-create elnode-server-error-log)
-      (goto-char (point-max))
-      (insert (concat fmtmsg "\n")))
-    (message "elnode-error: %s" fmtmsg)))
+  `(let* ((fmtmsg
+           (format
+            "elnode-%s: %s"
+            (format-time-string "%Y%m%d%H%M%S")
+            (apply 'format (list ,msg ,@args)))))
+     (with-current-buffer (elnode--get-error-log-buffer)
+       (goto-char (point-max))
+       (insert (concat fmtmsg "\n")))
+     (when elnode-error-log-to-messages
+       (message "elnode-error: %s" fmtmsg))))
 
 (ert-deftest elnode-test-error-log ()
   (let ((err-message "whoops!! something went wrong! %s" )
-        (err-include '("some included value")))
-    (if (get-buffer elnode-server-error-log)
-        (kill-buffer elnode-server-error-log))
-    (apply 'elnode-error `(,err-message ,@err-include))
-    (should (string-match
-             (format "^elnode-.*: %s\n$"
-                     (apply 'format `(,err-message ,@err-include)))
-             (with-current-buffer (get-buffer elnode-server-error-log)
-               (buffer-substring (point-min) (point-max)))))))
+        (err-include "some included value"))
+    (with-temp-buffer
+      (let ((test-log-buf (current-buffer)))
+        ;; Setup a fake server log buffer
+        (flet ((elnode--get-error-log-buffer () test-log-buf))
+          (elnode-error err-message err-include))
+        ;; Assert the message sent to the log buffer is correctly formatted.
+        (should (string-match
+                 (format
+                  "^elnode-.*: %s\n$"
+                  (apply 'format `(,err-message ,@(list err-include))))
+                 (buffer-substring (point-min) (point-max))))))))
+
+(ert-deftest elnode-test-error-log-list ()
+  (let ((err-message "whoops!! something went wrong! %s %s")
+        (err-include '("included value 1" "included value 2")))
+    (with-temp-buffer
+      (let ((test-log-buf (current-buffer)))
+        ;; Setup a fake server log buffer
+        (flet ((elnode--get-error-log-buffer () test-log-buf))
+          (elnode-error
+           err-message
+           "included value 1" "included value 2"))
+        ;; Assert the message sent to the log buffer is correctly formatted.
+        (should (string-match
+                 (format
+                  "^elnode-.*: %s\n$"
+                  (apply 'format `(,err-message ,@err-include)))
+                 (buffer-substring (point-min) (point-max))))))))
 
 (defun elnode-log-access (logname httpcon)
   "Log the HTTP access in buffer LOGNAME.
@@ -254,10 +281,11 @@ by elnode iteslf."
 
 ;; Defer stuff
 
-(put 'elnode-defer 'error-conditions '(elnode-defer)) ;; the elnode defer signal
+(progn
+  ;; Sets up the elnode defer signal
+  (put 'elnode-defer 'error-conditions '(elnode-defer)))
 
-(defvar elnode--deferred
-  '()
+(defvar elnode--deferred '()
   "List of deferred pairs: (socket . handler).")
 
 (defun elnode-defer-now (handler)
@@ -268,8 +296,7 @@ Pass in the current HANDLER.
 FIXME: We could capture the current handler somehow? I think the
 point is that whatever signals elnode-defer should be getting
 control back when the deferred is re-processed."
-  (signal 'elnode-defer handler)
-  )
+  (signal 'elnode-defer handler))
 
 (defmacro elnode-defer-or-do (guard &rest body)
   "Test the GUARD and defer if it suceeds and BODY if it doesn't."
@@ -290,9 +317,7 @@ dealing with it to enable comet like behaviour."
       (setcdr
        (last elnode--deferred)
        (cons `(,httpcon . ,handler) nil))
-    (setq elnode--deferred (cons `(,httpcon . ,handler) nil))
-    )
-  )
+    (setq elnode--deferred (cons `(,httpcon . ,handler) nil))))
 
 (defun elnode--deferred-processor ()
   "Called by an idle timer to process any deferred socket/handler pairs.
@@ -350,23 +375,22 @@ The function 'elnode-send-status' also uses these."
   :type '(alist :key-type integer
                 :value-type string))
 
-(defun elnode--format-response (status &optional message)
+(defun elnode--format-response (status &optional msg)
   "Format the STATUS and optionally MESSAGE as an HTML return."
   (format "<h1>%s</h1>%s\r\n"
           (cdr (or (assoc status elnode-default-response-table)
                    (assoc t elnode-default-response-table)))
-          (if message (format "<p>%s</p>" message) "")))
+          (if msg (format "<p>%s</p>" msg) "")))
 
 
 ;; Main control functions
 
 (defun elnode--sentinel (process status)
   "Sentinel function for the main server and for the client sockets."
-  (message
+  (elnode-error
    "elnode--sentinel %s for process  %s"
-   (replace-regexp-in-string "[\n\r]" "." status)
+   (elnode-trunc status)
    (process-name process))
-
   (cond
    ;; Server status
    ((and
@@ -674,7 +698,7 @@ port number of the connection."
         ;; If this fails with one of these specific codes it's
         ;; ok... we'll finish it when the data arrives
         ('(header content)
-         (message "Elnode: partial header data received"))
+         (elnode-error "elnode--filter: partial header data received"))
         ;; We were successful so we can call the user handler.
         ('done
          (save-excursion
@@ -697,7 +721,7 @@ port number of the connection."
                ('t
                 ;; FIXME: we need some sort of check to see if the
                 ;; header has been written
-                (message "elnode--filter default handling")
+                (elnode-error "elnode--filter: default handling")
                 (process-send-string
                  process
                  (elnode--format-response 500)))))))))))
@@ -764,13 +788,10 @@ For header and parameter names, strings MUST be used currently."
           (flet
               ((elnode--make-send-eof
                 ()
-                (message "override elnode--make-send-eof called")
                 (lambda (httpcon)
-                  (message "override send-eof called")
                   ;; Flet everything in elnode--http-end
                   (flet ((process-send-eof
                           (proc)
-                          (message "override process-send-eof called")
                           ;; Signal the end
                           (setq the-end 't))
                          (delete-process
@@ -791,7 +812,6 @@ For header and parameter names, strings MUST be used currently."
             (elnode--filter http-connection hdrtext)
             ;; Now we sleep till the-end is true
             (while (not the-end)
-              (message "sleeping")
               (sleep-for 0 10))
             (when the-end
               (list
@@ -1398,35 +1418,35 @@ DATA must be a string, it's just passed to 'elnode-http-send'."
       (process-send-string httpcon "\r\n")
       (funcall (process-get httpcon :send-eof-function) httpcon))))
 
-(defun elnode-send-status (httpcon status &optional message)
+(defun elnode-send-status (httpcon status &optional msg)
   "A generic handler to send STATUS to HTTPCON.
 
 Sends an HTTP response with STATUS to the HTTPCON.  An HTML body
 is sent by looking up the STATUS in the 'elnode-default-response'
 table.
 
-Optionally include MESSAGE."
+Optionally include MSG."
   (elnode-http-start httpcon status '("Content-type" . "text/html"))
   (elnode-http-return httpcon
-                      (elnode--format-response status message)))
+                      (elnode--format-response status msg)))
 
-(defun elnode-send-404 (httpcon &optional message)
+(defun elnode-send-404 (httpcon &optional msg)
   "Sends a Not Found error to the HTTPCON.
 
-Optionally include MESSAGE."
-  (elnode-send-status httpcon 404 message))
+Optionally include MSG."
+  (elnode-send-status httpcon 404 msg))
 
-(defun elnode-send-400 (httpcon &optional message)
+(defun elnode-send-400 (httpcon &optional msg)
   "Sends a Bad Request error to the HTTPCON.
 
-Optionally include MESSAGE."
-  (elnode-send-status httpcon 404 message))
+Optionally include MSG."
+  (elnode-send-status httpcon 404 msg))
 
-(defun elnode-send-500 (httpcon &optional message)
+(defun elnode-send-500 (httpcon &optional msg)
   "Sends a Server Error to the HTTPCON.
 
-Optionally include MESSAGE."
-  (elnode-send-status httpcon 500 message))
+Optionally include MSG."
+  (elnode-send-status httpcon 500 msg))
 
 
 (defun elnode-send-redirect (httpcon location &optional type)
@@ -1669,15 +1689,11 @@ CHILD-LISP is sent in response to Emacs' query for the Lisp on stdin."
           (get-buffer-create "* elnode-worker-response *")
         (goto-char (point-max))
         (insert data)))
+
   ;; Spit out a bit of the data (truncated)
-  (message
+  (elnode-error
    "elnode--worker-filter-helper %s... %s"
    (elnode-trunc data)
-   out-stream)
-
-  (message
-   "elnode--worker-filter-helper status %s for %s"
-   (process-status out-stream)
    out-stream)
 
   ;; We get this as a signal to read a lisp expression
@@ -1813,26 +1829,26 @@ chunk encoding and to end the HTTP connection correctly."
         ,procvar
         (lambda (process status)
           ;; Choose or fake a send-eof func
-          (message "elnode-worker-elisp sentinel for %s" ,namevar)
+          (elnode-error "elnode-worker-elisp sentinel for %s" ,namevar)
           (let ((send-eof-function
                  (or (and (processp ,outvar)
                           (or (process-get ,outvar :send-eof-function)
                               'process-send-eof))
                      (lambda (con)
-                       (message
+                       (elnode-error
                         "elnode-worker-elisp fake eof func %s"
                         ,namevar)))))
             (cond
              ;; Normal end
              ((equal status "finished\n")
-              (message
+              (elnode-error
                "elnode-worker-elisp %s completed %s"
                ,namevar
                ,outvar)
               (funcall send-eof-function ,outvar))
              ;; Error end
              ((string-match "exited abnormally with code \\([0-9]+\\)\n" status)
-              (message
+              (elnode-error
                "elnode-worker-elisp %s completed with an error: %s"
                ,namevar
                status)
@@ -2367,6 +2383,10 @@ the WIKIROOT, back to the HTTPCON."
            (insert text))
          (elnode-wiki-send httpcon "/tmp/preview" path))))))
 
+(defun elnode-wikiserver-test ()
+  "Test whether we should serve Wiki or not."
+  (featurep 'creole))
+
 (defun elnode-wikiserver (httpcon)
   "Serve Wiki pages from 'elnode-wikiserver-wikiroot'.
 
@@ -2374,7 +2394,7 @@ HTTPCON is the request.
 
 The Wiki server is only available if the 'creole' package is
 provided. Otherwise it will just error."
-  (if (featurep 'creole)
+  (if (elnode-wikiserver-test)
       (elnode-wiki-handler httpcon elnode-wikiserver-wikiroot)
     (elnode-send-500 httpcon "The Emacs feature 'creole is required.")))
 
@@ -2402,7 +2422,7 @@ provided. Otherwise it will just error."
                 ,@child-lisp)))))
       ;; Now the actual test
       (let ((r (elnode-test-call "/wiki/test.creole")))
-        (message "result -> %s" r)
+        (elnode-error "result -> %s" r)
         (should
          (equal
           (plist-get r :status)
@@ -2437,8 +2457,8 @@ the handler and listening on 'elnode-init-host'"
            elnode-init-port
            elnode-init-host)
         (error
-         (message
-          "elnode can't start because port %d has something attached already"
+         (elnode-error
+          "elnode-init: can't start - port %d has something attached already"
           elnode-init-port))))
   ;;(if (not elnode--defer-timer)
   ;;    (elnode--init-deferring))
