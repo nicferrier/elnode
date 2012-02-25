@@ -174,6 +174,9 @@ This is a work in progress - not sure what we'll return yet."
               (process-contact
                (proc &optional arg)
                (list "localhost" 8000))
+              (process-status
+               (proc)
+               'fake)
               (process-buffer
                (proc)
                (get-or-create-pvbuf proc))
@@ -192,6 +195,12 @@ This is a work in progress - not sure what we'll return yet."
 
 ;; Error log handling
 
+(defun elnode-trunc (data)
+  "Truncate and clean DATA."
+  (replace-regexp-in-string
+   "[\r\n]" "."
+   (substring data 0 (if (> 20 (length data)) (length data) 20))))
+
 (defun elnode-error (msg &rest args)
   "Log MSG with ARGS as an error.
 
@@ -199,13 +208,15 @@ This function is available for handlers to call.  It is also used
 by elnode iteslf.
 
 There is only one error log, in the future there may be more."
-  (with-current-buffer (get-buffer-create elnode-server-error-log)
-    (goto-char (point-max))
-    (insert (format "elnode-%s: %s\n"
+  (let ((fmtmsg (format "elnode-%s: %s"
                     (format-time-string "%Y%m%d%H%M%S")
                     (if (car-safe args)
                         (apply 'format `(,msg ,@args))
-                      msg)))))
+                      msg))))
+    (with-current-buffer (get-buffer-create elnode-server-error-log)
+      (goto-char (point-max))
+      (insert (concat fmtmsg "\n")))
+    (message "elnode-error: %s" fmtmsg)))
 
 (ert-deftest elnode-test-error-log ()
   (let ((err-message "whoops!! something went wrong! %s" )
@@ -351,6 +362,11 @@ The function 'elnode-send-status' also uses these."
 
 (defun elnode--sentinel (process status)
   "Sentinel function for the main server and for the client sockets."
+  (message
+   "elnode--sentinel %s for process  %s"
+   (replace-regexp-in-string "[\n\r]" "." status)
+   (process-name process))
+
   (cond
    ;; Server status
    ((and
@@ -391,6 +407,7 @@ connection) in a way that chunked encoding is endeed properly.
 
 This is used by 'elnode-worker-elisp' to implement a protocol for
 sending data through an elnode connection transparently."
+  (elnode-error "elnode--process-send-eof on %s" proc)
   (elnode-http-send-string proc "")
   (process-send-string proc "\r\n")
   (elnode--http-end proc))
@@ -667,7 +684,10 @@ port number of the connection."
              ;; TODO: this needs error protection so we can return an error?
              (condition-case signal-value
                  ;; Defer handling - for comet style operations
-                 (funcall handler process)
+                 (progn
+                   (elnode-error "filter: calling handler on %s" process)
+                   (funcall handler process)
+                   (elnode-error "filter: handler returned on %s" process))
                ('elnode-defer
                 ;; The handler's processing of the socket should be deferred
                 ;;
@@ -677,6 +697,7 @@ port number of the connection."
                ('t
                 ;; FIXME: we need some sort of check to see if the
                 ;; header has been written
+                (message "elnode--filter default handling")
                 (process-send-string
                  process
                  (elnode--format-response 500)))))))))))
@@ -1257,6 +1278,7 @@ Does a full http parse of a dummy buffer."
 This is really only a placeholder function for doing transfer-encoding."
   ;; We should check that we are actually doing chunked encoding...
   ;; ... but for now we just presume we're doing it.
+  (elnode-error "elnode-http-send-string %s %s" httpcon (elnode-trunc str))
   (let ((len (string-bytes str)))
     (process-send-string httpcon (format "%x\r\n%s\r\n" len (or str "")))))
 
@@ -1325,8 +1347,9 @@ For example:
 The status and the header are also stored on the process as meta
 data.  This is done mainly for testing infrastructure."
   (if (process-get httpcon :elnode-http-started)
-      (elnode-error "Http already started")
+      (elnode-error "Http already started on %s" httpcon)
     ;; Send the header
+    (elnode-error "starting HTTP response on %s" httpcon)
     (let ((header-alist (cons '("Transfer-encoding" . "chunked") header)))
       ;; Store the meta data about the response.
       (process-put httpcon :elnode-httpresponse-status status)
@@ -1334,7 +1357,7 @@ data.  This is done mainly for testing infrastructure."
       (process-send-string
        httpcon
        (format
-        "HTTP/1.1 %s %s\r\n%s\r\n\r\n"
+        "HTTP/1.1 %s %s\r\n%s\r\n"
         status
         ;; The status text
         (aget elnode-http-codes-alist status)
@@ -1353,6 +1376,7 @@ data.  This is done mainly for testing infrastructure."
   ;; we we to find a way for something to specify it wants this done,
   ;; or not (tests need to stop it happening)
   "We need a special end function to do the emacs clear up."
+  (elnode-error "elnode--http-end ending socket %s" httpcon)
   (process-send-eof httpcon)
   (delete-process httpcon)
   (kill-buffer (process-buffer httpcon)))
@@ -1634,24 +1658,28 @@ The buffer '* elnode-worker-response *' is used for the log."
 (defun elnode--worker-filter-helper (process
                                      data
                                      child-lisp
-                                     child-proc
                                      out-stream)
   "A helper function for 'elnode-worker-elisp.
 
 Sends DATA being sent from PROCESS to OUT-STREAM.
 
-CHILD-LISP is sent in response to Emacs' query for the Lisp on stdin.
-
-CHILD-PROC is the sub-Emacs process."
+CHILD-LISP is sent in response to Emacs' query for the Lisp on stdin."
   (if elnode-log-worker-responses
       (with-current-buffer
           (get-buffer-create "* elnode-worker-response *")
         (goto-char (point-max))
         (insert data)))
+  ;; Spit out a bit of the data (truncated)
   (message
-   "elnode--worker-filter-helper %s %s"
-   data
+   "elnode--worker-filter-helper %s... %s"
+   (elnode-trunc data)
    out-stream)
+
+  (message
+   "elnode--worker-filter-helper status %s for %s"
+   (process-status out-stream)
+   out-stream)
+
   ;; We get this as a signal to read a lisp expression
   (if (equal data "Lisp expression: ")
       (process-send-string process child-lisp)
@@ -1662,7 +1690,7 @@ CHILD-PROC is the sub-Emacs process."
      ((functionp out-stream)
       (funcall out-stream process data))
      ((processp out-stream)
-      (if (not (equal "closed" (process-status child-proc)))
+      (if (not (equal "closed" (process-status process)))
           (funcall
            ;; Does the output-stream have a specific function?
            (or (process-get out-stream :send-string-function)
@@ -1779,13 +1807,13 @@ chunk encoding and to end the HTTP connection correctly."
            process
            data
            ,childlispvar
-           ,procvar
            ,outvar)))
        ;; Now setup the sentinel
        (set-process-sentinel
         ,procvar
         (lambda (process status)
           ;; Choose or fake a send-eof func
+          (message "elnode-worker-elisp sentinel for %s" ,namevar)
           (let ((send-eof-function
                  (or (and (processp ,outvar)
                           (or (process-get ,outvar :send-eof-function)
