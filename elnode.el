@@ -7,6 +7,7 @@
 ;; Created: 5th October 2010
 ;; Version: 0.9.2
 ;; Keywords: lisp, http, hypermedia
+;; Requirements: ((fakir . "0.0.2")(creole . "0.8.1"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -55,6 +56,7 @@
 (require 'mailcap)
 (require 'url-util)
 (require 'ert)
+(require 'vc)
 (eval-when-compile (require 'cl))
 
 (defconst ELNODE-FORM-DATA-TYPE "application/x-www-form-urlencoded"
@@ -2054,6 +2056,9 @@ specified and are passed through, see 'elnode-send-file' for
 details."
   (lambda (httpcon)
     (elnode-send-file httpcon filename mime-types :preamble preamble)))
+
+
+
 
 
 ;; Webserver stuff
