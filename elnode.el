@@ -1482,7 +1482,8 @@ Otherwise it calls HANDLER."
 (defun elnode--mapper-find-mapping (match-path mapping-table)
   "Return the mapping that matches MATCH-PATH in MAPPING-TABLE."
   (loop for mapping in mapping-table
-        if (string-match (car mapping) match-path) return mapping))
+        if (string-match (car mapping) match-path)
+        return mapping))
 
 (defun elnode--mapper-find (httpcon path mapping-table)
   "Try and find the PATH inside the MAPPING-TABLE.
@@ -1494,9 +1495,9 @@ that you can access that in your handler with something like:
 
 Returns the handler function that mapped, or 'nil'.
 
-This function also establishes the ':elnode-http-mapping'
+This function also establishes the `:elnode-http-mapping'
 property, adding it to the HTTPCON so it can be accessed from
-inside your handler with 'elnode-http-mapping'."
+inside your handler with `elnode-http-mapping'."
   ;; First find the mapping in the mapping table
   (let* ((match-path (save-match-data
                        ;; remove leading slash
@@ -1509,21 +1510,26 @@ inside your handler with 'elnode-http-mapping'."
                (or (functionp (cdr m))
                    (functionp (and (symbolp (cdr m))
                                    (symbol-value (cdr m))))))
-      (process-put httpcon :elnode-http-mapping match-path)
+      ;; Make the match parts accessible
+      (process-put
+       httpcon
+       :elnode-http-mapping
+       (when (string-match (car m) match-path)
+         (loop for i from 0 to (- (/ (length (match-data match-path)) 2) 1)
+               collect (match-string i match-path))))
+      ;; Check if it's a function or a variable pointing to a
+      ;; function
       (cond
-       ;; Check if it's a function or a variable pointing to a
-       ;; function
        ((functionp (cdr m))
         (cdr m))
        ((functionp (symbol-value (cdr m)))
         (symbol-value (cdr m)))))))
 
-(ert-deftest elnode--mapper-find ()
-  "Test the mapper find function."
-  )
-
-(defun elnode-http-mapping (httpcon)
+(defun elnode-http-mapping (httpcon &optional part)
   "Return the match on the HTTPCON that resulted in the current handler.
+
+With PART it returns a specific part of the match , by default
+PART is 0.
 
 This results only from a call via `elnode-dispatcher'.
 
@@ -1543,7 +1549,79 @@ The following is true inside the handler:
 
 The function 'elnode-test-path' uses this facility to work out a
 target path."
-  (process-get httpcon :elnode-http-mapping))
+  (elt
+   (process-get httpcon :elnode-http-mapping)
+   (if part part 0)))
+
+(ert-deftest elnode--mapper-find ()
+  "Test the mapper find function."
+  (fakir-mock-process
+   ((:nothing))
+   (should
+    (equal
+     (elnode--mapper-find
+      :fake
+      "localhost/wiki/somefile.creole"
+      '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver)
+        ("[^/]+/.*" . elnode-webserver)))
+     'elnode-wikiserver))
+   (should
+    (equal
+     (elnode-http-mapping :fake)
+     "localhost/wiki/somefile.creole"))
+   (should
+    (equal
+     (elnode-http-mapping :fake 1)
+     "somefile.creole"))
+   (should
+    (equal
+     (elnode--mapper-find
+      :fake
+      "anyhost/wiki/somefile.creole"
+      '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver)
+        ("[^/]+/.*" . elnode-webserver)))
+     'elnode-wikiserver))))
+
+
+(defun elnode-get-targetfile (httpcon docroot)
+  "Get the targetted file from the HTTPCON.
+
+Attempts to resolve the matched path of the HTTPCON against the
+DOCROOT.
+
+The resulting file is NOT checked for existance or safety."
+  (let* ((pathinfo (elnode-http-pathinfo httpcon))
+         (path (elnode-http-mapping httpcon 1))
+         (targetfile
+          (format
+           "%s%s"
+           (expand-file-name docroot)
+           (format (or (and (save-match-data
+                              (string-match "^/" path))
+                            "%s")
+                       "/%s")
+                   (if (equal path "/")  "" path)))))
+    targetfile))
+
+(ert-deftest elnode-get-targetfile ()
+  "Test the target file resolution stuff."
+  (fakir-mock-process
+    ((:elnode-http-pathinfo "/wiki/index.creole"))
+    (should
+     (equal
+      (elnode--mapper-find
+       :fake
+       "localhost/wiki/index.creole"
+       '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver)
+         ("[^/]+/.*" . elnode-webserver)))
+      'elnode-wikiserver))
+    (fakir-mock-file (fakir-file
+                      :filename "index.creole"
+                      :directory "/home/elnode/wiki")
+      (should
+       (equal
+        (elnode-get-targetfile :fake "/home/elnode/wiki")
+        "/home/elnode/wiki/index.creole")))))
 
 (defun elnode--dispatch-proc (httpcon
                               path
