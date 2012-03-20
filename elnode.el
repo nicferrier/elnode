@@ -2017,21 +2017,41 @@ statements so a compliant user-agent will transform the XML."
       (elnode-send-404 httpcon))))
 
 (defmacro elnode-method (&rest method-mappings)
-  "A method mapping macro.
+  "Map the HTTP method.
 
 Write code like this:
 
  (elnode-method
-  ('GET
+  (GET
    (code)
    (more code))
-  ('POST
+  (POST
    (different code)
    (evenmorecode)))"
-  (declare (indent defun)
-           (debug t))
-  `(case (intern (elnode-http-method httpcon))
-    ,@method-mappings))
+  (declare
+   (debug (&rest (sexp &rest form)))
+   (indent defun))
+  (let ((var (make-symbol "v")))
+    `(let ((,var (intern "GET"))) ;; (elnode-http-method httpcon))))
+       (cond
+        ,@(loop
+           for d in method-mappings
+           collect `((eq ,var (quote ,(car d)))
+                     ,@(cdr d)))))))
+
+(ert-deftest elnode-method ()
+  "A quick test for `elnode-method'."
+  (let ((httpcon :fake)
+        method)
+    (flet ((elnode-http-method
+            (http-con)
+            "GET"))
+      (elnode-method
+        (GET
+         (setq method "GET"))
+        (POST
+         (set method "POST")))
+      (should (equal method "GET")))))
 
 
 ;; Make simple handlers automatically
