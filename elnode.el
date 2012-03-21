@@ -81,11 +81,11 @@ This is an alist of proc->server-process:
 ;; Useful macros for testing
 
 (defvar elnode-require-specified-buffer nil
-  "Tell 'elnode--mock-process that you require a buffer to be set.
+  "Tell `elnode--mock-process' that you require a buffer to be set.
 
 This is used to make elnode--filter testing work
 properly. Normally, tests do not need to set the process-buffer
-directly, they can just expect it to be there. 'elnode--filter,
+directly, they can just expect it to be there. `elnode--filter',
 though, needs to set the process-buffer to work properly.")
 
 (defmacro elnode--mock-process (process-bindings &rest body)
@@ -105,9 +105,9 @@ Causes:
 
 to always return \"GET\".
 
-'process-put' is also remapped, currently to swallow any setting.
+`process-put' is also remapped, currently to swallow any setting.
 
-'process-buffer' is also remapped, to deliver the value of the
+`process-buffer' is also remapped, to deliver the value of the
 key ':buffer' if present and a dummy buffer otherwise.
 
 This is a work in progress - not sure what we'll return yet."
@@ -376,7 +376,7 @@ with the following functions:
  'elnode-send-404'
  'elnode-send-500'
 
-The function 'elnode-send-status' also uses these."
+The function `elnode-send-status' also uses these."
   :group 'elnode
   :type '(alist :key-type integer
                 :value-type string))
@@ -420,22 +420,22 @@ The function 'elnode-send-status' also uses these."
     (elnode-error "Elnode status: %s %s" process status))))
 
 (defun elnode--process-send-string (proc data)
-  "Elnode adapter for 'process-send-string'.
+  "Elnode adapter for `process-send-string'.
 
 Sends DATA to the HTTP connection PROC (which is an HTTP
-connection) using 'elnode-http-send-string'.
+connection) using `elnode-http-send-string'.
 
-This is used by 'elnode-worker-elisp' to implement a protocol for
+This is used by `elnode-worker-elisp' to implement a protocol for
 sending data through an elnode connection transparently."
   (elnode-http-send-string proc data))
 
 (defun elnode--process-send-eof (proc)
-  "Elnode adapter for 'process-send-eof'.
+  "Elnode adapter for `process-send-eof'.
 
 Sends EOF to the HTTP connection PROC (which is an HTTP
 connection) in a way that chunked encoding is endeed properly.
 
-This is used by 'elnode-worker-elisp' to implement a protocol for
+This is used by `elnode-worker-elisp' to implement a protocol for
 sending data through an elnode connection transparently."
   (elnode-error "elnode--process-send-eof on %s" proc)
   (elnode-http-send-string proc "")
@@ -447,7 +447,7 @@ sending data through an elnode connection transparently."
 
 If the request is not fully complete (if the header has not
 arrived yet or we don't have all the content-length yet for
-example) this can throw 'elnode-parse-http'.  The thing being
+example) this can throw `elnode-parse-http'.  The thing being
 waited for is indicated.
 
 Important side effects of this function are to add certain
@@ -507,7 +507,7 @@ HEADERS should be pairs of strings indicating the header values:
 Where symbols are encountered they are turned into strings.
 Inside headers they are capitalized.
 
-A header pair with the key 'body' can be used to make a content body:
+A header pair with the key `body' can be used to make a content body:
 
  (elnode--http-make-hdr 'get \"/\" '(body . \"some text\"))
  =>
@@ -640,8 +640,8 @@ and then test again."
 (defun elnode--get-server-handler (process)
   "Retrieve the server handler from PROCESS.
 
-The server handler is bound with 'elnode-start which sets up
-'elnode--log-fn to ensure that all sockets created have a link
+The server handler is bound with `elnode-start' which sets up
+`elnode--log-fn' to ensure that all sockets created have a link
 back to the server."
   (let* ((server (process-get process :server))
          (handler (process-get server :elnode-http-handler)))
@@ -742,7 +742,7 @@ This is useful for doing end to end client testing:
     (elnode-test-call \"/something/test\")))
 
 The test call with be passed to the
-'elnode-hostpath-default-handler via the normal HTTP parsing
+`elnode-hostpath-default-handler' via the normal HTTP parsing
 routines."
   (declare
    (indent defun)
@@ -1262,7 +1262,7 @@ would result in:
 (ert-deftest elnode-test-http-get-params ()
   "Test that the params are ok if they are on the status line.
 
-Sets ':elnode-http-params' to nil to trigger 'elnode-http-params'
+Sets ':elnode-http-params' to nil to trigger `elnode-http-params'
 parsing. That checks the ':elnode-http-method':
 
 - for GET it returns the parsed ':elnode-http-query'
@@ -1432,9 +1432,9 @@ data.  This is done mainly for testing infrastructure."
   "End the response on HTTPCON optionally sending DATA first.
 
 HTTPCON is the http connection which must have had the headers
-sent with 'elnode-http-start'
+sent with `elnode-http-start'
 
-DATA must be a string, it's just passed to 'elnode-http-send'."
+DATA must be a string, it's just passed to `elnode-http-send'."
   (if (not (process-get httpcon :elnode-http-started))
       (elnode-error "Http not started")
     (progn
@@ -1449,7 +1449,7 @@ DATA must be a string, it's just passed to 'elnode-http-send'."
   "A generic handler to send STATUS to HTTPCON.
 
 Sends an HTTP response with STATUS to the HTTPCON.  An HTML body
-is sent by looking up the STATUS in the 'elnode-default-response'
+is sent by looking up the STATUS in the `elnode-default-response'
 table.
 
 Optionally include MSG."
@@ -1518,7 +1518,7 @@ that you can access that in your handler with something like:
 
  (match-string 1 (elnode-http-pathinfo httpcon))
 
-Returns the handler function that mapped, or 'nil'.
+Returns the handler function that mapped, or `nil'.
 
 This function also establishes the `:elnode-http-mapping'
 property, adding it to the HTTPCON so it can be accessed from
@@ -1572,7 +1572,7 @@ The following is true inside the handler:
  (equals \"/somedir/somefile.jpg\"
          (match-string 1 (elnode-http-mapping httpcon)))
 
-The function 'elnode-test-path' uses this facility to work out a
+The function `elnode-test-path' uses this facility to work out a
 target path."
   (elt
    (process-get httpcon :elnode-http-mapping)
@@ -1741,14 +1741,14 @@ separated, thus:
 (defcustom elnode-hostpath-default-table
   '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver)
     ("[^/]+/.*" . elnode-webserver))
-  "Defines mappings for 'elnode-hostpath-default-handler'.
+  "Defines mappings for `elnode-hostpath-default-handler'.
 
 This is the default mapping table for Elnode, out of the box. If
 you customize this then elnode will serve these hostpath mappings
 by just loading Elnode.
 
 By default the table maps everything to
-'elnode-webserver'. Unless you're happy with the default you
+`elnode-webserver'. Unless you're happy with the default you
 should probably get rid of the everything path because it will
 interfere with any other mappings you add."
   :group 'elnode
@@ -1758,9 +1758,9 @@ interfere with any other mappings you add."
 (defun elnode-hostpath-default-handler (httpcon)
   "A default hostpath handler.
 
-This uses the 'elnode-hostpath-default-table' for the match
-table.  It calls 'elnode-hostpath-dispatcher' with
-'elnode-hostpath-default-table'."
+This uses the `elnode-hostpath-default-table' for the match
+table.  It calls `elnode-hostpath-dispatcher' with
+`elnode-hostpath-default-table'."
   (elnode-hostpath-dispatcher httpcon elnode-hostpath-default-table))
 
 
@@ -1784,7 +1784,7 @@ The buffer '* elnode-worker-response *' is used for the log."
                                      data
                                      child-lisp
                                      out-stream)
-  "A helper function for 'elnode-worker-elisp.
+  "A helper function for `elnode-worker-elisp'.
 
 Sends DATA being sent from PROCESS to OUT-STREAM.
 
@@ -1836,7 +1836,7 @@ serialized for the child Emacs.  Unless a variable from the
 parent is explicitly stated here it will NOT be accessible in the
 child Emacs.
 
-The child Emacs has a 'load-path' exactly as the 'load-path' of
+The child Emacs has a `load-path' exactly as the `load-path' of
 the parent Emacs at execution.
 
 The created child Emacs process is returned.  It's possible to
@@ -1848,15 +1848,15 @@ The OUTPUT-STREAM could be a buffer, a function or another
 process.
 
 If the OUTPUT-STREAM is another process it may have a process
-property ':send-string-function' evaluating to a function to send
+property `:send-string-function' evaluating to a function to send
 data to that process.  The function should take the same
-arguments as the standard Emacs Lisp 'process-send-string'.
+arguments as the standard Emacs Lisp `process-send-string'.
 
 Furthermore, if the OUTPUT-STREAM is another process, when the
 child Emacs finishes an EOF is sent to that process.  If the
-OUTPUT-STREAM process has a process property ':send-eof-function'
+OUTPUT-STREAM process has a process property `:send-eof-function'
 then that is used to send the EOF.  The function should take the
-same arguments as the standard Emacs Lisp 'process-send-eof'.
+same arguments as the standard Emacs Lisp `process-send-eof'.
 
 An example:
 
@@ -1867,13 +1867,13 @@ An example:
 
 Presuming http-connection is a process (in the manner of Elnode,
 for example) this will cause a child Emacs to be created, within
-which 'path' (which is serialized from the value of the parent
-Emacs' 'path-function') will be loaded and converted from
+which `path' (which is serialized from the value of the parent
+Emacs' `path-function') will be loaded and converted from
 WikiCreole to HTML and then sent to the standard output stream.
 The child's standard output stream is connected directly to the
-'http-connection'.  In this case, presumably the
-'http-connection' would have functions attached to the properties
-'':send-string-function' and ':send-eof-function' to do HTTP
+`http-connection'.  In this case, presumably the
+`http-connection' would have functions attached to the properties
+`:send-string-function' and `:send-eof-function' to do HTTP
 chunk encoding and to end the HTTP connection correctly."
   (declare (indent 2)
            (debug t))
@@ -1971,7 +1971,7 @@ chunk encoding and to end the HTTP connection correctly."
     (sleep-for 1)))
 
 (ert-deftest elnode-worker-elisp ()
-  "Test the 'elmode-worker-elisp macro.
+  "Test the `elmode-worker-elisp' macro.
 
 Runs some lisp in a child Emacs and tests that it outputs the
 right thing."
@@ -2002,7 +2002,7 @@ send their output to an Elnode HTTP connection.
 
 The main job of this sentinel is to monitor when the STATUS of
 PROCESS indicates the end of the PROCESS and to do
-'elnode-http-end' on the associated HTTP connection when that
+`elnode-http-end' on the associated HTTP connection when that
 happens."
   (cond
    ((equal status "finished\n")
@@ -2050,7 +2050,7 @@ and sending the data there."
   "Run the specified PROGRAM asynchronously sending output to HTTPCON.
 
 PROGRAM is the path to the program to run, to be resolved by
-'start-process' in the usual way.
+`start-process' in the usual way.
 
 ARGS is a list of arguments to pass to the program.
 
@@ -2081,11 +2081,11 @@ directed at the same http connection."
   "Send the TARGETFILE to the HTTPCON.
 
 If the TARGETFILE is relative then resolve it via the current
-'load-file-name' or 'buffer-file-name' or 'default-directory'.
+`load-file-name' or `buffer-file-name' or `default-directory'.
 
 WARNING: this resolution order is likely to change because,
-especially when developing 'default-directory' can be quite
-random (change buffer, change 'default-directory').
+especially when developing `default-directory' can be quite
+random (change buffer, change `default-directory').
 
 MIME-TYPES is an optional alist of MIME type mappings to help
 resolve the type of a file.
@@ -2172,10 +2172,10 @@ Optionally, use the specified TYPE as the status code, eg:
   "Make a handler that will serve a single FILENAME.
 
 If the FILENAME is relative then it is resolved against the
-package's 'load-file-name'.
+package's `load-file-name'.
 
 Optionally mime-types and other additional keyword arguments may be
-specified and are passed through, see 'elnode-send-file' for
+specified and are passed through, see `elnode-send-file' for
 details."
   (lambda (httpcon)
     (elnode-send-file httpcon filename mime-types :preamble preamble)))
@@ -2301,7 +2301,7 @@ date copy) then `elnode-cached' is called."
   "The document root of the webserver.
 
 Webserver functions are free to use this or not.  The
-'elnode-webserver' function does use it."
+`elnode-webserver' function does use it."
   :group 'elnode
   :type 'file)
 
@@ -2360,11 +2360,11 @@ TARGETFILE.  TARGETFILE is the absolute filename for the
 resource being requested (and is, obviously, safely below the
 DOCROOT).
 
-This is used by 'elnode--webserver-handler-proc' in the webservers
+This is used by `elnode--webserver-handler-proc' in the webservers
 that it creates... but it's also meant to be generally useful for
 other handler writers.
 
-This function use 'elnode-http-mapping' to establish a
+This function use `elnode-http-mapping' to establish a
 targetfile, allowing URL mappings to look like this:
 
  \"prefix/\\(.*\\)$\"
@@ -2436,7 +2436,7 @@ EXTRA-MIME-TYPES.
 
 The webserver handler also creates file indexes.
 
-The webserver uses 'elnode-test-path' to make sure that the
+The webserver uses `elnode-test-path' to make sure that the
 request does not go above the DOCROOT."
   ;;; REQUIRES LEXICAL SCOPE
   (let ((my-docroot (or docroot elnode-webserver-docroot))
@@ -2453,7 +2453,7 @@ request does not go above the DOCROOT."
 This is just an example of an elnode webserver, but it may be all
 that is needed most of the time.
 
-See 'elnode-webserver-handler-maker' for more possibilities for
+See `elnode-webserver-handler-maker' for more possibilities for
 making webserver functions.
 
 HTTPCON is the HTTP connection to the user agent."
@@ -2627,11 +2627,11 @@ the WIKIROOT, back to the HTTPCON."
   (featurep 'creole))
 
 (defun elnode-wikiserver (httpcon)
-  "Serve Wiki pages from 'elnode-wikiserver-wikiroot'.
+  "Serve Wiki pages from `elnode-wikiserver-wikiroot'.
 
 HTTPCON is the request.
 
-The Wiki server is only available if the 'creole' package is
+The Wiki server is only available if the `creole' package is
 provided. Otherwise it will just error."
   (if (elnode-wikiserver-test)
       (elnode-wiki-handler httpcon elnode-wikiserver-wikiroot)
@@ -2671,11 +2671,11 @@ provided. Otherwise it will just error."
 
 ;;;###autoload
 (defcustom elnode-init-port 8000
-  "The port that 'elnode-init' starts the default server on."
+  "The port that `elnode-init' starts the default server on."
   :group 'elnode)
 
 (defcustom elnode-init-host "localhost"
-  "The host that 'elnode-init' starts the default server listening on."
+  "The host that `elnode-init' starts the default server listening on."
   :group 'elnode)
 
 ;;;###autoload
@@ -2683,11 +2683,11 @@ provided. Otherwise it will just error."
   "Bootstraps the elnode environment when the Lisp is loaded.
 
 It's useful to have elnode start automatically... on Lisp
-load.  If the variable 'elnode-init-port' is set then this
+load.  If the variable `elnode-init-port' is set then this
 function will launch a server on it.
 
-The server is started with 'elnode-hostpath-default-handler' as
-the handler and listening on 'elnode-init-host'"
+The server is started with `elnode-hostpath-default-handler' as
+the handler and listening on `elnode-init-host'"
   (interactive)
   (if elnode-init-port
       (condition-case nil
@@ -2710,10 +2710,10 @@ the handler and listening on 'elnode-init-host'"
 The server that is started is controlled by more elnode
 customizations.
 
-'elnode-hostpath-default-table' defines the mappings from
+`elnode-hostpath-default-table' defines the mappings from
 hostpath regexs to handler functions. By default elnode ships
 with this customization setup to serve the document root defined
-in 'elnode-webserver-docroot', which by default is ~/public_html."
+in `elnode-webserver-docroot', which by default is ~/public_html."
   :group 'elnode
   :type '(boolean)
   )
