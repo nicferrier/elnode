@@ -7,7 +7,7 @@
 ;; Created: 5th October 2010
 ;; Version: 0.9.2
 ;; Keywords: lisp, http, hypermedia
-;; Package-Requires: ((fakir "0.0.2")(creole "0.8.1"))
+;; Package-Requires: ((fakir "0.0.3")(creole "0.8.1"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -2180,6 +2180,117 @@ details."
   (lambda (httpcon)
     (elnode-send-file httpcon filename mime-types :preamble preamble)))
 
+
+;; Docroot protection
+
+(defun elnode--under-docroot-p (target-file doc-root)
+  (and
+   (string-match
+    (format "^%s\\($\\|/\\)" doc-root)
+    target-file)
+   (file-exists-p target-file)))
+
+(ert-deftest elnode--under-docroot-p ()
+  "Test that the docroot protection works."
+  (fakir-mock-file (fakir-file
+                    :filename "index.creole"
+                    :directory "/home/elnode/wiki")
+    (should
+     (elnode--under-docroot-p
+      "/home/elnode/wiki/index.creole"
+      "/home/elnode/wiki"))
+    (should-not
+     (elnode--under-docroot-p
+      "/home/elnode/wiki/blah/index.creole"
+      "/home/elnode/wiki"))
+    (should-not
+     (elnode--under-docroot-p
+      "/home/elnode/wiki/blah.creole"
+      "/home/elnode/wiki"))
+    (should-not
+     (elnode--under-docroot-p
+      "/home/elnode/wikiroot/blah.creole"
+      "/home/elnode/wiki"))
+    (should-not
+     (elnode--under-docroot-p
+      "/home/elnode/wiki/blah.creole"
+      "/home/elnode/wikiroot"))))
+
+(defun elnode-not-found (httpcon target-file)
+  "`elnode-docroot-for' calls this when the doc was not found.
+
+You can override this in tests to have interesting effects.  By
+default it just calls `elnode-send-404'."
+  (elnode-send-404 httpcon))
+
+(defun elnode-cached-p (httpcon target-file)
+  "Is the specified TARGET-FILE older than the HTTPCON?"
+  (time-less-p
+   (elt (file-attributes target-file) 5)
+   (elnode-http-header httpcon 'if-modified-since :time)))
+
+(ert-deftest elnode-cached-p ()
+  "Is a resource cached?"
+  (fakir-mock-file (fakir-file
+                    :filename "page.creole"
+                    :directory "/home/elnode/wiki"
+                    :mtime "Mon, Feb 27 2012 22:10:21 GMT")
+    (fakir-mock-process
+      ((:elnode-http-header-syms
+        '((if-modified-since . "Mon, Feb 27 2012 22:10:24 GMT"))))
+      (should
+       (elnode-cached-p :httpcon "/home/elnode/wiki/page.creole")))))
+
+(defun elnode-cached (httpcon)
+  "`elnode-docroot-for' calls this when the resources was cached.
+
+By default it just calls `elnode-send-status' with 304."
+  (elnode-send-status httpcon 304))
+
+(defmacro elnode-docroot-for (doc-root with target-file-var
+                                       on httpcon
+                                       do &rest handling)
+  "Docroot protection for Elnode handlers.
+
+Test the path requested in HTTPCON is safely under the DOC-ROOT
+specified, bind the TARGET-FILE-VAR to the resulting expanded
+file name and execute the HANDLING code.
+
+For example:
+
+  (elnode-docroot-for
+        \"~/work\"
+        with file-var
+        on httpcon
+        do
+        (elnode-send-file httpcon file-var))
+
+checks any resource requested in HTTPCON is a file under the
+doc-root \"~/work\" and if it is, binds the resulting file name
+to FILE-VAR and calls the code following DO (which sends the file
+to the HTTPCON).
+
+When a file is not found (or not safe to return) `elnode-not-found' is called.
+
+When a file is cached on the client (when a client sends a
+conditional GET for the file that shows the client has an up to
+date copy) then `elnode-cached' is called."
+  (declare
+   (debug (sexp "with" sexp "on" sexp "do" &rest form))
+   (indent defun))
+  (let ((dr (make-symbol "docroot"))
+        (con (make-symbol "httpcon")))
+    (assert (eq with 'with))
+    (assert (eq on 'on))
+    (assert (eq do 'do))
+    `(let ((,dr ,doc-root)
+           (,con ,httpcon))
+       (let ((,target-file-var (elnode-get-targetfile ,con ,dr)))
+         (if (not (elnode--under-docroot-p ,target-file-var ,dr))
+             (elnode-not-found ,con ,target-file-var)
+           (if (elnode-cached-p ,con ,target-file-var)
+               (elnode-cached ,con)
+             ,@handling))))))
 
 
 
