@@ -7,7 +7,7 @@
 ;; Created: 5th October 2010
 ;; Version: 0.9.2
 ;; Keywords: lisp, http, hypermedia
-;; Requirements: ((fakir . "0.0.2")(creole . "0.8.1"))
+;; Package-Requires: ((fakir "0.0.2")(creole "0.8.1"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -55,8 +55,12 @@
 (require 'mm-encode)
 (require 'mailcap)
 (require 'url-util)
-(require 'ert)
+;; the wiki needs this
 (require 'vc)
+
+;; only needed for tests
+(require 'ert)
+(require 'fakir)
 (eval-when-compile (require 'cl))
 
 (defconst ELNODE-FORM-DATA-TYPE "application/x-www-form-urlencoded"
