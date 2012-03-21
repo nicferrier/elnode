@@ -974,6 +974,10 @@ elnode servers on the same port on different hosts."
              (string-lessp (buffer-name b) (buffer-name a))))))
   (display-buffer (get-buffer "*elnode-buffers*")))
 
+(defun elnode-time-encode (time-str)
+  "Basic TIME-STR to time encoding."
+  (apply 'encode-time (parse-time-string time-str)))
+
 
 ;; HTTP API methods
 
@@ -985,11 +989,16 @@ The status-line and the header alist."
    (process-get httpcon :elnode-http-status)
    (process-get httpcon :elnode-http-header)))
 
-(defun elnode-http-header (httpcon name)
+(defun elnode-http-header (httpcon name &optional convert)
   "Get the header specified by NAME from the HTTPCON.
 
 HEADER may be a string or a symbol.  If NAME is a symbol it is
-case insensitve."
+case insensitve.
+
+If optional CONVERT is specified it may specify a conversion,
+currently supported conversions are:
+
+ :time - to convert a time value properly"
   (let* ((key (if (symbolp name)
                   (intern (downcase (symbol-name name)))
                 name))
@@ -997,8 +1006,13 @@ case insensitve."
                httpcon
                (if (symbolp key)
                    :elnode-http-header-syms
-                 :elnode-http-header))))
-    (cdr (assoc key hdr))))
+                 :elnode-http-header)))
+         (val (cdr (assoc key hdr))))
+    (case convert
+      (:time
+       (elnode-time-encode val))
+      (t
+       val))))
 
 (ert-deftest elnode-http-header ()
   "Test that we have headers."
@@ -1008,6 +1022,7 @@ case insensitve."
        'get "/"
        '(host . "localhost")
        '(user-agent . "test-agent")
+       '(if-modified-since . "Mon, Feb 27 2012 22:10:21 GMT")
        `(content-length . ,(format "%d" (length "this is finished")))
        '(body . "this is finished"))))
     ;; Now parse
@@ -1017,14 +1032,20 @@ case insensitve."
               (elnode--http-parse nil))))
     (should
      (equal "test-agent"
-            (elnode-http-header nil "User-Agent")))
+            (elnode-http-header :httpcon "User-Agent")))
     (should
      (equal "test-agent"
-            (elnode-http-header nil 'user-agent)))
+            (elnode-http-header :httpcon 'user-agent)))
     (should
      (equal "test-agent"
-            (elnode-http-header nil 'User-Agent)))))
-
+            (elnode-http-header :httpcon 'User-Agent)))
+    (should
+     (equal '(20299 65357)
+            (elnode-http-header :httpcon 'if-modified-since :time)))
+    ;; FIXME - add a test for bad time encoding
+    (should
+     (equal "Mon, Feb 27 2012 22:10:21 GMT"
+            (elnode-http-header :httpcon 'if-modified-since)))))
 
 (defun elnode-http-cookie (httpcon name)
   "Return the cookie value for HTTPCON specified by NAME."
