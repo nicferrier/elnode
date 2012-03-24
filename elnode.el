@@ -2304,7 +2304,72 @@ date copy) then `elnode-cached' is called."
              ,@handling))))))
 
 
-
+(ert-deftest elnode-docroot-for ()
+  "Test the docroot protection macro."
+  (let ((httpcon :fake))
+    (flet ((elnode-send-404
+            (httpcon)
+            (throw :test 404))
+           (elnode-send-status
+            (httpcon status &optional msg)
+            (throw :test status))
+           (send-200
+            (httpcon)
+            (throw :test 200)))
+      ;; Test straight through
+      (should
+       (equal
+        200
+        (catch :test
+          (fakir-mock-process
+            ((:elnode-http-pathinfo "/wiki/test.creole")
+             (:elnode-http-mapping '("/wiki/test.creole" "test.creole")))
+            (fakir-mock-file
+              (fakir-file
+               :filename "test.creole"
+               :directory "/home/elnode/wikiroot")
+              (elnode-docroot-for "/home/elnode/wikiroot"
+                with target-path
+                on httpcon
+                do
+                (send-200 httpcon)))))))
+      ;; Non-existant path
+      (should
+       (equal
+        404
+        (catch :test
+          (fakir-mock-process
+            ((:elnode-http-pathinfo "/wiki/test.creole")
+             (:elnode-http-mapping '("/wiki/test.creole" "test.creole")))
+            (fakir-mock-file
+              (fakir-file
+               :filename "test.creole"
+               :directory "/home/elnode/wikiroot")
+              (elnode-docroot-for "/home/elnode/wikifiles"
+                with target-path
+                on httpcon
+                do
+                (send-200 httpcon)))))))
+      ;; Test the cached check
+      (should
+       (equal
+        304
+        (catch :test
+          (fakir-mock-process
+            ((:elnode-http-pathinfo "/wiki/test.creole")
+             (:elnode-http-mapping '("/wiki/test.creole" "test.creole"))
+             (:elnode-http-header-syms
+              '((if-modified-since . "Mon, Feb 27 2012 22:10:24 GMT"))))
+            (fakir-mock-file
+              (fakir-file
+               :filename "test.creole"
+               :directory "/home/elnode/wikiroot"
+               :mtime "Mon, Feb 27 2012 22:10:20 GMT")
+              (elnode-docroot-for "/home/elnode/wikiroot"
+                with target-path
+                on httpcon
+                do
+                (send-200 httpcon))))))))))
 
 ;; Webserver stuff
 
