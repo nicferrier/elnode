@@ -1010,7 +1010,8 @@ currently supported conversions are:
          (val (cdr (assoc key hdr))))
     (case convert
       (:time
-       (elnode-time-encode val))
+       (when val
+         (elnode-time-encode val)))
       (t
        val))))
 
@@ -2225,9 +2226,13 @@ default it just calls `elnode-send-404'."
 
 (defun elnode-cached-p (httpcon target-file)
   "Is the specified TARGET-FILE older than the HTTPCON?"
-  (time-less-p
-   (elt (file-attributes target-file) 5)
-   (elnode-http-header httpcon 'if-modified-since :time)))
+  (let ((modified-since
+         (elnode-http-header httpcon 'if-modified-since :time)))
+    (and
+     modified-since
+     (time-less-p
+      (elt (file-attributes target-file) 5)
+      modified-since))))
 
 (ert-deftest elnode-cached-p ()
   "Is a resource cached?"
@@ -2239,6 +2244,12 @@ default it just calls `elnode-send-404'."
       ((:elnode-http-header-syms
         '((if-modified-since . "Mon, Feb 27 2012 22:10:24 GMT"))))
       (should
+       (elnode-cached-p :httpcon "/home/elnode/wiki/page.creole")))
+    ;; Test the case where there is no header
+    (fakir-mock-process
+      ((:elnode-http-header-syms
+        '((user-agent . "Elnode test client"))))
+      (should-not
        (elnode-cached-p :httpcon "/home/elnode/wiki/page.creole")))))
 
 (defun elnode-cached (httpcon)
