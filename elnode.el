@@ -1971,13 +1971,27 @@ chunk encoding and to end the HTTP connection correctly."
              (t)))))
        ,procvar)))
 
+(defun elnode-worker-last-code ()
+  "Put the last worker code in a file for later use.
+
+When testing it's good to be able to capture the last lisp made
+by `elnode-worker-elisp' for manipulating manually."
+  (interactive)
+  (with-current-buffer "* elnode-worker-elisp *"
+    (goto-line -1)
+    (let ((last-line
+           (buffer-substring (line-beginning-position)
+                             (line-end-position))))
+      (with-temp-file "/tmp/elnode-worker-elisp-code.el"
+        (insert last-line)))))
+
 (defun elnode-wait-for-exit (process)
   "Wait for PROCESS status to go to 'exit."
   (while (not (eq (process-status process) 'exit))
     (sleep-for 1)))
 
 (ert-deftest elnode-worker-elisp ()
-  "Test the `elmode-worker-elisp' macro.
+  "Test the `elnode-worker-elisp' macro.
 
 Runs some lisp in a child Emacs and tests that it outputs the
 right thing."
@@ -1986,10 +2000,11 @@ right thing."
     (elnode-wait-for-exit
      ;; Nice simple bit of elisp to run in the child
      (elnode-worker-elisp
-                   buf
-                   ((a 10))
-                 (setq x a)
-                 (princ x)))
+         buf
+         ((a 10)
+          (b 20))
+       (setq x a)
+       (princ x)))
     (should
      (equal
       "10"
