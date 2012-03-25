@@ -1876,8 +1876,13 @@ The child's standard output stream is connected directly to the
 `http-connection' would have functions attached to the properties
 `:send-string-function' and `:send-eof-function' to do HTTP
 chunk encoding and to end the HTTP connection correctly."
-  (declare (indent 2)
-           (debug t))
+  (declare
+   (indent 2)
+   (debug
+    (sexp
+     (&rest
+      &or symbolp (gate symbolp &optional form))
+     &rest form)))
   (let ((loadpathvar (make-symbol "load-path-form"))
         (bindingsvar (make-symbol "bindings"))
         (childlispvar (make-symbol "child-lisp"))
