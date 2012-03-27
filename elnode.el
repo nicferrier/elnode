@@ -2292,6 +2292,10 @@ date copy) then `elnode-cached' is called."
                (elnode-cached ,con)
              ,@handling))))))
 
+(ert-deftest elnode-docroot-for ()
+  "Test the docroot protcetion macro."
+  ;; 
+  )
 
 
 
@@ -2573,9 +2577,7 @@ If PAGEINFO is specified it's the HTTP path to the Wiki page."
 
 (defun elnode--wiki-get (httpcon wikiroot path)
   "Wiki-GET handler."
-  (if (equal path (concat wikiroot "/"))
-      (elnode-wiki-send httpcon (concat wikiroot "/index.creole"))
-    (elnode-wiki-send httpcon path)))
+  )
 
 (defun elnode-wiki-handler (httpcon wikiroot)
   "A low level handler for Wiki operations.
@@ -2583,12 +2585,15 @@ If PAGEINFO is specified it's the HTTP path to the Wiki page."
 Send the Wiki page requested, which must be a file existing under
 the WIKIROOT, back to the HTTPCON."
   (elnode-method
-    ('GET
-     (elnode-test-path
-      httpcon wikiroot
-      (lambda (httpcon docroot target-path)
-        (elnode--wiki-get httpcon docroot target-path))))
-    ('POST
+    (GET
+     (elnode-docroot-for wikiroot
+       with target-path
+       on httpcon
+       do
+       (if (equal target-path (concat wikiroot "/"))
+           (elnode-wiki-send httpcon (concat wikiroot "/index.creole"))
+         (elnode-wiki-send httpcon target-path))))
+    (POST
      (let* ((path (elnode-http-pathinfo httpcon))
             (comment (elnode-http-param httpcon "comment"))
             (text (replace-regexp-in-string
@@ -2660,12 +2665,15 @@ provided. Otherwise it will just error."
                         buf)))
                 ,@child-lisp)))))
       ;; Now the actual test
-      (let ((r (elnode-test-call "/wiki/test.creole")))
-        (elnode-error "result -> %s" r)
-        (should
-         (equal
-          (plist-get r :status)
-          200))))))
+      (fakir-mock-file (fakir-file
+                        :filename "test.creole"
+                        :directory "/home/elnode/wiki")
+        (let ((r (elnode-test-call "/wiki/test.creole")))
+          (elnode-error "result -> %s" r)
+          (should
+           (equal
+            (plist-get r :status)
+            200)))))))
 
 ;;; Main customization stuff
 

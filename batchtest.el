@@ -5,25 +5,28 @@
        (file-name-directory
         (or (buffer-file-name)
             load-file-name))
-       "/elpa"))
+       "elpa"))
+(setq package-cache-dir
+      (concat package-dir "/../elpacache"))
 
 (when (file-exists-p package-dir)
   (delete-directory package-dir t))
 
-;;(setq package-upload-base "/home/nferrier/work/emacspackages")
-(setq package-user-dir package-dir)
+(setq package-user-dir package-cache-dir)
 (setq package-archives
-      '(("local" . (concat package-dir "/../elpacache"))
+      '(("local" . package-cache-dir)
         ("gnu" . "http://elpa.gnu.org/packages/")
         ("marmalade" . "http://marmalade-repo.org/packages/")))
 (package-list-packages)
 
 (setq elnode-init-port nil)
-(package-install-file (concat
-                       (file-name-directory
-                        (or (buffer-file-name)
-                            load-file-name))
-                       "/elnode.el"))
+(let ((to-test
+       (concat
+        (file-name-directory
+         (or (buffer-file-name)
+             load-file-name))
+        "elnode.el")))
+  (package-install-file to-test))
 
 (ert-run-tests-batch-and-exit)
 
