@@ -1010,7 +1010,8 @@ currently supported conversions are:
          (val (cdr (assoc key hdr))))
     (case convert
       (:time
-       (elnode-time-encode val))
+       (when val
+         (elnode-time-encode val)))
       (t
        val))))
 
@@ -1875,8 +1876,13 @@ The child's standard output stream is connected directly to the
 `http-connection' would have functions attached to the properties
 `:send-string-function' and `:send-eof-function' to do HTTP
 chunk encoding and to end the HTTP connection correctly."
-  (declare (indent 2)
-           (debug t))
+  (declare
+   (indent 2)
+   (debug
+    (sexp
+     (&rest
+      &or symbolp (gate symbolp &optional form))
+     &rest form)))
   (let ((loadpathvar (make-symbol "load-path-form"))
         (bindingsvar (make-symbol "bindings"))
         (childlispvar (make-symbol "child-lisp"))
@@ -1965,13 +1971,27 @@ chunk encoding and to end the HTTP connection correctly."
              (t)))))
        ,procvar)))
 
+(defun elnode-worker-last-code ()
+  "Put the last worker code in a file for later use.
+
+When testing it's good to be able to capture the last lisp made
+by `elnode-worker-elisp' for manipulating manually."
+  (interactive)
+  (with-current-buffer "* elnode-worker-elisp *"
+    (goto-line -1)
+    (let ((last-line
+           (buffer-substring (line-beginning-position)
+                             (line-end-position))))
+      (with-temp-file "/tmp/elnode-worker-elisp-code.el"
+        (insert last-line)))))
+
 (defun elnode-wait-for-exit (process)
   "Wait for PROCESS status to go to 'exit."
   (while (not (eq (process-status process) 'exit))
     (sleep-for 1)))
 
 (ert-deftest elnode-worker-elisp ()
-  "Test the `elmode-worker-elisp' macro.
+  "Test the `elnode-worker-elisp' macro.
 
 Runs some lisp in a child Emacs and tests that it outputs the
 right thing."
@@ -1980,10 +2000,11 @@ right thing."
     (elnode-wait-for-exit
      ;; Nice simple bit of elisp to run in the child
      (elnode-worker-elisp
-                   buf
-                   ((a 10))
-                 (setq x a)
-                 (princ x)))
+         buf
+         ((a 10)
+          (b 20))
+       (setq x a)
+       (princ x)))
     (should
      (equal
       "10"
@@ -2225,9 +2246,13 @@ default it just calls `elnode-send-404'."
 
 (defun elnode-cached-p (httpcon target-file)
   "Is the specified TARGET-FILE older than the HTTPCON?"
-  (time-less-p
-   (elt (file-attributes target-file) 5)
-   (elnode-http-header httpcon 'if-modified-since :time)))
+  (let ((modified-since
+         (elnode-http-header httpcon 'if-modified-since :time)))
+    (and
+     modified-since
+     (time-less-p
+      (elt (file-attributes target-file) 5)
+      modified-since))))
 
 (ert-deftest elnode-cached-p ()
   "Is a resource cached?"
@@ -2239,6 +2264,12 @@ default it just calls `elnode-send-404'."
       ((:elnode-http-header-syms
         '((if-modified-since . "Mon, Feb 27 2012 22:10:24 GMT"))))
       (should
+       (elnode-cached-p :httpcon "/home/elnode/wiki/page.creole")))
+    ;; Test the case where there is no header
+    (fakir-mock-process
+      ((:elnode-http-header-syms
+        '((user-agent . "Elnode test client"))))
+      (should-not
        (elnode-cached-p :httpcon "/home/elnode/wiki/page.creole")))))
 
 (defun elnode-cached (httpcon)
@@ -2297,7 +2328,72 @@ date copy) then `elnode-cached' is called."
   ;; 
   )
 
-
+(ert-deftest elnode-docroot-for ()
+  "Test the docroot protection macro."
+  (let ((httpcon :fake))
+    (flet ((elnode-send-404
+            (httpcon)
+            (throw :test 404))
+           (elnode-send-status
+            (httpcon status &optional msg)
+            (throw :test status))
+           (send-200
+            (httpcon)
+            (throw :test 200)))
+      ;; Test straight through
+      (should
+       (equal
+        200
+        (catch :test
+          (fakir-mock-process
+            ((:elnode-http-pathinfo "/wiki/test.creole")
+             (:elnode-http-mapping '("/wiki/test.creole" "test.creole")))
+            (fakir-mock-file
+              (fakir-file
+               :filename "test.creole"
+               :directory "/home/elnode/wikiroot")
+              (elnode-docroot-for "/home/elnode/wikiroot"
+                with target-path
+                on httpcon
+                do
+                (send-200 httpcon)))))))
+      ;; Non-existant path
+      (should
+       (equal
+        404
+        (catch :test
+          (fakir-mock-process
+            ((:elnode-http-pathinfo "/wiki/test.creole")
+             (:elnode-http-mapping '("/wiki/test.creole" "test.creole")))
+            (fakir-mock-file
+              (fakir-file
+               :filename "test.creole"
+               :directory "/home/elnode/wikiroot")
+              (elnode-docroot-for "/home/elnode/wikifiles"
+                with target-path
+                on httpcon
+                do
+                (send-200 httpcon)))))))
+      ;; Test the cached check
+      (should
+       (equal
+        304
+        (catch :test
+          (fakir-mock-process
+            ((:elnode-http-pathinfo "/wiki/test.creole")
+             (:elnode-http-mapping '("/wiki/test.creole" "test.creole"))
+             (:elnode-http-header-syms
+              '((if-modified-since . "Mon, Feb 27 2012 22:10:24 GMT"))))
+            (fakir-mock-file
+              (fakir-file
+               :filename "test.creole"
+               :directory "/home/elnode/wikiroot"
+               :mtime "Mon, Feb 27 2012 22:10:20 GMT")
+              (elnode-docroot-for "/home/elnode/wikiroot"
+                with target-path
+                on httpcon
+                do
+                (send-200 httpcon))))))))))
 
 ;; Webserver stuff
 
