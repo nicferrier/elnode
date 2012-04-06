@@ -2341,7 +2341,7 @@ When a file is cached on the client (when a client sends a
 conditional GET for the file that shows the client has an up to
 date copy) then `elnode-cached' is called."
   (declare
-   (debug (sexp "with" sexp "on" sexp "do" &rest form))
+   (debug (sexp "with" sexp "on" sexp "do" (&rest form)))
    (indent defun))
   (let ((dr (make-symbol "docroot"))
         (con (make-symbol "httpcon")))
