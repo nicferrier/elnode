@@ -2234,11 +2234,12 @@ details."
 ;; Docroot protection
 
 (defun elnode--under-docroot-p (target-file doc-root)
-  (and
-   (string-match
-    (format "^%s\\($\\|/\\)" doc-root)
-    target-file)
-   (file-exists-p target-file)))
+  (let ((docroot (expand-file-name doc-root)))
+    (and
+     (string-match
+      (format "^%s\\($\\|/\\)" docroot)
+      target-file)
+     (file-exists-p target-file))))
 
 (ert-deftest elnode--under-docroot-p ()
   "Test that the docroot protection works."
@@ -2249,6 +2250,10 @@ details."
      (elnode--under-docroot-p
       "/home/elnode/wiki/index.creole"
       "/home/elnode/wiki"))
+    (should
+     (elnode--under-docroot-p
+      "/home/elnode/wiki/index.creole"
+      "~/wiki"))
     (should-not
      (elnode--under-docroot-p
       "/home/elnode/wiki/blah/index.creole"
