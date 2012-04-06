@@ -55,6 +55,7 @@
 (require 'mm-encode)
 (require 'mailcap)
 (require 'url-util)
+(require 'json)
 ;; the wiki needs this
 (require 'vc)
 
@@ -1444,7 +1445,35 @@ DATA must be a string, it's just passed to `elnode-http-send'."
       ;; Need to close the chunked encoding here
       (elnode-http-send-string httpcon "")
       (process-send-string httpcon "\r\n")
-      (funcall (process-get httpcon :send-eof-function) httpcon))))
+      (let ((eof-func (process-get httpcon :send-eof-function)))
+        (when (functionp eof-func)
+          (funcall eof-func httpcon))))))
+
+(defun elnode-send-json (httpcon data &optional content-type)
+  "Send a 200 OK to the HTTPCON along with DATA as JSON.
+
+If CONTENT-TYPE is specified then it is used as the HTTP Content
+Type of the response."
+  (let ((json-to-send (json-encode data)))
+    (elnode-http-start
+     httpcon 200
+     `("Content-type" . ,(or content-type "application/json")))
+    (elnode-http-return httpcon json-to-send)))
+
+(ert-deftest elnode-send-json ()
+  "Test sending JSON."
+  (let ((httpcon :fake)
+        (sent-data ""))
+    (should
+     (equal
+      ["a string in a list"]
+      (json-read-from-string
+       (flet ((elnode-http-return
+               (con data)
+               (setq sent-data data)))
+         (fakir-mock-process ()
+           (elnode-send-json httpcon (list "a string in a list")))
+         sent-data))))))
 
 (defun elnode-send-status (httpcon status &optional msg)
   "A generic handler to send STATUS to HTTPCON.
