@@ -2774,7 +2774,7 @@ provided. Otherwise it will just error."
     (lambda (httpcon)
       (elnode-hostpath-dispatcher
        httpcon
-       '(("[^/]+/wiki/.*" . elnode-wikiserver))))
+       '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver))))
     ;; Setup the the Creole file handler mocking.
     (flet
         ((elnode--worker-lisp-helper
