@@ -2358,11 +2358,6 @@ date copy) then `elnode-cached' is called."
              ,@handling))))))
 
 (ert-deftest elnode-docroot-for ()
-  "Test the docroot protcetion macro."
-  ;; 
-  )
-
-(ert-deftest elnode-docroot-for ()
   "Test the docroot protection macro."
   (let ((httpcon :fake))
     (flet ((elnode-send-404
