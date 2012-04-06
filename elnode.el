@@ -850,7 +850,7 @@ For header and parameter names, strings MUST be used currently."
       (elnode-hostpath-dispatcher
        httpcon
        '(("[^/]+/test/.*" . elnode-test-handler))))
-    (let ((r (elnode-test-call "/test/test.creole")))
+    (let ((r (elnode-test-call "/test/test.something")))
       (should (equal (plist-get r :status) 200)))))
 
 (defun elnode--log-fn (server con msg)
