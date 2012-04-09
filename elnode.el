@@ -5,9 +5,9 @@
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Maintainer: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Created: 5th October 2010
-;; Version: 0.9.2
+;; Version: 0.9.3
 ;; Keywords: lisp, http, hypermedia
-;; Package-Requires: ((fakir "0.0.3")(creole "0.8.1"))
+;; Package-Requires: ((fakir "0.0.4")(creole "0.8.4"))
 
 ;; This file is NOT part of GNU Emacs.
 
@@ -58,6 +58,7 @@
 (require 'json)
 ;; the wiki needs this
 (require 'vc)
+(require 'creole)
 
 ;; only needed for tests
 (require 'ert)
@@ -77,121 +78,6 @@
 This is an alist of proc->server-process:
 
   (port . process)")
-
-
-;; Useful macros for testing
-
-(defvar elnode-require-specified-buffer nil
-  "Tell `elnode--mock-process' that you require a buffer to be set.
-
-This is used to make elnode--filter testing work
-properly. Normally, tests do not need to set the process-buffer
-directly, they can just expect it to be there. `elnode--filter',
-though, needs to set the process-buffer to work properly.")
-
-(defmacro elnode--mock-process (process-bindings &rest body)
-  "Allow easier elnode testing by mocking the process functions.
-
-For example:
-
- (elnode--mock-process (:elnode-http-params
-                        (:elnode-http-method \"GET\")
-                        (:elnode-http-query \"a=10\"))
-   (should (equal 10 (elnode-http-param 't \"a\")))
-   )
-
-Causes:
-
- (process-get anything :elnode-http-method)
-
-to always return \"GET\".
-
-`process-put' is also remapped, currently to swallow any setting.
-
-`process-buffer' is also remapped, to deliver the value of the
-key ':buffer' if present and a dummy buffer otherwise.
-
-This is a work in progress - not sure what we'll return yet."
-  (declare (indent defun))
-  (let ((pvvar (make-symbol "pv"))
-        (pvbuf (make-symbol "buf"))
-        (result (make-symbol "result")))
-    `(let
-         ;; Turn the list of bindings into an alist
-         (,result
-          (,pvvar
-           (list
-            ,@(loop
-               for f in
-               ;; We need to make sure there is always something in this alist
-               (append
-                (list :elnode-mock-process t)
-                process-bindings)
-               collect
-               (if (listp f)
-                   (list 'cons `(quote ,(car f)) (cadr f))
-                 (list 'cons `,f nil)))))
-          ;; Make a dummy buffer variable for the process - we fill
-          ;; this in dynamically in 'process-buffer
-          (,pvbuf))
-       ;; Rebind the process function interface
-       (flet ((process-get
-               (proc key)
-               ;;(message "override pget called %s" key)
-               (let ((pair (assoc key ,pvvar)))
-                 ;;(message "override pget called %s %s" key pair)
-                 (if pair
-                     (cdr pair))))
-              (process-put ; Only adds, doesn't edit.
-               (proc key value)
-               ;;(message "override pput called %s %s" key value)
-               (nconc ,pvvar (list (cons key value)))
-               ;;(message "pput -> %s" ,pvvar)
-               )
-              (get-or-create-pvbuf
-               (proc &optional specified-buf)
-               (if (bufferp ,pvbuf)
-                   ,pvbuf
-                 (setq ,pvbuf
-                       (if elnode-require-specified-buffer
-                           (if (bufferp specified-buf)
-                               specified-buf
-                             nil)
-                         (or specified-buf
-                             (get-buffer-create
-                              (generate-new-buffer-name
-                               "* elnode mock proc buf *")))))
-                 ;; If we've got a buffer value then insert it.
-                 (when (assoc :buffer ,pvvar)
-                   (with-current-buffer ,pvbuf
-                     (insert (cdr (assoc :buffer ,pvvar)))))
-                 ,pvbuf))
-              (process-send-string
-               (proc str)
-               (with-current-buffer (get-or-create-pvbuf proc)
-                 (save-excursion
-                   (goto-char (point-max))
-                   (insert str))))
-              (process-contact
-               (proc &optional arg)
-               (list "localhost" 8000))
-              (process-status
-               (proc)
-               'fake)
-              (process-buffer
-               (proc)
-               (get-or-create-pvbuf proc))
-              (set-process-buffer
-               (proc buffer)
-               (get-or-create-pvbuf proc buffer)))
-         (setq ,result (progn ,@body)))
-       ;; Now clean up
-       (when (bufferp ,pvbuf)
-         (with-current-buffer ,pvbuf
-           (set-buffer-modified-p nil)
-           (kill-buffer ,pvbuf)))
-       ;; Now return whatever the body returned
-       ,result)))
 
 
 ;; Error log handling
@@ -566,7 +452,7 @@ my data")))
 
 (ert-deftest elnode--http-parse-header-complete ()
   "Test the HTTP parsing."
-  (elnode--mock-process
+  (fakir-mock-process
     ((:buffer
       (elnode--http-make-hdr
        'get "/"
@@ -590,7 +476,7 @@ my data")))
 An HTTP request with an incomplete header is setup and tested,
 then we finish the request (fill out the header) and then test
 again."
-  (elnode--mock-process
+  (fakir-mock-process
     ((:buffer
       "GET / HTTP/1.1\r\nHost: localh"))
     ;; Now parse
@@ -615,7 +501,7 @@ again."
 An HTTP request with an incomplete body is setup and tested, then
 we finish the request (fill out the content to content-length)
 and then test again."
-  (elnode--mock-process
+  (fakir-mock-process
     ((:buffer
       (elnode--http-make-hdr
        'get "/"
@@ -779,7 +665,7 @@ or:
 
 For header and parameter names, strings MUST be used currently."
   (let ((elnode-require-specified-buffer t))
-    (elnode--mock-process ()
+    (fakir-mock-process ()
       (let ((hdrtext
              (apply
               'elnode--http-make-hdr
@@ -1018,7 +904,7 @@ currently supported conversions are:
 
 (ert-deftest elnode-http-header ()
   "Test that we have headers."
-  (elnode--mock-process
+  (fakir-mock-process
     ((:buffer
       (elnode--http-make-hdr
        'get "/"
@@ -1273,13 +1159,13 @@ parsing. That checks the ':elnode-http-method':
   ':elnode-http-query'.
 
 *** WARNING:: This test so far only handles GET ***"
-  (elnode--mock-process
+  (fakir-mock-process
     (:elnode-http-params
      (:elnode-http-method "GET")
      (:elnode-http-query "a=10"))
     (should (equal "10" (elnode-http-param 't "a"))))
   ;; Test some more complex params
-  (elnode--mock-process
+  (fakir-mock-process
     (:elnode-http-params
      (:elnode-http-method "GET")
      (:elnode-http-query "a=10&b=lah+dee+dah&c+a=blah+blah"))
@@ -1291,7 +1177,7 @@ parsing. That checks the ':elnode-http-method':
 
 Does a full http parse of a dummy buffer."
   (let ((post-body "a=10&b=20&c=this+is+finished"))
-    (elnode--mock-process
+    (fakir-mock-process
       ((:buffer
         (elnode--http-make-hdr
          'post "/"
@@ -1827,7 +1713,7 @@ CHILD-LISP is sent in response to Emacs' query for the Lisp on stdin."
 
   ;; Spit out a bit of the data (truncated)
   (elnode-error
-   "elnode--worker-filter-helper %s... %s"
+   "elnode--worker-filter-helper data %s... %s"
    (elnode-trunc data)
    out-stream)
 
@@ -1915,6 +1801,7 @@ chunk encoding and to end the HTTP connection correctly."
   (let ((loadpathvar (make-symbol "load-path-form"))
         (bindingsvar (make-symbol "bindings"))
         (childlispvar (make-symbol "child-lisp"))
+        (childlispfile (make-symbol "child-lisp-file"))
         (filtervar (make-symbol "filter-function"))
         (cmdvar (make-symbol "command"))
         (procvar (make-symbol "process"))
@@ -1940,7 +1827,15 @@ chunk encoding and to end the HTTP connection correctly."
                                  `(format "%s" ,(cadr f)))))
                        '(progn ,@(elnode--worker-lisp-helper body))))
               "\n"))
-            (,cmdvar "emacs -q -batch --eval '(eval (read))' 2> /dev/null")
+            (,childlispfile
+             (let ((,childlispfile (make-temp-file "elnode")))
+               (with-temp-file ,childlispfile
+                 (insert ,childlispvar))
+               ,childlispfile))
+            (,cmdvar
+             (concat "emacs -q -batch "
+                     "--script " ,childlispfile
+                     ));;" 2> /dev/null"))
             (,namevar (concat
                        (number-to-string (random))
                        (number-to-string (float-time))))
@@ -2630,6 +2525,38 @@ HTTPCON is the HTTP connection to the user agent."
   :type '(string)
   :group 'elnode-wikiserver)
 
+(defun elnode--wiki-call (out-buf page-text page)
+  "Call a wiki page sending output OUT-BUF.
+
+The page is faked with PAGE-TEXT."
+  (flet
+      ((elnode--worker-lisp-helper
+        (child-lisp)
+        `((progn
+            (require 'creole)
+            (require 'cl)
+            (flet ((creole--get-file
+                    (filename)
+                    (let ((buf (get-buffer-create "wikibuf")))
+                      (with-current-buffer buf
+                        (insert ,page-text))
+                      buf)))
+              ,@child-lisp)))))
+    (elnode-wait-for-exit
+     (elnode-worker-elisp
+         out-buf
+         ((target page)
+          (page-info page)
+          (header elnode-wikiserver-body-header)
+          (footer elnode-wikiserver-body-footer))
+       (require 'creole)
+       (creole-wiki
+        target
+        :destination t
+        :variables `((page . ,page-info))
+        :body-header header
+        :body-footer footer)))))
+
 (ert-deftest elnode-wiki-worker ()
   "Test the worker elisp.
 
@@ -2639,44 +2566,21 @@ via a child process."
          (outbuf (get-buffer-create
                   (generate-new-buffer-name
                    "elnode-worker-wiki-test"))))
-    ;; Setup the the Creole file handler mocking.
-    (flet
-        ((elnode--worker-lisp-helper
-          (child-lisp)
-          `((progn
-              (require 'creole)
-              (require 'cl)
-              (flet ((creole--get-file
-                      (filename)
-                      (let ((buf (get-buffer-create "wikibuf")))
-                        (with-current-buffer buf
-                          (insert "= A Creole file ="))
-                        buf)))
-                ,@child-lisp)))))
-      (elnode-wait-for-exit
-       (elnode-worker-elisp
-           outbuf
-           ((target page)
-            (page-info page)
-            (header elnode-wikiserver-body-header)
-            (footer elnode-wikiserver-body-footer))
-         (require 'creole)
-         (creole-wiki
-          target
-          :destination t
-          :variables `((page . ,page-info))
-          :body-header header
-          :body-footer footer)))
-      ;; What are our assertions??
-      (with-current-buffer outbuf
-        (should
-         (progn
-           (goto-char (point-min))
-           (re-search-forward
-            "<div id='top'></div><h1>A Creole file</h1>"
-            nil
-            t))))
-      (kill-buffer outbuf))))
+    (elnode--wiki-call
+     outbuf
+     "= A Creole file ="
+     page)
+    ;; What are our assertions??
+    (should
+     (let ((res
+            (with-current-buffer outbuf
+              (goto-char (point-min))
+              (re-search-forward
+               "<div id='top'></div><h1>A Creole file</h1>"
+               nil
+               t))))
+       (kill-buffer outbuf)
+       res))))
 
 (defun elnode-wiki-send (httpcon wikipage &optional pageinfo)
   "A very low level Wiki handler.
@@ -2699,10 +2603,6 @@ If PAGEINFO is specified it's the HTTP path to the Wiki page."
        :variables `((page . ,page-info))
        :body-header header
        :body-footer footer))))
-
-(defun elnode--wiki-get (httpcon wikiroot path)
-  "Wiki-GET handler."
-  )
 
 (defun elnode-wiki-handler (httpcon wikiroot)
   "A low level handler for Wiki operations.
