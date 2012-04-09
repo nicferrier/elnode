@@ -664,7 +664,7 @@ or:
                    :parameters '((\"a\" . 10)))
 
 For header and parameter names, strings MUST be used currently."
-  (let ((elnode-require-specified-buffer t))
+  (let ((fakir-mock-process-require-specified-buffer t))
     (fakir-mock-process ()
       (let ((hdrtext
              (apply
