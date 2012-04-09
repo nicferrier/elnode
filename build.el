@@ -5,7 +5,7 @@
        (file-name-directory
         (or (buffer-file-name)
             load-file-name))
-       "elpa"))
+       ".elpa"))
 
 (when (file-exists-p package-dir)
   (delete-directory package-dir t))
