@@ -2374,7 +2374,9 @@ PATHINFO."
       "\n"))))
 
 (defun elnode-test-path (httpcon docroot handler &optional failure)
-  "Check that the path in the HTTPCON is above the DOCROOT.
+  "DEPRECATED.
+
+Check that the path in the HTTPCON is above the DOCROOT.
 
 Call FAILURE-HANDLER (falling back to 'enode-send-404') on failure
 and HANDLER on success.
