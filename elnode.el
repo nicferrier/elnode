@@ -2435,19 +2435,19 @@ for meta information.
 This is not a real handler (because it takes more than the
 HTTPCON) but it is called directly by the real webserver
 handlers."
-  (elnode-test-path
-   httpcon docroot
-   (lambda (httpcon docroot targetfile)
-     ;; The file exists and is legal
-     (let ((pathinfo (elnode-http-pathinfo httpcon)))
-       (if (file-directory-p targetfile)
-           (let ((index (elnode--webserver-index docroot targetfile pathinfo)))
-             ;; What's the best way to do simple directory indexes?
-             (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
-             (elnode-http-return httpcon index))
-         ;; Send a file.
-         (elnode-send-file httpcon targetfile)))
-     (elnode-log-access docroot httpcon))))
+  (elnode-docroot-for docroot
+    with targetfile
+    on httpcon
+    do
+    ;; The file exists and is legal
+    (let ((pathinfo (elnode-http-pathinfo httpcon)))
+      (if (file-directory-p targetfile)
+          (let ((index (elnode--webserver-index docroot targetfile pathinfo)))
+            ;; What's the best way to do simple directory indexes?
+            (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
+            (elnode-http-return httpcon index))
+        ;; Send a file.
+        (elnode-send-file httpcon targetfile)))))
 
 (defun elnode-webserver-handler-maker (&optional docroot extra-mime-types)
   "Make a webserver handler possibly with the DOCROOT and EXTRA-MIME-TYPES.
