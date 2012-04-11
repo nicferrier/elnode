@@ -88,6 +88,14 @@ This is an alist of proc->server-process:
    "[\r\n]" "."
    (substring data 0 (if (> 20 (length data)) (length data) 20))))
 
+(defun elnode-trim (str)
+  "Trim off whitespace."
+  (string-match "[ \t\n\r]*$" str)
+  (setq str (replace-match "" nil nil str))
+  (string-match "^[ \t\n\r]*" str)
+  (replace-match "" nil nil str))
+
+
 (defcustom elnode-error-log-to-messages t
   "Wether to send elnode logging through the messaging system."
   :group 'elnode
@@ -304,7 +312,7 @@ The function `elnode-send-status' also uses these."
 
    ;; Default
    (t
-    (elnode-error "Elnode status: %s %s" process status))))
+    (elnode-error "Elnode status: %s %s" process (elnode-trim status)))))
 
 (defun elnode--process-send-string (proc data)
   "Elnode adapter for `process-send-string'.
