@@ -235,7 +235,7 @@ only be expanded where there is an inscope `httpcon'."
                 new-deferred)))))
     (setq elnode--deferred new-deferred)))
 
-(ert-deftest elnode-defering ()
+(ert-deftest elnode-deferring ()
   "Testing the defer setup."
   (let* ((result :not-done)
          (httpcon :fake)
