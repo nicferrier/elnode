@@ -1223,7 +1223,7 @@ Does a full http parse of a dummy buffer."
 This is really only a placeholder function for doing transfer-encoding."
   ;; We should check that we are actually doing chunked encoding...
   ;; ... but for now we just presume we're doing it.
-  (elnode-error "elnode-http-send-string %s %s" httpcon (elnode-trunc str))
+  (elnode-error "elnode-http-send-string %s [[%s]]" httpcon (elnode-trunc str))
   (let ((len (string-bytes str)))
     (process-send-string httpcon (format "%x\r\n%s\r\n" len (or str "")))))
 
@@ -1970,9 +1970,10 @@ happens."
    ((equal status "finished\n")
     (let ((httpcon (process-get process :elnode-httpcon)))
       (elnode-error
-       "Status @ finished: %s -> %s"
+       "Elnode-child-process-sentinel Status @ finished: %s -> %s on %s"
        (process-status httpcon)
-       (process-status process))
+       (process-status process)
+       httpcon)
       (if (not (eq 'closed (process-status httpcon)))
           (progn
             (elnode-http-send-string httpcon  "")
@@ -1980,16 +1981,16 @@ happens."
             (elnode--http-end httpcon)))))
    ((string-match "exited abnormally with code \\([0-9]+\\)\n" status)
     (let ((httpcon (process-get process :elnode-httpcon)))
+      (elnode-error "Elnode-child-process-sentinel: %s on %s" status httpcon)
       (if (not (eq 'closed (process-status httpcon)))
           (progn
             (elnode-http-send-string httpcon "")
             (process-send-string httpcon "\r\n")
             (elnode--http-end httpcon)))
       (delete-process process)
-      (kill-buffer (process-buffer process))
-      (elnode-error "Elnode-child-process-sentinel: %s" status)))
+      (kill-buffer (process-buffer process))))
    (t
-    (elnode-error "Elnode-chlild-process-sentinel: %s" status))))
+    (elnode-error "Elnode-chlild-process-sentinel: %s on %s" status process))))
 
 (defun elnode--child-process-filter (process data)
   "A generic filter function for elnode child processes.
@@ -2001,10 +2002,11 @@ This filter function does the job of taking the output from the
 async process and finding the associated elnode http connection
 and sending the data there."
   (let ((httpcon (process-get process :elnode-httpcon)))
-    (elnode-error "Elnode-child-process-filter http state: %s data length: %s"
-                  (process-status httpcon)
-                  (length data)
-                  )
+    (elnode-error
+     "Elnode-child-process-filter http state: %s data length: %s on %s"
+     (process-status httpcon)
+     (length data)
+     httpcon)
     (if (not (equal "closed" (process-status httpcon)))
         (elnode-http-send-string httpcon data))))
 
@@ -2035,7 +2037,16 @@ directed at the same http connection."
     ;; Setup the filter and the sentinel to do the right thing with
     ;; incomming data and signals
     (set-process-filter p 'elnode--child-process-filter)
-    (set-process-sentinel p 'elnode--child-process-sentinel)))
+    (set-process-sentinel p 'elnode--child-process-sentinel)
+    (elnode-error "Elnode-child-process init %s" httpcon)))
+
+(defcustom elnode-send-file-program "/bin/cat"
+  "The program to use for sending files.
+
+Altering this is not recomended but it may be a good hook for
+certain types of debugging."
+  :group 'elnode
+  :type '(string))
 
 (defun* elnode-send-file (httpcon targetfile
                                   &optional mime-types
@@ -2054,29 +2065,31 @@ resolve the type of a file.
 
 Optionally you may specify extra keyword arguments:
 
- :PREAMBLE a string of data to send before the file.
+:PREAMBLE a string of data to send before the file.
 
 :PREAMBLE is most useful for prefixing syntax to some other file,
 for example you could prefix an XML file with XSL transformation
 statements so a compliant user-agent will transform the XML."
-  (let ((filename (if (not (file-name-absolute-p targetfile))
-                      (file-relative-name
-                       targetfile
-                       (let ((dir (or load-file-name buffer-file-name)))
-                         (if dir
-                             (directory-file-name dir)
-                           default-directory)))
-                    targetfile)))
+  (let ((filename
+         (if (not (file-name-absolute-p targetfile))
+             (file-relative-name
+              targetfile
+              (let ((dir (or load-file-name buffer-file-name)))
+                (if dir
+                    (directory-file-name dir)
+                  default-directory)))
+           targetfile)))
     (if (file-exists-p filename)
-        (let ((mimetype (or (if (listp mime-types)
-                                (car (rassoc
-                                      (file-name-extension targetfile)
-                                      mime-types)))
-                            (mm-default-file-encoding targetfile)
-                            "application/octet-stream")))
+        (let ((mimetype
+               (or (if (listp mime-types)
+                       (car (rassoc
+                             (file-name-extension targetfile)
+                             mime-types)))
+                   (mm-default-file-encoding targetfile)
+                   "application/octet-stream")))
           (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
           (if preamble (elnode-http-send-string httpcon preamble))
-          (elnode-child-process httpcon "cat" targetfile))
+          (elnode-child-process httpcon elnode-send-file-program targetfile))
       ;; FIXME: This needs improving so we can handle the 404
       ;; This function should raise an exception?
       (elnode-send-404 httpcon))))
