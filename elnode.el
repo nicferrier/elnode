@@ -192,14 +192,6 @@ by elnode iteslf."
 (defvar elnode--deferred '()
   "List of deferred pairs: (socket . handler).")
 
-(defun elnode-defered-queue (arg)
-  "Message the length of the deferred queue."
-  (interactive "P")
-  (if (not arg)
-      (message "elnode deferred queue: %d" (length elnode--deferred))
-    (setq elnode--deferred (list))
-    (message "elnode deferred queue reset!")))
-
 (defun elnode-defer-now (handler)
   "The function you call to defer processing of the current socket.
 
@@ -211,46 +203,67 @@ control back when the deferred is re-processed."
   (signal 'elnode-defer handler))
 
 (defmacro elnode-defer-or-do (guard &rest body)
-  "Test the GUARD and defer if it suceeds and BODY if it doesn't."
+  "Test GUARD and defer if it succeeds and BODY if it doesn't.
+
+`httpcon' is captured in this macro which means the macro can
+only be expanded where there is an inscope `httpcon'."
   (declare (indent defun))
-  `(if ,guard
-       (elnode-defer-now (lambda (httpcon) ,@body))
-     (progn
-       ,@body)))
+  (let ((bv (make-symbol "bv")))
+    `(let ((,bv (lambda (httpcon) ,@body)))
+       (if ,guard
+           (elnode-defer-now ,bv)
+         (progn
+           (funcall ,bv httpcon))))))
 
 (defun elnode--deferred-add (httpcon handler)
-  "Add the specified HTTPCON HANDLER pair to the list to be processed later.
-
-Basically, add the HTTPCON connection and the HANDLER that is
-dealing with it to enable comet like behaviour."
-  ;; Update the elnode--deferred list directly.
-  ;; Remember, there are no concurrency issues here.
-  (if elnode--deferred
-      (setcdr
-       (last elnode--deferred)
-       (cons `(,httpcon . ,handler) nil))
-    (setq elnode--deferred (cons `(,httpcon . ,handler) nil))))
+  "Add the specified HTTPCON/HANDLER pair to the deferred list."
+  (push (cons httpcon handler) elnode--deferred))
 
 (defun elnode--deferred-processor ()
-  "Called by an idle timer to process any deferred socket/handler pairs.
+  "Process the deferred queue."
+  (let ((new-deferred (list)))
+    (loop for pair in elnode--deferred
+          do
+          (let ((httpcon (car pair))
+                (handler (cdr pair)))
+            (elnode-error "elnode-deferred handling %s %s" httpcon handler)
+            (condition-case signal-value
+                (funcall handler httpcon)
+              ('elnode-defer
+               (push
+                (cons httpcon (cdr signal-value))
+                new-deferred)))))
+    (setq elnode--deferred new-deferred)))
 
-It's this that gives elnode the ability to be a COMET server."
-  (let* ((lst 'elnode--deferred))
-    (while (eval lst)
-      (let* ((pair (car (eval lst)))
-             (httpcon (car pair))
-             (handler (cdr pair)))
-        ;; This could benefit from a try/catch/else type form
-        (catch 'next
-          (condition-case signal-value
-              ;; Defer handling - for comet style operations
-              (funcall handler httpcon)
-            ('elnode-defer
-             ;; We need to continue to defer this
-             ;; basically it means not removing it from the list
-             (throw 'next 't)))
-          ;; We completed without a defer signal so we need to remove the pair
-          (set lst (cdr (eval lst))))))))
+(ert-deftest elnode-defering ()
+  "Testing the defer setup."
+  (let* ((result :not-done)
+         (httpcon :fake)
+         (handler (lambda (httpcon) (setq result :done)))
+         (elnode--deferred (list)))
+    ;; The queue starts empty
+    (should (equal 0 (length elnode--deferred)))
+    ;; Then we add to it...
+    (elnode--deferred-add httpcon handler)
+    (should (equal 1 (length elnode--deferred)))
+    ;; Then we process it...
+    (elnode--deferred-processor)
+    ;; ... that should have emptied it out...
+    (should (eq result :done))
+    (should (equal 0 (length elnode--deferred)))
+    ;; Now we add a handler that defers...
+    (elnode--deferred-add
+     httpcon
+     (lambda (httpcon)
+       (elnode-defer-now handler)))
+    (should (equal 1 (length elnode--deferred)))
+    ;; Now we process...
+    (elnode--deferred-processor)
+    ;; ... should still have the deferred handler in it...
+    (should (equal 1 (length elnode--deferred)))
+    ;; ... process again ...
+    (elnode--deferred-processor)
+    (should (equal 0 (length elnode--deferred)))))
 
 (defvar elnode--defer-timer nil
   "The timer used by the elnode defer processing.
@@ -258,10 +271,34 @@ It's this that gives elnode the ability to be a COMET server."
 This is initialized by `elnode--init-deferring'.")
 
 (defun elnode--init-deferring ()
-  "Initialize elnode defer processing.  Necessary for running comet apps."
+  "Initialize elnode defer processing.
+
+Necessary for running comet apps."
   (setq elnode--defer-timer
         (run-with-idle-timer 0.1 't 'elnode--deferred-processor)))
 
+(defun elnode-deferred-queue (arg)
+  "Message the length of the deferred queue.
+
+This is just a management tool.  It can also be used to reset or
+start the queue."
+  (interactive "P")
+  (if (not arg)
+      (message
+       "elnode deferred queue: %d %s"
+       (length elnode--deferred)
+       elnode--defer-timer)
+    (setq elnode--deferred (list))
+    (unless elnode--defer-timer
+      (elnode--init-deferring))
+    (message "elnode deferred queue reset!")))
+
+(defun elnode-deferred-queue-stop ()
+  "Stop any running deferred queue processor."
+  (interactive)
+  (when elnode--defer-timer
+    (cancel-timer elnode--defer-timer)
+    (setq elnode--defer-timer nil)))
 
 ;;; Basic response mangling
 
