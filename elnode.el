@@ -171,11 +171,13 @@ by elnode iteslf."
   ;; serialization, so Elnode could be told to save it all the time,
   ;; or in an idle-timer or maybe to make the log file an actual
   ;; process instead of a buffer (that would be *most* safe?)
-  (with-current-buffer (get-buffer-create
-                        (format "* elnode-access-%s *" logname))
+  (with-current-buffer
+      (get-buffer-create
+       (format "*%s-elnode-access*" logname))
     (goto-char (point-max))
-    (insert (format "%s %s %s\n"
+    (insert (format "%s %s %s %s\n"
                     (format-time-string "%Y%m%d%H%M%S")
+                    (process-get httpcon :elnode-httpresponse-status)
                     (elnode-http-method httpcon)
                     (elnode-http-pathinfo httpcon)))))
 
@@ -1572,10 +1574,12 @@ The resulting file is NOT checked for existance or safety."
         (elnode-get-targetfile :fake "/home/elnode/wiki")
         "/home/elnode/wiki/index.creole")))))
 
-(defun elnode--dispatch-proc (httpcon
+(defun* elnode--dispatch-proc (httpcon
                               path
                               url-mapping-table
-                              &optional function-404)
+                              &key
+                              (function-404 'elnode-send-404)
+                              (log-name "elnode"))
   "Dispatch to the matched handler for the PATH on the HTTPCON.
 
 The handler for PATH is matched in the URL-MAPPING-TABLE via
@@ -1584,17 +1588,17 @@ The handler for PATH is matched in the URL-MAPPING-TABLE via
 If no handler is found then a 404 is attempted via FUNCTION-404,
 it it's found to be a function, or as a last resort
 `elnode-send-404'."
-  (let ((handler-func (elnode--mapper-find httpcon path url-mapping-table)))
+  (let ((handler-func
+         (elnode--mapper-find
+          httpcon path
+          url-mapping-table)))
     (cond
      ;; If we have a handler, use it.
      ((functionp handler-func)
       (funcall handler-func httpcon))
-     ;; Maybe we should send the 404 function?
-     ((functionp function-404)
-      (funcall function-404 httpcon))
-     ;; We don't have a custom 404 so send our own
      (t
-      (elnode-send-404 httpcon)))))
+      (funcall function-404 httpcon)))
+    (elnode-log-access log-name httpcon)))
 
 (defun elnode-dispatcher (httpcon url-mapping-table &optional function-404)
   "Dispatch the HTTPCON to the correct function based on the URL-MAPPING-TABLE.
@@ -1633,18 +1637,22 @@ matched."
         url-mapping-table
         function-404)))))
 
-(defun elnode-hostpath-dispatcher (httpcon
+(defun* elnode-hostpath-dispatcher (httpcon
                                    hostpath-mapping-table
-                                   &optional function-404)
+                                   &key
+                                   (function-404 'elnode-send-404)
+                                   (log-name "elnode"))
   "Dispatch HTTPCON to a handler based on the HOSTPATH-MAPPING-TABLE.
 
 HOSTPATH-MAPPING-TABLE has a regex of the host and the path slash
 separated, thus:
 
- (\"^localhost/pastebin.*\" . pastebin-handler)"
-  ;;(elnode-normalize-path
-  ;; httpcon
-  ;; (lambda (httpcon)
+ (\"^localhost/pastebin.*\" . pastebin-handler)
+
+FUNCTION-404 should be a 404 handling function, by default it's
+`elnode-send-404'.
+
+LOG-NAME is an optional log-name."
   (let ((hostpath
          (format "%s%s"
                  (let ((host
@@ -1659,7 +1667,8 @@ separated, thus:
      httpcon
      hostpath
      hostpath-mapping-table
-     function-404)))
+     :function-404 function-404
+     :log-name log-name)))
 
 ;;;###autoload
 (defcustom elnode-hostpath-default-table
