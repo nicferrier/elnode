@@ -176,7 +176,7 @@ by elnode iteslf."
        (format "*%s-elnode-access*" logname))
     (goto-char (point-max))
     (insert (format "%s %s % 6d %s %s\n"
-                    (format-time-string "%Y%m%d%H%M%S")
+                    (format-time-string "%Y-%m-%d-%H:%M:%S")
                     (process-get httpcon :elnode-httpresponse-status)
                     (or (process-get httpcon :elnode-bytes-written) 0)
                     (elnode-http-method httpcon)
