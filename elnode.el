@@ -175,9 +175,10 @@ by elnode iteslf."
       (get-buffer-create
        (format "*%s-elnode-access*" logname))
     (goto-char (point-max))
-    (insert (format "%s %s %s %s\n"
+    (insert (format "%s %s % 6d %s %s\n"
                     (format-time-string "%Y%m%d%H%M%S")
                     (process-get httpcon :elnode-httpresponse-status)
+                    (or (process-get httpcon :elnode-bytes-written) 0)
                     (elnode-http-method httpcon)
                     (elnode-http-pathinfo httpcon)))))
 
@@ -1225,6 +1226,8 @@ This is really only a placeholder function for doing transfer-encoding."
   ;; ... but for now we just presume we're doing it.
   (elnode-error "elnode-http-send-string %s [[%s]]" httpcon (elnode-trunc str))
   (let ((len (string-bytes str)))
+    (process-put httpcon :elnode-bytes-written
+                 (+ len (or (process-get httpcon :elnode-bytes-written) 0)))
     (process-send-string httpcon (format "%x\r\n%s\r\n" len (or str "")))))
 
 (defvar elnode-http-codes-alist
@@ -1313,15 +1316,15 @@ data.  This is done mainly for testing infrastructure."
       (process-put httpcon :elnode-http-started 't))))
 
 (defun elnode--http-end (httpcon)
-  ;; problematic function for testing
-  ;;
-  ;; when it's called by child-elisp plumbing the flets might have
-  ;; gone out of scope
-  ;;
-  ;; we we to find a way for something to specify it wants this done,
-  ;; or not (tests need to stop it happening)
-  "We need a special end function to do the emacs clear up."
+  "We need a special end function to do the emacs clear up.
+
+This makes access log file calls if the socket has a property
+`:elnode-access-log-name'.  The property is taken to be the name
+of a buffer."
   (elnode-error "elnode--http-end ending socket %s" httpcon)
+  (let ((access-log-name (process-get httpcon :elnode-access-log-name)))
+    (when access-log-name
+      (elnode-log-access access-log-name httpcon)))
   (process-send-eof httpcon)
   (delete-process httpcon)
   (kill-buffer (process-buffer httpcon)))
@@ -1592,13 +1595,13 @@ it it's found to be a function, or as a last resort
          (elnode--mapper-find
           httpcon path
           url-mapping-table)))
+    (process-put httpcon :elnode-access-log-name log-name)
     (cond
      ;; If we have a handler, use it.
      ((functionp handler-func)
       (funcall handler-func httpcon))
      (t
-      (funcall function-404 httpcon)))
-    (elnode-log-access log-name httpcon)))
+      (funcall function-404 httpcon)))))
 
 (defun elnode-dispatcher (httpcon url-mapping-table &optional function-404)
   "Dispatch the HTTPCON to the correct function based on the URL-MAPPING-TABLE.
