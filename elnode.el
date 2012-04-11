@@ -192,6 +192,14 @@ by elnode iteslf."
 (defvar elnode--deferred '()
   "List of deferred pairs: (socket . handler).")
 
+(defun elnode-defered-queue (arg)
+  "Message the length of the deferred queue."
+  (interactive "P")
+  (if (not arg)
+      (message "elnode deferred queue: %d" (length elnode--deferred))
+    (setq elnode--deferred (list))
+    (message "elnode deferred queue reset!")))
+
 (defun elnode-defer-now (handler)
   "The function you call to defer processing of the current socket.
 
