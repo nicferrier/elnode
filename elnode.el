@@ -217,6 +217,7 @@ only be expanded where there is an inscope `httpcon'."
 
 (defun elnode--deferred-add (httpcon handler)
   "Add the specified HTTPCON/HANDLER pair to the deferred list."
+  (elnode-error "deferred-add: adding a defer for %s" httpcon)
   (push (cons httpcon handler) elnode--deferred))
 
 (defun elnode--deferred-processor ()
@@ -232,7 +233,11 @@ only be expanded where there is an inscope `httpcon'."
               ('elnode-defer
                (push
                 (cons httpcon (cdr signal-value))
-                new-deferred)))))
+                new-deferred))
+              (error
+               (elnode-error
+                "elnode-deferred found an error processing %s" httpcon)))))
+    ;; Set the correct queue
     (setq elnode--deferred new-deferred)))
 
 (ert-deftest elnode-deferring ()
@@ -252,10 +257,9 @@ only be expanded where there is an inscope `httpcon'."
     (should (eq result :done))
     (should (equal 0 (length elnode--deferred)))
     ;; Now we add a handler that defers...
-    (elnode--deferred-add
-     httpcon
-     (lambda (httpcon)
-       (elnode-defer-now handler)))
+    (elnode--deferred-add httpcon
+                          (lambda (httpcon)
+                            (elnode-defer-now handler)))
     (should (equal 1 (length elnode--deferred)))
     ;; Now we process...
     (elnode--deferred-processor)
@@ -278,10 +282,7 @@ Necessary for running comet apps."
         (run-with-idle-timer 0.1 't 'elnode--deferred-processor)))
 
 (defun elnode-deferred-queue (arg)
-  "Message the length of the deferred queue.
-
-This is just a management tool.  It can also be used to reset or
-start the queue."
+  "Message the length of the deferred queue."
   (interactive "P")
   (if (not arg)
       (message
@@ -289,8 +290,6 @@ start the queue."
        (length elnode--deferred)
        elnode--defer-timer)
     (setq elnode--deferred (list))
-    (unless elnode--defer-timer
-      (elnode--init-deferring))
     (message "elnode deferred queue reset!")))
 
 (defun elnode-deferred-queue-stop ()
@@ -353,7 +352,7 @@ The function `elnode-send-status' also uses these."
     (if (process-buffer process)
         (progn
           (kill-buffer (process-buffer process))
-          (elnode-error "Elnode connection dropped"))))
+          (elnode-error "Elnode connection dropped %s" process))))
 
    ((equal status "open\n") ;; this says "open from ..."
     (elnode-error "Elnode opened new connection"))
@@ -580,15 +579,15 @@ and then test again."
             (catch 'elnode-parse-http
               (elnode--http-parse nil))))))
 
-(defun elnode--get-server-handler (process)
-  "Retrieve the server handler from PROCESS.
+(defun elnode--get-server-prop (process key)
+  "Get the value of the KEY from the server attached to PROCESS.
 
-The server handler is bound with `elnode-start' which sets up
+Server properties are bound with `elnode-start' which sets up
 `elnode--log-fn' to ensure that all sockets created have a link
 back to the server."
   (let* ((server (process-get process :server))
-         (handler (process-get server :elnode-http-handler)))
-    handler))
+         (value (process-get server key)))
+    value))
 
 (defun elnode--make-send-string ()
   "Make a function to send a string to an HTTP connection."
@@ -652,21 +651,24 @@ port number of the connection."
         ('done
          (save-excursion
            (goto-char (process-get process :elnode-header-end))
-           (let ((handler (elnode--get-server-handler process)))
+           (let ((handler
+                  (elnode--get-server-prop process :elnode-http-handler)))
              ;; This is where we call the user handler
              ;; TODO: this needs error protection so we can return an error?
              (condition-case signal-value
-                 ;; Defer handling - for comet style operations
                  (progn
                    (elnode-error "filter: calling handler on %s" process)
                    (funcall handler process)
                    (elnode-error "filter: handler returned on %s" process))
                ('elnode-defer
-                ;; The handler's processing of the socket should be deferred
-                ;;
-                ;; - the value of the signal is the current handler
-                ;; - (see elnode-defer-now)
-                (elnode--deferred-add process (cdr signal-value)))
+                (elnode-error "filter: defer caught on %s" process)
+                (case (elnode--get-server-prop process :elnode-defer-mode)
+                  ((:managed 'managed)
+                   (elnode--deferred-add process
+                                         (cdr signal-value)))
+                  ((:immediate 'immediate)
+                   (elnode-error "filter: immediate defer on %s" process)
+                   (funcall (cdr signal-value) process))))
                ('t
                 ;; FIXME: we need some sort of check to see if the
                 ;; header has been written
@@ -690,9 +692,11 @@ routines."
   (declare
    (indent defun)
    (debug t))
-  `(flet ((elnode--get-server-handler
-           (proc)
-           ,handler))
+  `(flet ((elnode--get-server-prop
+           (proc key)
+           (cond
+            ((eq key :elnode-http-handler)
+             ,handler))))
      ,@body))
 
 (defun* elnode-test-call (path
@@ -811,8 +815,15 @@ Serves only to connect the server process to the client processes"
   "The history of hosts that servers are started on.")
 
 ;;;###autoload
-(defun elnode-start (request-handler &optional port host)
-  "Start a server so that REQUEST-HANDLER handles requests on PORT on HOST.
+(defun* elnode-start (request-handler
+                      &key
+                      port
+                      (host "localhost")
+                      (defer-mode :managed))
+  "Start a server using REQUEST-HANDLER.
+
+REQUEST-HANDLER will handle requests on PORT on HOST (which is
+'localhost' by default).
 
 REQUEST-HANDLER is a function which is called with the request.
 The function is called with one argument, which is the
@@ -850,7 +861,7 @@ elnode servers on the same port on different hosts."
                                    obarray 'fboundp t nil nil))
          (port (read-number "Port: " 8000))
          (host (read-string "Host: " "localhost" 'elnode-host-history)))
-     (list (intern handler) port host)))
+     (list (intern handler) :port port :host host)))
   (let ((port (or port 8000))
         (host (or host "localhost")))
     (unless (assoc port elnode-server-socket)
@@ -865,19 +876,18 @@ elnode servers on the same port on different hosts."
                       :server t
                       :nowait 't
                       :host (cond
-                             ((equal host "localhost")
-                              'local)
-                             ((equal host "*")
-                              nil)
-                             (t
-                              host))
+                             ((equal host "localhost") 'local)
+                             ((equal host "*") nil)
+                             (t host))
                       :service port
                       :coding '(raw-text-unix . raw-text-unix)
                       :family 'ipv4
                       :filter 'elnode--filter
                       :sentinel 'elnode--sentinel
                       :log 'elnode--log-fn
-                      :plist `(:elnode-http-handler ,request-handler))))
+                      :plist (list
+                              :elnode-http-handler request-handler
+                              :elnode-defer-mode defer-mode))))
              elnode-server-socket)))))
 
 ;; TODO: make this take an argument for the
