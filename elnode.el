@@ -1,6 +1,6 @@
 ;;; elnode.el --- a simple emacs async HTTP server -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010  Nic Ferrier
+;; Copyright (C) 2010, 2011, 2012  Nic Ferrier
 
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Maintainer: Nic Ferrier <nferrier@ferrier.me.uk>
