@@ -1283,6 +1283,8 @@ This is really only a placeholder function for doing transfer-encoding."
   (let ((len (string-bytes str)))
     (process-put httpcon :elnode-bytes-written
                  (+ len (or (process-get httpcon :elnode-bytes-written) 0)))
+    ;; FIXME Errors can happen here, because the socket goes away.. it
+    ;; would be nice to trap them and report and then re-raise them.
     (process-send-string httpcon (format "%x\r\n%s\r\n" len (or str "")))))
 
 (defvar elnode-http-codes-alist
