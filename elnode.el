@@ -5,7 +5,7 @@
 ;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Maintainer: Nic Ferrier <nferrier@ferrier.me.uk>
 ;; Created: 5th October 2010
-;; Version: 0.9.3
+;; Version: 0.9.4
 ;; Keywords: lisp, http, hypermedia
 ;; Package-Requires: ((fakir "0.0.4")(creole "0.8.4"))
 
