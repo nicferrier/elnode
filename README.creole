@@ -252,7 +252,7 @@ table.  It calls [[elnode-hostpath-dispatcher]] with
 [[elnode-hostpath-default-table]].
 
 
-=== elnode-hostpath-dispatcher httpcon hostpath-mapping-table &rest --cl-rest-- ===
+=== elnode-hostpath-dispatcher httpcon hostpath-mapping-table &key function-404 //(default: (quote elnode-send-404))// log-name //(default: elnode)// ===
 
 Dispatch //httpcon// to a handler based on the //hostpath-mapping-table//.
 
@@ -263,12 +263,10 @@ separated, thus:
  ("^localhost/pastebin.*" . pastebin-handler)
 }}}
 
-FUNCTION-404 should be a 404 handling function, by default it's
+//function-404// should be a 404 handling function, by default it's
 [[elnode-send-404]].
 
-LOG-NAME is an optional log-name.
-
-(fn (//httpcon// //hostpath-mapping-table// &key (FUNCTION-404 (quote elnode-send-404)) (LOG-NAME "elnode")))
+//log-name// is an optional log-name.
 
 
 === elnode-http-cookie httpcon name ===
@@ -443,7 +441,7 @@ Optionally, use the specified //type// as the status code, eg:
 
 
 
-=== elnode-make-send-file filename &rest --cl-rest-- ===
+=== elnode-make-send-file filename &key preamble mime-types ===
 
 Make a handler that will serve a single //filename//.
 
@@ -453,8 +451,6 @@ package's [[load-file-name]].
 Optionally mime-types and other additional keyword arguments may be
 specified and are passed through, see [[elnode-send-file]] for
 details.
-
-(fn (//filename// &key PREAMBLE MIME-TYPES))
 
 
 === elnode-method &rest method-mappings ===
@@ -514,7 +510,7 @@ Sends a Server Error to the //httpcon//.
 Optionally include //msg//.
 
 
-=== elnode-send-file httpcon targetfile &optional mime-types &rest --cl-rest-- ===
+=== elnode-send-file httpcon targetfile &optional mime-types &key preamble ===
 
 Send the //targetfile// to the //httpcon//.
 
@@ -530,13 +526,11 @@ resolve the type of a file.
 
 Optionally you may specify extra keyword arguments:
 
-:PREAMBLE a string of data to send before the file.
+://preamble// a string of data to send before the file.
 
-:PREAMBLE is most useful for prefixing syntax to some other file,
+://preamble// is most useful for prefixing syntax to some other file,
 for example you could prefix an XML file with XSL transformation
 statements so a compliant user-agent will transform the XML.
-
-(fn (//httpcon// //targetfile// &optional //mime-types// &key PREAMBLE))
 
 
 === elnode-send-json httpcon data &optional content-type ===
@@ -566,11 +560,11 @@ table.
 Optionally include //msg//.
 
 
-=== elnode-start request-handler &rest --cl-rest-- ===
+=== elnode-start request-handler &key port host //(default: localhost)// defer-mode //(default: :managed)// ===
 
 Start a server using //request-handler//.
 
-//request-handler// will handle requests on PORT on HOST (which is
+//request-handler// will handle requests on //port// on //host// (which is
 'localhost' by default).
 
 //request-handler// is a function which is called with the request.
@@ -592,10 +586,10 @@ Example:
 
 Now visit http://127.0.0.1:8000
 
-If PORT is non-nil, then run server on PORT, otherwise default to
+If //port// is non-nil, then run server on //port//, otherwise default to
 8000.
 
-If HOST is non-nil, then run the server on the specified local IP
+If //host// is non-nil, then run the server on the specified local IP
 address, otherwise use localhost.  A few names are predefined:
 
 {{{
@@ -605,11 +599,9 @@ address, otherwise use localhost.  A few names are predefined:
 
 Additionally, you may specifiy an IP address, e.g "1.2.3.4"
 
-Note that although HOST may be specified, elnode does not
-disambiguate on running servers by HOST.  So you cannot start two
+Note that although //host// may be specified, elnode does not
+disambiguate on running servers by //host//.  So you cannot start two
 elnode servers on the same port on different hosts.
-
-(fn (//request-handler// &key PORT (HOST "localhost") (DEFER-MODE :managed)))
 
 
 === elnode-stop port ===
@@ -617,7 +609,7 @@ elnode servers on the same port on different hosts.
 Stop the elnode server attached to //port//.
 
 
-=== elnode-test-call path &rest --cl-rest-- ===
+=== elnode-test-call path &key method //(default: get)// parameters //(default: (quote nil))// headers //(default: (quote nil))// ===
 
 Fake a call to elnode with the //path//.
 
@@ -645,8 +637,6 @@ or:
 }}}
 
 For header and parameter names, strings MUST be used currently.
-
-(fn (//path// &key (METHOD "GET") (PARAMETERS (quote nil)) (HEADERS (quote nil))))
 
 
 === elnode-test-handler httpcon ===
@@ -821,7 +811,6 @@ Put the last worker code in a file for later use.
 
 When testing it's good to be able to capture the last lisp made
 by [[elnode-worker-elisp]] for manipulating manually.
-
 
 
 
