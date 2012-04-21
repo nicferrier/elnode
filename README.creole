@@ -3,6 +3,13 @@
 An attempt to make an EmacsLISP clone of node.js.
 
 
+== Requirements ==
+
+Elnode will not run properly on anything less than Emacs 24.  Elnode
+requires Emacs 24's lexical binding as it makes extensive use of
+closures.
+
+
 == Rationale ==
 
 Elnode should be used for making small, personal web services or for
