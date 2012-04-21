@@ -1,6 +1,6 @@
 = Elnode =
 
-An attempt to make an EmacsLISP clone of node.js.
+An evented IO webserver in Emacs Lisp.
 
 
 == Requirements ==
@@ -12,19 +12,16 @@ closures.
 
 == Rationale ==
 
-Elnode should be used for making small, personal web services or for
-developing a first draft of a web service you may later do in Clojure
-or Node.js or some other web framework.
-
-Emacs is a very good LISP programming environment as well as a great
-editor. Now that Emacs 24 has lexical scope EmacsLISP is a very
-powerful language. A webserver framework inside such a powerful LISP
-environment therefore makes sense.
+Emacs is a very good Lisp programming environment as well as a great
+editor. Now that Emacs 24 has lexical scope Emacs Lisp is a very
+powerful language. A webserver framework inside such a powerful Lisp
+environment therefore makes sense. Emacs also has good evented IO. So
+an evented IO webserver framework is quite elegant.
 
 
 == Installation ==
 
-Elnode is now packaged in [[http://marmalade-repo.org/packages/elnode|marmalade]]. 
+Elnode is packaged in [[http://marmalade-repo.org/packages/elnode|marmalade]]. 
 
 For dealing with package repositories check out the
 [[http://www.emacswiki.org/emacs/ELPA|Emacs Wiki]] but the short version
@@ -76,8 +73,7 @@ You can define a handler function:
 (defun nicferrier-handler (httpcon)
   "Demonstration function"
   (elnode-http-start httpcon "200" '("Content-type" . "text/html"))
-  (elnode-http-return httpcon "<html><b>HELLO!</b></html>")
-  )
+  (elnode-http-return httpcon "<html><b>HELLO!</b></html>"))
 }}}
 
 And then start the server:
