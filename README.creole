@@ -103,7 +103,6 @@ M-x elnode-stop
 
 
 == API ==
-
 === elnode-cached httpcon ===
 
 [[elnode-docroot-for]] calls this when the resources was cached.
@@ -255,7 +254,7 @@ table.  It calls [[elnode-hostpath-dispatcher]] with
 [[elnode-hostpath-default-table]].
 
 
-=== elnode-hostpath-dispatcher httpcon hostpath-mapping-table &key function-404 //(default: (quote elnode-send-404))// log-name //(default: elnode)// ===
+=== elnode-hostpath-dispatcher httpcon hostpath-mapping-table &key function-404 ((quote elnode-send-404)) log-name ("elnode") ===
 
 Dispatch //httpcon// to a handler based on the //hostpath-mapping-table//.
 
@@ -563,7 +562,7 @@ table.
 Optionally include //msg//.
 
 
-=== elnode-start request-handler &key port host //(default: localhost)// defer-mode //(default: :managed)// ===
+=== elnode-start request-handler &key port host ("localhost") defer-mode (:managed) ===
 
 Start a server using //request-handler//.
 
@@ -612,7 +611,7 @@ elnode servers on the same port on different hosts.
 Stop the elnode server attached to //port//.
 
 
-=== elnode-test-call path &key method //(default: get)// parameters //(default: (quote nil))// headers //(default: (quote nil))// ===
+=== elnode-test-call path &key method ("get") parameters ((quote nil)) headers ((quote nil)) ===
 
 Fake a call to elnode with the //path//.
 
@@ -818,6 +817,7 @@ by [[elnode-worker-elisp]] for manipulating manually.
 
 
 
+
 == But... ==
 
 There's always a but.
@@ -839,8 +839,6 @@ If you're playing with elnode but you can't think of anything to do with it...
  * an emacsclient with elnode
  ** write a command line client that submits data to the server over HTTP
  ** it should interact with the emacs user in the same way that emacs server does
- * a simple wiki engine with elnode
- ** maybe using a command line wiki templating tool
  * alter {{{elnode-webserver-handler-maker}}} to do indexing better
  ** take an optional index producing function?
  ** take keyword flags that set the behaviour? 
