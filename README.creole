@@ -12,12 +12,12 @@ closures.
 
 == Rationale ==
 
-Elnode is a great at these things:
+Elnode is a great for these things:
 
  * nice simple server with few dependancies (just Emacs and {{{cat}}} basically)
- * good for prototyping things
- * good for browser testing
- * good for implementing asynchronous apps, like chat apps
+ * prototyping webapps
+ * browser testing
+ * asynchronous apps, like chat apps
 
 
 == Installation ==
