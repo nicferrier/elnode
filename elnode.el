@@ -1288,11 +1288,12 @@ The resulting file is NOT checked for existance or safety."
           (format
            "%s%s"
            (expand-file-name docroot)
-           (format (or (and (save-match-data
+           (format (or (and path
+                            (save-match-data
                               (string-match "^/" path))
                             "%s")
                        "/%s")
-                   (if (equal path "/")  "" path)))))
+                   (if (or (not path) (equal path "/"))  "" path)))))
     targetfile))
 
 
@@ -1905,7 +1906,7 @@ When a file is cached on the client (when a client sends a
 conditional GET for the file that shows the client has an up to
 date copy) then `elnode-cached' is called."
   (declare
-   (debug (sexp "with" sexp "on" sexp "do" (&rest form)))
+   (debug (sexp "with" sexp "on" sexp "do" &rest form))
    (indent defun))
   (let ((dr (make-symbol "docroot"))
         (con (make-symbol "httpcon")))
@@ -2044,7 +2045,6 @@ handlers."
     with targetfile
     on httpcon
     do
-    ;; The file exists and is legal
     (let ((pathinfo (elnode-http-pathinfo httpcon)))
       (if (file-directory-p targetfile)
           (let ((index (elnode--webserver-index docroot targetfile pathinfo)))
