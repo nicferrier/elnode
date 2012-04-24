@@ -2276,8 +2276,8 @@ the handler and listening on `elnode-init-host'"
       (condition-case nil
           (elnode-start
            'elnode-hostpath-default-handler
-           elnode-init-port
-           elnode-init-host)
+           :port elnode-init-port
+           :host elnode-init-host)
         (error
          (elnode-error
           "elnode-init: can't start - port %d has something attached already"
