@@ -50,8 +50,6 @@
 
 ;;; Code:
 
-(assert (>= emacs-major-version 24))
-
 (require 'mm-encode)
 (require 'mailcap)
 (require 'url-util)
