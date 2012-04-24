@@ -12,11 +12,12 @@ closures.
 
 == Rationale ==
 
-Emacs is a very good Lisp programming environment as well as a great
-editor. Now that Emacs 24 has lexical scope Emacs Lisp is a very
-powerful language. A webserver framework inside such a powerful Lisp
-environment therefore makes sense. Emacs also has good evented IO. So
-an evented IO webserver framework is quite elegant.
+Elnode is a great at these things:
+
+ * nice simple server with few dependancies (just Emacs and {{{cat}}} basically)
+ * good for prototyping things
+ * good for browser testing
+ * good for implementing asynchronous apps, like chat apps
 
 
 == Installation ==
