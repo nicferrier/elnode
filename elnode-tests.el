@@ -302,6 +302,25 @@ Does a full http parse of a dummy buffer."
       (should (equal "20" (elnode-http-param nil "b")))
       (should (equal "this is finished" (elnode-http-param nil "c"))))))
 
+(ert-deftest elnode-test-http-post-empty-params ()
+  "Test that the params are ok if they are just empty in the body."
+  (let ((post-body ""))
+    (fakir-mock-process
+      ((:buffer
+        (elnode--http-make-hdr
+         'post "/"
+         '(host . "localhost")
+         '(user-agent . "test-agent")
+         `(content-length . ,(format "%d" (length post-body)))
+         `(body . ,post-body))))
+      ;; Now parse
+      (should
+       (equal 'done
+              (catch 'elnode-parse-http
+                (elnode--http-parse :httpcon))))
+      ;; Now test some params
+      (should-not (elnode-http-param :httpcon "a")))))
+
 
 (ert-deftest elnode--http-result-header ()
   "Test that we can make result headers."

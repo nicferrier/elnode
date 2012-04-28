@@ -914,12 +914,12 @@ will do:
 Returns an association list."
   (let ((alist (mapcar
                 (lambda (nv)
-                  (string-match "\\([^=]+\\)\\(=\\(.*\\)\\)*" nv)
-                  (cons
-                   (elnode--http-param-part-decode (match-string 1 nv))
-                   (if (match-string 2 nv)
-                       (elnode--http-param-part-decode (match-string 3 nv))
-                     nil)))
+                  (if (string-match "\\([^=]+\\)\\(=\\(.*\\)\\)*" nv)
+                      (cons
+                       (elnode--http-param-part-decode (match-string 1 nv))
+                       (if (match-string 2 nv)
+                           (elnode--http-param-part-decode (match-string 3 nv))
+                         nil))))
                 (split-string query "&"))
                ))
     alist))
