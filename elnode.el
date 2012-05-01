@@ -1712,7 +1712,7 @@ and sending the data there."
      (process-status httpcon)
      (length data)
      httpcon)
-    (if (not (equal "closed" (process-status httpcon)))
+    (if (not (eq 'closed (process-status httpcon)))
         (elnode-http-send-string httpcon data))))
 
 (defun elnode-child-process (httpcon program &rest args)
