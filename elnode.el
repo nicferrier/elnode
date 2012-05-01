@@ -138,14 +138,19 @@ There is only one error log, in the future there may be more."
 
 This function is available for handlers to call.  It is also used
 by elnode iteslf."
-  ;; TODO I'd like this to work deeper than this, maybe a if a buffer
-  ;; is named after the handler (or the matched host or path or something)
-  ;; then automatically log to the buffer
+  ;; FIXME
   ;;
-  ;; The buffer could have local variables specifying it's
-  ;; serialization, so Elnode could be told to save it all the time,
-  ;; or in an idle-timer or maybe to make the log file an actual
-  ;; process instead of a buffer (that would be *most* safe?)
+  ;; we need buffer saving and buffer truncation here
+  ;;
+  ;; append-to-file  should work for saving to large files
+  ;;
+  ;; comint-truncate-buffer  should work for keeping the buffer truncated
+  ;;
+  ;; initial thought is to make a filename and a size parameters of
+  ;; the handler and then attach those as variables of the buffer
+  ;; created and then act on them here?
+  ;;
+  ;; that would mean this MUST NOT create the buffer
   (with-current-buffer
       (get-buffer-create
        (format "*%s-elnode-access*" logname))
