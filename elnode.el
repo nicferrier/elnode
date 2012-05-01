@@ -1748,9 +1748,51 @@ certain types of debugging."
   :group 'elnode
   :type '(string))
 
+(defun elnode--buffer-template (file-buf replacements)
+  "Template render a buffer and return a copy.
+
+FILE-BUF is the source buffer to use, template sections marked up like:
+
+ <!##E \\(.*?\\) E##!>
+
+will be replaced with a value looked up in REPLACEMENTS.
+
+REPLACEMENTS is either a hashtable or an association list.
+
+For example:
+
+ <title><!##E my-title E##!></title>
+ <p>By <!##E my-name E##!>.</p>
+
+with the REPLACEMENTS being:
+
+  my-title => All things Elnode!
+  my-name => Nic Ferrier
+
+would result in the string:
+
+  <title>All things Elnode!</title>
+  <p>By Nic Ferrier</p>
+
+being returned."
+  (with-current-buffer file-buf
+    (replace-regexp-in-string
+     "<!##E \\(.*?\\) E##!>"
+     (lambda (matched)
+       (cond
+        ((hash-table-p replacements)
+         (gethash (match-string 1 matched) replacements ""))
+        (t
+         ;; Presume it's an alist
+         (or
+          (aget replacements (match-string 1 matched) t) ""))))
+     (buffer-substring (point-min)(point-max)))))
+
 (defun* elnode-send-file (httpcon targetfile
-                                  &optional mime-types
-                                  &key preamble)
+                                  &key
+                                  preamble
+                                  mime-types
+                                  replacements)
   "Send the TARGETFILE to the HTTPCON.
 
 If the TARGETFILE is relative then resolve it via the current
@@ -1760,16 +1802,23 @@ WARNING: this resolution order is likely to change because,
 especially when developing `default-directory' can be quite
 random (change buffer, change `default-directory').
 
-MIME-TYPES is an optional alist of MIME type mappings to help
-resolve the type of a file.
-
 Optionally you may specify extra keyword arguments:
 
 :PREAMBLE a string of data to send before the file.
 
 :PREAMBLE is most useful for prefixing syntax to some other file,
 for example you could prefix an XML file with XSL transformation
-statements so a compliant user-agent will transform the XML."
+statements so a compliant user-agent will transform the XML.
+
+:MIME-TYPES is an optional alist of MIME type mappings to help
+resolve the type of a file.
+
+If :REPLACEMENTS is specified it should be a hash-table or an
+association list used to supply values for templating.  When
+templating is specified the targetfile is not sent directly but
+opened in Emacs as a buffer and transformed through the
+templating system before being sent.  See
+`elnode--buffer-template' for details of templating."
   (let ((filename
          (if (not (file-name-absolute-p targetfile))
              (file-relative-name
@@ -1779,20 +1828,28 @@ statements so a compliant user-agent will transform the XML."
                     (directory-file-name dir)
                   default-directory)))
            targetfile)))
-    (if (file-exists-p filename)
-        (let ((mimetype
-               (or (if (listp mime-types)
-                       (car (rassoc
-                             (file-name-extension targetfile)
-                             mime-types)))
-                   (mm-default-file-encoding targetfile)
-                   "application/octet-stream")))
-          (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
-          (if preamble (elnode-http-send-string httpcon preamble))
-          (elnode-child-process httpcon elnode-send-file-program targetfile))
-      ;; FIXME: This needs improving so we can handle the 404
-      ;; This function should raise an exception?
-      (elnode-send-404 httpcon))))
+    (if (not (file-exists-p filename))
+        ;; FIXME: This needs improving so we can handle the 404
+        ;; This function should raise an exception?
+        (elnode-send-404 httpcon)
+      (let ((mimetype
+             (or (when (listp mime-types)
+                   (car (rassoc
+                         (file-name-extension targetfile)
+                         mime-types)))
+                 (mm-default-file-encoding targetfile)
+                  "application/octet-stream")))
+        (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
+        (when preamble (elnode-http-send-string httpcon preamble))
+        (if replacements
+            (let ((file-buf (find-file-noselect filename)))
+              (elnode-http-return
+               httpcon
+               (elnode--buffer-template file-buf replacements)))
+          (elnode-child-process
+           httpcon
+           elnode-send-file-program
+           targetfile))))))
 
 (defmacro elnode-method (&rest method-mappings)
   "Map the HTTP method.
@@ -1839,7 +1896,11 @@ Optionally mime-types and other additional keyword arguments may be
 specified and are passed through, see `elnode-send-file' for
 details."
   (lambda (httpcon)
-    (elnode-send-file httpcon filename mime-types :preamble preamble)))
+    (elnode-send-file
+     httpcon
+     filename
+     :mime-tpes mime-types
+     :preamble preamble)))
 
 
 ;; Docroot protection

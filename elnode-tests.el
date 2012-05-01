@@ -354,6 +354,40 @@ Content-Type: text/html\r
            (elnode-send-json httpcon (list "a string in a list")))
          sent-data))))))
 
+(ert-deftest elnode--buffer-template ()
+  "Test the buffer templating."
+  (let ((result
+         (with-temp-buffer
+           (insert "<!doctype html>
+<head>
+  <meta charset='utf-8'>
+  <meta http-equiv='X-UA-Compatible' content='IE=edge,chrome=1'>
+  <title><!##E title E##!></title>
+  <meta name='viewport' content='width=device-width'>
+  <link rel='stylesheet' href='/talk/stuff/css/style.css'/>
+  <link rel='stylesheet' href='/talk/stuff/css/basic.css'/>
+</head>
+<body>
+    <div id='header'>
+        <ul>
+            <li><a href='javascript:;'>talk to a friend</a></li>
+            <li><a href='/about/'>about</a></li>
+            <li><a href='/blog/'>blog</a></li>
+        </ul>
+        <!##E name-html E##!>
+    </div>
+</body>
+</html>")
+           (elnode--buffer-template
+            (current-buffer)
+            '(("title" . "My webpage")
+              ("name-html" . "<div>you are talking to Caroline</div>"))))))
+    (should
+     (string-match ".*<title>My webpage</title>.*" result))
+    (should
+     (string-match ".*<div>you are talking to Caroline</div>.*" result))))
+
+
 (ert-deftest elnode--mapper-find ()
   "Test the mapper find function."
   (fakir-mock-process
