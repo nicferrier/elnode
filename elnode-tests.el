@@ -424,19 +424,38 @@ Content-Type: text/html\r
     ((:elnode-http-pathinfo "/wiki/index.creole"))
     (should
      (equal
+      'elnode-wikiserver
       (elnode--mapper-find
        :fake
        "localhost/wiki/index.creole"
        '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver)
-         ("[^/]+/.*" . elnode-webserver)))
-      'elnode-wikiserver))
+         ("[^/]+/\\(.*\\)" . elnode-webserver)))))
     (fakir-mock-file (fakir-file
                       :filename "index.creole"
                       :directory "/home/elnode/wiki")
       (should
        (equal
         (elnode-get-targetfile :fake "/home/elnode/wiki")
-        "/home/elnode/wiki/index.creole")))))
+        "/home/elnode/wiki/index.creole"))))
+  ;; Now alter the mapping to NOT declare the mapped part...
+  (fakir-mock-process
+    ((:elnode-http-pathinfo "/blah/thing.txt"))
+    ;; ... the mapper-find should still work...
+    (should
+     (equal
+      'elnode-webserver
+      (elnode--mapper-find
+       :fake
+       "localhost/blah/thing.txt"
+       '(("[^/]+/.*" . elnode-webserver)))))
+    ;; ... but finding a file WILL NOT work (because there is no mapping)
+    (fakir-mock-file (fakir-file
+                      :filename "thing.txt"
+                      :directory "/home/elnode/www/blah")
+      (should-not
+       (equal
+        (elnode-get-targetfile :fake "/home/elnode/www")
+        "/home/elnode/www/blah/thing.txt")))))
 
 (ert-deftest elnode-worker-elisp ()
   "Test the `elnode-worker-elisp' macro.

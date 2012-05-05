@@ -1298,7 +1298,9 @@ The resulting file is NOT checked for existance or safety."
                               (string-match "^/" path))
                             "%s")
                        "/%s")
-                   (if (or (not path) (equal path "/"))  "" path)))))
+                   (if (or (not path) (equal path "/"))
+                       ""
+                     path)))))
     targetfile))
 
 
@@ -1401,7 +1403,7 @@ LOG-NAME is an optional log-name."
 ;;;###autoload
 (defcustom elnode-hostpath-default-table
   '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver)
-    ("[^/]+/.*" . elnode-webserver))
+    ("[^/]+/\\(.*\\)" . elnode-webserver))
   "Defines mappings for `elnode-hostpath-default-handler'.
 
 This is the default mapping table for Elnode, out of the box. If
