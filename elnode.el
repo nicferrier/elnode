@@ -632,6 +632,7 @@ For header and parameter names, strings MUST be used currently."
                           t))
                     ;; Now call the captured eof-func
                     (funcall eof-func httpcon)))))
+            ;; FIXME - we should unwind protect this?
             (elnode--filter http-connection hdrtext)
             ;; Now we sleep till the-end is true
             (while (not the-end)
