@@ -10,8 +10,6 @@
 (setq package-archives
       '(("gnu" . "http://elpa.gnu.org/packages/")
         ("marmalade" . "http://marmalade-repo.org/packages/")))
-(package-initialize)
-(package-refresh-contents)
 (load-file "build.el")
 (require 'elnode-tests)
 (ert-run-tests-batch-and-exit)

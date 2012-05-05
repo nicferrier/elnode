@@ -1,5 +1,7 @@
 ;; Batch test Elnode
 
+(package-initialize)
+(package-refresh-contents)
 (let ((tar-package
        (concat
         (file-name-directory

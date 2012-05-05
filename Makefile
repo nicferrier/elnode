@@ -20,7 +20,7 @@ test: tarball
 
 # Install the tarball in the user's emacs
 install: tarball
-	emacs --batch --script ./build.el -- $(TARBALL)
+	emacs --batch -l ~/.emacs.d/init.el -l ./build.el -- $(TARBALL)
 
 clean:
 	rm -rf .elpa
