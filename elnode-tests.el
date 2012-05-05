@@ -196,7 +196,14 @@ and then test again."
        httpcon
        '(("[^/]+/test/.*" . elnode-test-handler))))
     (let ((r (elnode-test-call "/test/test.something")))
-      (should (equal (plist-get r :status) 200)))))
+      (should
+       (equal
+        200
+        (plist-get r :status)))
+      (should
+       (equal
+        "<html><body><h1>Hello World</h1></body></html>"
+        (plist-get r :result-string))))))
 
 (ert-deftest elnode-http-header ()
   "Test that we have headers."
@@ -665,6 +672,7 @@ via a child process."
                         :directory "/home/elnode/wiki")
         (let ((r (elnode-test-call "/wiki/test.creole")))
           (elnode-error "result -> %s" r)
+          (message "elnode result data: %s" (plist-get r :result-string))
           (should
            (equal
             (plist-get r :status)

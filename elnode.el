@@ -589,10 +589,27 @@ For header and parameter names, strings MUST be used currently."
             (http-connection t))
         ;; Capture the real eof-func and then override it to do fake ending.
         (let ((eof-func (elnode--make-send-eof))
+              (main-send-string (symbol-function 'elnode-http-send-string))
+              (send-string-func (elnode--make-send-string))
               (the-end 0)
+              (res-buffer (get-buffer-create "*elnode-test-call*"))
               result-data)
           (flet
-              ((elnode--make-send-eof
+              ((test-send-string
+                (httpcon str)
+                (with-current-buffer res-buffer
+                  (goto-char (point-max))
+                  (insert str)))
+               (elnode-http-send-string
+                (httpcon str)
+                (test-send-string httpcon str)
+                (funcall main-send-string httpcon str))
+               (elnode--make-send-string
+                ()
+                (lambda (httpcon str)
+                  (test-send-string httpcon str)
+                  (send-string-func httpcon str)))
+               (elnode--make-send-eof
                 ()
                 (lambda (httpcon)
                   ;; Flet everything in elnode--http-end
@@ -623,6 +640,11 @@ For header and parameter names, strings MUST be used currently."
               (list
                :result-data
                result-data
+               :result-string
+               (let ((data (with-current-buffer res-buffer
+                             (buffer-substring (point-min) (point-max)))))
+                 (kill-buffer res-buffer)
+                 data)
                :buffer
                (process-buffer http-connection)
                ;; These properties are set by elnode-http-start
@@ -636,7 +658,9 @@ For header and parameter names, strings MUST be used currently."
                 :elnode-httpresponse-header)))))))))
 
 (defun elnode-test-handler (httpcon)
-  "A simple handler for testing 'elnode-test-call"
+  "A simple handler for testing `elnode-test-call'.
+
+The text spat out is tested, so is the status."
   (elnode-http-start httpcon 200 '("Content-Type" . "text/html"))
   (elnode-http-return
    httpcon
