@@ -2010,6 +2010,13 @@ can add more file mappings more easily than editing
   :type '(alist :key-type string
                 :value-type string))
 
+(defcustom elnode-webserver-index '("index.html" "index.htm")
+  "A list of possible index filenames.
+
+Anyone of the values of this list may be picked as the index page
+for a directory."
+  :group 'elnode
+  :type '(repeat string))
 
 (defun elnode--webserver-index (docroot targetfile pathinfo)
   "Constructs index documents.
@@ -2115,10 +2122,19 @@ handlers."
     do
     (let ((pathinfo (elnode-http-pathinfo httpcon)))
       (if (file-directory-p targetfile)
-          (let ((index (elnode--webserver-index docroot targetfile pathinfo)))
-            ;; What's the best way to do simple directory indexes?
-            (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
-            (elnode-http-return httpcon index))
+          ;; Use an existing index file or send a directory index
+          (let* ((indexfile
+                  (loop for i in elnode-webserver-index
+                        if (member i (directory-files targetfile))
+                        return i)))
+            (if indexfile
+                (elnode-send-file httpcon (concat targetfile "/" indexfile))
+              (let ((index (elnode--webserver-index
+                            docroot
+                            targetfile
+                            pathinfo))))
+              (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
+              (elnode-http-return httpcon index)))
         ;; Send a file.
         (elnode-send-file httpcon targetfile)))))
 
