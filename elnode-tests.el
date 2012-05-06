@@ -678,6 +678,36 @@ via a child process."
             (plist-get r :status)
             200)))))))
 
+(ert-deftest elnode-webserver ()
+  (with-elnode-mock-server
+    ;; The dispatcher function
+    (lambda (httpcon)
+      (elnode-hostpath-dispatcher
+       httpcon
+       '(("[^/]+/\\(.*\\)" . elnode-webserver))))
+    ;; Now the actual test
+    (fakir-mock-file
+     (fakir-file
+      :filename "blah.html"
+      :directory "/home/elnode/public_html"
+      :content "<html>Fake HTML file</html>")
+     (unwind-protect
+         ;; Ensure the webserver uses Emacs to open files so fakir can
+         ;; override it.
+         (let* ((elnode-webserver-visit-file t)
+                (r (elnode-test-call "/blah.html")))
+           (elnode-error "result -> %s" r)
+           (should
+            (equal
+             (plist-get r :status)
+             200))
+           (should
+            (equal
+             "<html>Fake HTML file</html>"
+             (plist-get r :result-string))))
+       ;; Now kill the buffer that was opened to serve the file.
+       (kill-buffer "blah.html")))))
+
 (provide 'elnode-tests)
 
 ;;; elnode-tests.el ends here

@@ -1820,6 +1820,12 @@ being returned."
           (aget replacements (match-string 1 matched) t) ""))))
      (buffer-substring (point-min)(point-max)))))
 
+(defvar elnode-webserver-visit-file nil
+  "Whether the webserver reads files by visiting buffers or not.
+
+When set to `t' files to be sent with the `elnode-send-file' are
+read into Emacs using `find-file'.")
+
 (defun* elnode-send-file (httpcon targetfile
                                   &key
                                   preamble
@@ -1873,7 +1879,7 @@ templating system before being sent.  See
                   "application/octet-stream")))
         (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
         (when preamble (elnode-http-send-string httpcon preamble))
-        (if replacements
+        (if (or elnode-webserver-visit-file replacements)
             (let ((file-buf (find-file-noselect filename)))
               (elnode-http-return
                httpcon
