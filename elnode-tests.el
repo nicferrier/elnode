@@ -807,6 +807,7 @@ via a child process."
          ;; Ensure the webserver uses Emacs to open files so fakir can
          ;; override it.
          (let* ((elnode-webserver-visit-file t)
+                (elnode--do-access-logging-on-dispatch nil)
                 (r (elnode-test-call "/blah.html")))
            (elnode-error "result -> %s" r)
            (should

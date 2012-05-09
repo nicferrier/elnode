@@ -1371,6 +1371,8 @@ The resulting file is NOT checked for existance or safety."
                      path)))))
     targetfile))
 
+(defvar elnode--do-access-logging-on-dispatch t
+  "Needed to suppress logging in testing.")
 
 (defun* elnode--dispatch-proc (httpcon
                               path
@@ -1390,7 +1392,8 @@ it it's found to be a function, or as a last resort
          (elnode--mapper-find
           httpcon path
           url-mapping-table)))
-    (process-put httpcon :elnode-access-log-name log-name)
+    (when elnode--do-access-logging-on-dispatch
+      (process-put httpcon :elnode-access-log-name log-name))
     (cond
      ;; If we have a handler, use it.
      ((functionp handler-func)
