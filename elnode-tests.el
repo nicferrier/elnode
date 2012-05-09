@@ -40,6 +40,86 @@
 (require 'fakir)
 (require 'elnode)
 
+(defun elnode--log-buffer-read-text (buffer)
+  "Turn the buffer into a list of text.
+
+Strips off the date format from each text line.  Primarily this
+is just a test helper."
+  (let* ((log-line-regex "[0-9]\\{14\\}: \\(.*\\)")
+         (lines
+          (split-string
+           (with-current-buffer buffer
+             (buffer-substring (point-min) (point-max)))
+           "\n")))
+    (loop for line in lines
+          if (string-match log-line-regex line)
+          collect (match-string 1 line))))
+
+(ert-deftest elnode-log-buffer-log ()
+  "Test the log buffer stuff."
+  (let ((tf (make-temp-file "logbufferlog")))
+    (with-temp-buffer
+      (elnode-log-buffer-log "test it" (current-buffer) tf)
+      (should
+       (equal
+        (marker-position elnode-log-buffer-position-written)
+        (point-max)))
+      (elnode-log-buffer-log "test again" (current-buffer) tf)
+      (should
+       (equal
+        '("test it" "test again")
+        (elnode--log-buffer-read-text (current-buffer)))))
+    ;; Test that we can read it back from the file.
+    (let* ((log-buf (find-file-noselect tf)))
+      (should
+       (equal
+        '("test it" "test again")
+        (elnode--log-buffer-read-text log-buf))))))
+
+(ert-deftest elnode-log-buffer-log-truncates ()
+  "Test the log buffer gets truncated stuff."
+  (let ((log-line-regex "[0-9]\\{14\\}: \\(.*\\)")
+        (tf (make-temp-file "logbufferlog"))
+        (elnode-log-buffer-max-size 8))
+    (with-temp-buffer
+      (elnode-log-buffer-log "test it" (current-buffer) tf)
+      (elnode-log-buffer-log "test again" (current-buffer) tf)
+      (elnode-log-buffer-log "test three" (current-buffer) tf)
+      (elnode-log-buffer-log "test four" (current-buffer) tf)
+      (elnode-log-buffer-log "test five" (current-buffer) tf)
+      (elnode-log-buffer-log "test six" (current-buffer) tf)
+      (elnode-log-buffer-log "test seven" (current-buffer) tf)
+      (elnode-log-buffer-log "test eight" (current-buffer) tf)
+      (elnode-log-buffer-log "test nine" (current-buffer) tf)
+      (elnode-log-buffer-log "test ten" (current-buffer) tf)
+      (should
+       (equal
+        8
+        (length
+         (loop for i in
+               (split-string
+                (buffer-substring
+                 (point-min)
+                 (point-max))
+                "\n")
+               if (not (equal i ""))
+               collect i)))))))
+
+(ert-deftest elnode-test-error-log ()
+  (let ((err-message "whoops!! something went wrong! %s" )
+        (err-include "some included value"))
+    (with-temp-buffer
+      (let ((test-log-buf (current-buffer)))
+        ;; Setup a fake server log buffer
+        (flet ((elnode--get-error-log-buffer () test-log-buf))
+          (elnode-error err-message err-include))
+        ;; Assert the message sent to the log buffer is correctly formatted.
+        (should (string-match
+                 (format
+                  "^elnode-.*: %s\n$"
+                  (apply 'format `(,err-message ,@(list err-include))))
+                 (buffer-substring (point-min) (point-max))))))))
+
 (ert-deftest elnode-test-error-log-list ()
   (let ((err-message "whoops!! something went wrong! %s %s")
         (err-include '("included value 1" "included value 2")))

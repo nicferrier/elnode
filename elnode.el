@@ -86,6 +86,63 @@ This is an alist of proc->server-process:
   (string-match "^[ \t\n\r]*" str)
   (replace-match "" nil nil str))
 
+(defcustom elnode-log-files-directory "~/.elnodelogs"
+  "The directory to store any Elnode log files.
+
+Elnode can use files for storing logs and will write them to this
+directory.  If the directory does not exist it is created.  If
+this field is left blank no log saving is done."
+  :group 'elnode
+  :type '(directory))
+
+(defvar elnode-log-buffer-position-written 0
+  "The position in the log buffer written.
+
+This is used by `elnode-log-buffer-log' to track what has been written
+so far.")
+
+(defvar elnode-log-buffer-max-size 1000
+  "Maximum number of lines of log.")
+
+(defvar elnode-log-buffer-datetime-format "%Y%m%d%H%M%S"
+  "The date time format used by `elnode-log-buffer-log'.")
+
+(defun elnode-log-buffer-log (text buffer-or-name &optional filename)
+  "Log TEXT to the BUFFER-OR-NAME saving the buffer in FILENAME.
+
+BUFFER-OR-NAME is either a buffer or a string naming a buffer.
+FILENAME is a filename to save the buffer into.  If the FILENAME
+is not specified then we try to use the filename of the
+BUFFER-OR-NAME.
+
+If nether a buffer filename nor FILENAME is specified then an
+error is generated.
+
+The TEXT is logged with the current date and time formatted with
+`elnode-log-buffer-datetime-format'."
+  (let ((name (or filename (buffer-file-name (current-buffer)))))
+    (if (not name)
+        (error "Filename is required, or use a buffer with a filename"))
+    (with-current-buffer (get-buffer-create buffer-or-name)
+      (unless (assq
+               'elnode-log-buffer-position-written
+               (buffer-local-variables))
+        (make-local-variable 'elnode-log-buffer-position-written)
+        (setq elnode-log-buffer-position-written (make-marker))
+        (set-marker elnode-log-buffer-position-written (point-min)))
+      (save-excursion
+        (goto-char (point-max))
+        (insert
+         (format
+          "%s: %s\n"
+          (format-time-string elnode-log-buffer-datetime-format)
+          text))
+        (append-to-file elnode-log-buffer-position-written (point-max) name)
+        (set-marker elnode-log-buffer-position-written (point-max))
+        (goto-char (point-max))
+        (forward-line (- elnode-log-buffer-max-size))
+        (beginning-of-line)
+        (delete-region (point-min) (point))))))
 
 (defcustom elnode-error-log-to-messages t
   "Wether to send elnode logging through the messaging system."
@@ -116,21 +173,6 @@ There is only one error log, in the future there may be more."
        (insert (concat fmtmsg "\n")))
      (when elnode-error-log-to-messages
        (message "elnode-error: %s" fmtmsg))))
-
-(ert-deftest elnode-test-error-log ()
-  (let ((err-message "whoops!! something went wrong! %s" )
-        (err-include "some included value"))
-    (with-temp-buffer
-      (let ((test-log-buf (current-buffer)))
-        ;; Setup a fake server log buffer
-        (flet ((elnode--get-error-log-buffer () test-log-buf))
-          (elnode-error err-message err-include))
-        ;; Assert the message sent to the log buffer is correctly formatted.
-        (should (string-match
-                 (format
-                  "^elnode-.*: %s\n$"
-                  (apply 'format `(,err-message ,@(list err-include))))
-                 (buffer-substring (point-min) (point-max))))))))
 
 
 (defun elnode-log-access (logname httpcon)
@@ -1771,6 +1813,11 @@ directed at the same http connection."
     (set-process-filter p 'elnode--child-process-filter)
     (set-process-sentinel p 'elnode--child-process-sentinel)
     (elnode-error "Elnode-child-process init %s" httpcon)))
+
+;; Authentication handlers
+
+(defun elnode-auth (httpcon)
+  )
 
 (defcustom elnode-send-file-program "/bin/cat"
   "The program to use for sending files.
