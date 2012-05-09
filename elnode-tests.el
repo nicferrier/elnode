@@ -137,6 +137,38 @@ is just a test helper."
                   (apply 'format `(,err-message ,@err-include)))
                  (buffer-substring (point-min) (point-max))))))))
 
+(ert-deftest elnode-test-access-log ()
+  "Test the access logging."
+  (fakir-mock-process
+    ((:buffer
+      (elnode--http-make-hdr
+       'get "/"
+       '(host . "localhost")
+       '(user-agent . "test-agent")))
+     (:elnode-httpresponse-status 200)
+     (:elnode-bytes-written 2048))
+    (should
+     (equal
+      'done
+      (catch 'elnode-parse-http
+        (elnode--http-parse nil))))
+    (let* ((logname "ert-test")
+           (buffername (format "*%s-elnode-access*" logname)))
+      (flet ((elnode--log-access-filename
+              (log-name)
+              (make-temp-file "elnode-access")))
+        (unwind-protect
+            (progn
+              (elnode-log-access logname :httpcon)
+              (should
+               (string-match
+                (concat  "^[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}"
+                         "-[0-9]\\{2\\}:[0-9]\\{2\\}:[0-9]\\{2\\}:[ ]+"
+                         "200[ ]+2048[ ]+GET[ ]+/$")
+                (with-current-buffer buffername
+                  (buffer-substring (point-min)(point-max))))))
+          (kill-buffer buffername))))))
+
 (ert-deftest elnode-deferring ()
   "Testing the defer setup."
   (let* ((result :not-done)

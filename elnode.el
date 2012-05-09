@@ -137,8 +137,11 @@ The TEXT is logged with the current date and time formatted with
           "%s: %s\n"
           (format-time-string elnode-log-buffer-datetime-format)
           text))
+        (if (not (file-exists-p (file-name-directory name)))
+            (make-directory (file-name-directory name) t))
         (append-to-file elnode-log-buffer-position-written (point-max) name)
         (set-marker elnode-log-buffer-position-written (point-max))
+        ;; Truncate the file if it's grown too large
         (goto-char (point-max))
         (forward-line (- elnode-log-buffer-max-size))
         (beginning-of-line)
@@ -174,35 +177,33 @@ There is only one error log, in the future there may be more."
      (when elnode-error-log-to-messages
        (message "elnode-error: %s" fmtmsg))))
 
+(defun elnode--log-access-filename (logname)
+  "Turn LOGNAME into a filename.
+
+`elnode-log-files-directory' is used as the container for log files.
+
+This function mainly exists to make testing easier."
+  (expand-file-name
+   (format "%s/%s"
+           elnode-log-files-directory
+           logname)))
 
 (defun elnode-log-access (logname httpcon)
   "Log the HTTP access in buffer LOGNAME.
 
 This function is available for handlers to call.  It is also used
 by elnode iteslf."
-  ;; FIXME
-  ;;
-  ;; we need buffer saving and buffer truncation here
-  ;;
-  ;; append-to-file  should work for saving to large files
-  ;;
-  ;; comint-truncate-buffer  should work for keeping the buffer truncated
-  ;;
-  ;; initial thought is to make a filename and a size parameters of
-  ;; the handler and then attach those as variables of the buffer
-  ;; created and then act on them here?
-  ;;
-  ;; that would mean this MUST NOT create the buffer
-  (with-current-buffer
-      (get-buffer-create
-       (format "*%s-elnode-access*" logname))
-    (goto-char (point-max))
-    (insert (format "%s %s % 6d %s %s\n"
-                    (format-time-string "%Y-%m-%d-%H:%M:%S")
-                    (process-get httpcon :elnode-httpresponse-status)
-                    (or (process-get httpcon :elnode-bytes-written) 0)
-                    (elnode-http-method httpcon)
-                    (elnode-http-pathinfo httpcon)))))
+  (let ((elnode-log-buffer-datetime-format "%Y-%m-%d-%H:%M:%S")
+        (buffer-name (format "*%s-elnode-access*" logname))
+        (filename (elnode--log-access-filename logname)))
+    (elnode-log-buffer-log
+     (format "%s % 6d %s %s\n"
+             (process-get httpcon :elnode-httpresponse-status)
+             (or (process-get httpcon :elnode-bytes-written) 0)
+             (elnode-http-method httpcon)
+             (elnode-http-pathinfo httpcon))
+     buffer-name
+     filename)))
 
 
 ;; Defer stuff
