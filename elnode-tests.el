@@ -116,7 +116,7 @@ is just a test helper."
         ;; Assert the message sent to the log buffer is correctly formatted.
         (should (string-match
                  (format
-                  "^elnode-.*: %s\n$"
+                  "^.*: %s\n$"
                   (apply 'format `(,err-message ,@(list err-include))))
                  (buffer-substring (point-min) (point-max))))))))
 
@@ -133,7 +133,7 @@ is just a test helper."
         ;; Assert the message sent to the log buffer is correctly formatted.
         (should (string-match
                  (format
-                  "^elnode-.*: %s\n$"
+                  "^.*: %s\n$"
                   (apply 'format `(,err-message ,@err-include)))
                  (buffer-substring (point-min) (point-max))))))))
 
@@ -154,7 +154,7 @@ is just a test helper."
         (elnode--http-parse nil))))
     (let* ((logname "ert-test")
            (buffername (format "*%s-elnode-access*" logname)))
-      (flet ((elnode--log-access-filename
+      (flet ((elnode--log-filename
               (log-name)
               (make-temp-file "elnode-access")))
         (unwind-protect
@@ -736,6 +736,7 @@ right thing."
 Basically this is the same test as in the creole library but done
 via a child process."
   (let* ((page "~/creole/index.creole")
+         (elnode--do-error-logging nil)
          (outbuf (get-buffer-create
                   (generate-new-buffer-name
                    "elnode-worker-wiki-test"))))
@@ -782,7 +783,9 @@ via a child process."
       (fakir-mock-file (fakir-file
                         :filename "test.creole"
                         :directory "/home/elnode/wiki")
-        (let ((r (elnode-test-call "/wiki/test.creole")))
+        (let* ((elnode--do-error-logging nil)
+               (elnode--do-access-logging-on-dispatch nil)
+               (r (elnode-test-call "/wiki/test.creole")))
           (elnode-error "result -> %s" r)
           (message "elnode result data: %s" (plist-get r :result-string))
           (should
@@ -807,6 +810,7 @@ via a child process."
          ;; Ensure the webserver uses Emacs to open files so fakir can
          ;; override it.
          (let* ((elnode-webserver-visit-file t)
+                (elnode--do-error-logging nil)
                 (elnode--do-access-logging-on-dispatch nil)
                 (r (elnode-test-call "/blah.html")))
            (elnode-error "result -> %s" r)

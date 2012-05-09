@@ -155,29 +155,31 @@ The TEXT is logged with the current date and time formatted with
 (defvar elnode-server-error-log "*elnode-server-error*"
   "The buffer where error log messages are sent.")
 
+(defvar elnode--do-error-logging t
+  "Allows tests to turn off error logging.")
+
 (defun elnode--get-error-log-buffer ()
   "Returns the buffer for the error-log."
   (get-buffer-create elnode-server-error-log))
 
-(defmacro elnode-error (msg &rest args)
+(defun elnode-error (msg &rest args)
   "Log MSG with ARGS as an error.
 
 This function is available for handlers to call.  It is also used
 by elnode iteslf.
 
 There is only one error log, in the future there may be more."
-  `(let* ((fmtmsg
-           (format
-            "elnode-%s: %s"
-            (format-time-string "%Y%m%d%H%M%S")
-            (apply 'format (list ,msg ,@args)))))
-     (with-current-buffer (elnode--get-error-log-buffer)
-       (goto-char (point-max))
-       (insert (concat fmtmsg "\n")))
-     (when elnode-error-log-to-messages
-       (message "elnode-error: %s" fmtmsg))))
+  (when elnode--do-error-logging
+    (let ((filename (elnode--log-filename "elnode-error"))
+          (fmtmsg (apply 'format `(,msg ,@args))))
+      (elnode-log-buffer-log
+       fmtmsg
+       (elnode--get-error-log-buffer)
+       filename)
+      (when elnode-error-log-to-messages
+        (message "elnode-error: %s" fmtmsg)))))
 
-(defun elnode--log-access-filename (logname)
+(defun elnode--log-filename (logname)
   "Turn LOGNAME into a filename.
 
 `elnode-log-files-directory' is used as the container for log files.
@@ -195,7 +197,7 @@ This function is available for handlers to call.  It is also used
 by elnode iteslf."
   (let ((elnode-log-buffer-datetime-format "%Y-%m-%d-%H:%M:%S")
         (buffer-name (format "*%s-elnode-access*" logname))
-        (filename (elnode--log-access-filename logname)))
+        (filename (elnode--log-filename logname)))
     (elnode-log-buffer-log
      (format "%s % 6d %s %s\n"
              (process-get httpcon :elnode-httpresponse-status)
