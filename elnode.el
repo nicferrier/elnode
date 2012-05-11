@@ -930,8 +930,8 @@ If PROPERTY is non-nil, then return that property."
        ;; root pattern
        (string-match "^\\(/\\)\\(\\?.*\\)*$" resource)
        ;; /somepath or /somepath/somepath
-       (string-match "^\\(/[A-Za-z0-9_/.-]+\\)\\(\\?.*\\)*$" resource))
-      (let ((path (match-string 1 resource)))
+       (string-match "^\\(/[A-Za-z0-9_%/.-]+\\)\\(\\?.*\\)*$" resource))
+      (let ((path (url-unhex-string (match-string 1 resource))))
         (process-put httpcon :elnode-http-pathinfo path))
       (if (match-string 2 resource)
           (let ((query (match-string 2 resource)))
