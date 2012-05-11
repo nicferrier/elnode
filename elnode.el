@@ -2123,72 +2123,18 @@ PATHINFO."
 "
      pathinfo
      pathinfo
-     (mapconcat
-      (lambda (dir-entry)
-        (let ((entry (format
-                      "%s%s"
-                      (if (equal pathinfo "/")  "" pathinfo)
-                      (car dir-entry))))
-          (format
-           "<a href='%s'>%s</a><br/>\r\n"
-           entry
-           (car dir-entry))))
-      dirlist
-      "\n"))))
+     (loop for dir-entry in dirlist
+           concat
+           (let ((entry
+                  (format
+                   "%s/%s"
+                   (if (equal pathinfo "/")  "" pathinfo)
+                   (car dir-entry))))
+             (format
+              "<a href='%s'>%s</a><br/>\r\n"
+              entry
+              (car dir-entry)))))))
 
-(defun elnode-test-path (httpcon docroot handler &optional failure)
-  "DEPRECATED.
-
-Check that the path in the HTTPCON is above the DOCROOT.
-
-Call FAILURE-HANDLER (falling back to 'enode-send-404') on failure
-and HANDLER on success.
-
-HANDLER is called with these arguments: HTTPCON, DOCROOT and
-TARGETFILE.  TARGETFILE is the absolute filename for the
-resource being requested (and is, obviously, safely below the
-DOCROOT).
-
-This is used by `elnode--webserver-handler-proc' in the webservers
-that it creates... but it's also meant to be generally useful for
-other handler writers.
-
-This function use `elnode-http-mapping' to establish a
-targetfile, allowing URL mappings to look like this:
-
- \"prefix/\\(.*\\)$\"
-
-Only the grouped part will be used to resolve the targetfile."
-  ;; FIXME I am unhappy with this function as it stands - I am not
-  ;; sure that a user will ever use it, but it also adds to the
-  ;; contract of the next call (adding 'targetfile' from the mapping
-  ;; match data).
-  ;;
-  ;; The fact that it does that (adding the targetfile) also seems
-  ;; wrong but I can't think how to replace it.
-  (let* ((pathinfo (elnode-http-pathinfo httpcon))
-         (path (or (match-string 1 (elnode-http-mapping httpcon)) pathinfo))
-         (targetfile
-          (format
-           "%s%s"
-           (expand-file-name docroot)
-           (format (or (and (save-match-data
-                              (string-match "^/" path))
-                            "%s")
-                       "/%s")
-                   (if (equal path "/")  "" path)))))
-    (if (or
-         (file-exists-p targetfile)
-         ;; Test the targetfile is under the docroot
-         (let ((docrootlen (length docroot)))
-           (compare-strings
-            docroot 0 docrootlen
-            (file-truename targetfile) 0 docrootlen)))
-        (funcall handler httpcon docroot targetfile)
-      ;; Call the failure handler
-      (if (functionp failure)
-          (funcall failure httpcon)
-        (elnode-send-404 httpcon)))))
 
 ;;;###autoload
 (defun elnode--webserver-handler-proc (httpcon docroot mime-types)
@@ -2216,9 +2162,9 @@ handlers."
               (let ((index (elnode--webserver-index
                             docroot
                             targetfile
-                            pathinfo))))
-              (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
-              (elnode-http-return httpcon index)))
+                            pathinfo)))
+                (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
+                (elnode-http-return httpcon index))))
         ;; Send a file.
         (elnode-send-file httpcon targetfile)))))
 
