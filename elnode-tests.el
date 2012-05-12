@@ -40,6 +40,21 @@
 (require 'fakir)
 (require 'elnode)
 
+(ert-deftest elnode-url-encode-path ()
+  "Test the path encoding."
+  (should
+   (equal
+    "/path/the%20path"
+    (elnode-url-encode-path "/path/the path")))
+  (should
+   (equal
+    "/path/the%20path/"
+    (elnode-url-encode-path "/path/the path/")))
+  (should
+   (equal
+    "/path/the%20%27path%27"
+    (elnode-url-encode-path "/path/the 'path'"))))
+
 (defun elnode--log-buffer-read-text (buffer)
   "Turn the buffer into a list of text.
 

@@ -930,7 +930,7 @@ If PROPERTY is non-nil, then return that property."
        ;; root pattern
        (string-match "^\\(/\\)\\(\\?.*\\)*$" resource)
        ;; /somepath or /somepath/somepath
-       (string-match "^\\(/[A-Za-z0-9_%/.-]+\\)\\(\\?.*\\)*$" resource))
+       (string-match "^\\(/[^?]+\\)\\(\\?.*\\)*$" resource))
       (let ((path (url-unhex-string (match-string 1 resource))))
         (process-put httpcon :elnode-http-pathinfo path))
       (if (match-string 2 resource)
@@ -2102,6 +2102,22 @@ for a directory."
   :group 'elnode
   :type '(repeat string))
 
+(defun elnode-url-encode-path (path)
+  "Return a url encoded version of PATH.
+
+This is like `url-hexify-string' but it handles the parts of the
+PATH properly.  It also hexifies single quote."
+  (replace-regexp-in-string
+   "'" "%27"
+   (mapconcat
+    'identity
+    (loop
+     for part in (split-string entry "/")
+     collect
+     (concat
+      (url-hexify-string part)))
+    "/")))
+
 (defun elnode--webserver-index (docroot targetfile pathinfo)
   "Constructs index documents.
 
@@ -2132,9 +2148,8 @@ PATHINFO."
                    (car dir-entry))))
              (format
               "<a href='%s'>%s</a><br/>\r\n"
-              entry
+              (elnode-url-encode-path entry)
               (car dir-entry)))))))
-
 
 ;;;###autoload
 (defun elnode--webserver-handler-proc (httpcon docroot mime-types)
