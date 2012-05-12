@@ -590,11 +590,10 @@ routines."
   (declare
    (indent defun)
    (debug t))
-  `(flet ((elnode--get-server-prop
-           (proc key)
-           (cond
-            ((eq key :elnode-http-handler)
-             ,handler))))
+  `(flet ((elnode--get-server-prop (proc key)
+            (cond
+              ((eq key :elnode-http-handler)
+               ,handler))))
      ,@body))
 
 (defun* elnode-test-call (path
@@ -640,43 +639,36 @@ For header and parameter names, strings MUST be used currently."
               (res-buffer (get-buffer-create "*elnode-test-call*"))
               result-data)
           (flet
-              ((test-send-string
-                (httpcon str)
-                (with-current-buffer res-buffer
-                  (goto-char (point-max))
-                  (insert str)))
-               (elnode-http-send-string
-                (httpcon str)
-                (test-send-string httpcon str)
-                (funcall main-send-string httpcon str))
-               (elnode--make-send-string
-                ()
-                (lambda (httpcon str)
-                  (test-send-string httpcon str)
-                  (send-string-func httpcon str)))
-               (elnode--make-send-eof
-                ()
-                (lambda (httpcon)
-                  ;; Flet everything in elnode--http-end
-                  (flet ((process-send-eof
-                          (proc)
-                          ;; Signal the end
-                          (setq the-end 't))
-                         (delete-process
-                          (proc)
-                          ;; Do nothing - we want the test proc
-                          )
-                         (kill-buffer
-                          (buffer)
-                          ;; Again, do nothing, we want this buffer
-                          (with-current-buffer buffer
-                            (setq
-                             result-data
-                             (buffer-substring (point-min) (point-max))))
-                          ;; Return true, don't really kill the buffer
-                          t))
-                    ;; Now call the captured eof-func
-                    (funcall eof-func httpcon)))))
+              ((test-send-string (httpcon str)
+                 (with-current-buffer res-buffer
+                   (goto-char (point-max))
+                   (insert str)))
+               (elnode-http-send-string (httpcon str)
+                 (test-send-string httpcon str)
+                 (funcall main-send-string httpcon str))
+               (elnode--make-send-string ()
+                 (lambda (httpcon str)
+                   (test-send-string httpcon str)
+                   (send-string-func httpcon str)))
+               (elnode--make-send-eof ()
+                 (lambda (httpcon)
+                   ;; Flet everything in elnode--http-end
+                   (flet ((process-send-eof (proc)
+                            ;; Signal the end
+                            (setq the-end 't))
+                          (delete-process (proc)
+                            ;; Do nothing - we want the test proc
+                            )
+                          (kill-buffer (buffer)
+                            ;; Again, do nothing, we want this buffer
+                            (with-current-buffer buffer
+                              (setq
+                               result-data
+                               (buffer-substring (point-min) (point-max))))
+                            ;; Return true, don't really kill the buffer
+                            t))
+                     ;; Now call the captured eof-func
+                     (funcall eof-func httpcon)))))
             ;; FIXME - we should unwind protect this?
             (elnode--filter http-connection hdrtext)
             ;; Now we sleep till the-end is true
@@ -711,7 +703,6 @@ The text spat out is tested, so is the status."
   (elnode-http-return
    httpcon
    "<html><body><h1>Hello World</h1></body></html>"))
-
 
 (defun elnode--log-fn (server con msg)
   "Log function for elnode.
@@ -2112,11 +2103,38 @@ PATH properly.  It also hexifies single quote."
    (mapconcat
     'identity
     (loop
-     for part in (split-string entry "/")
-     collect
-     (concat
-      (url-hexify-string part)))
+       for part in (split-string path "/")
+       collect
+         (concat
+          (url-hexify-string part)))
     "/")))
+
+(defcustom elnode-webserver-index-page-template "<html>
+ <head>
+  <title>%s</title>
+ </head>
+ <body>
+  <h1>%s</h1>
+  <div>%s</div>
+ </body>
+</html>
+"
+  "The page template used to render an index page.
+
+The order of the variables is:
+
+- the title of the document
+- the title of the document
+- the HTML formatted list of files."
+  :group 'elnode
+  :type '(string))
+
+(defcustom elnode-webserver-index-file-template "<a href='%s'>%s</a><br/>\r\n"
+  "The template for each file in the webserver index.
+
+This is used to display each file in an automated directory index."
+  :group 'elnode
+  :type '(string))
 
 (defun elnode--webserver-index (docroot targetfile pathinfo)
   "Constructs index documents.
@@ -2127,16 +2145,7 @@ PATHINFO."
   (let ((dirlist (directory-files-and-attributes targetfile)))
     ;; TODO make some templating here so people can change this
     (format
-     "<html>
- <head>
-  <title>%s</title>
- </head>
- <body>
-  <h1>%s</h1>
-  <div>%s</div>
- </body>
-</html>
-"
+     elnode-webserver-index-page-template
      pathinfo
      pathinfo
      (loop for dir-entry in dirlist
@@ -2147,7 +2156,7 @@ PATHINFO."
                    (if (equal pathinfo "/")  "" pathinfo)
                    (car dir-entry))))
              (format
-              "<a href='%s'>%s</a><br/>\r\n"
+              elnode-webserver-index-file-template
               (elnode-url-encode-path entry)
               (car dir-entry)))))))
 
@@ -2264,18 +2273,16 @@ HTTPCON is the HTTP connection to the user agent."
 
 The page is faked with PAGE-TEXT."
   (flet
-      ((elnode--worker-lisp-helper
-        (child-lisp)
-        `((progn
-            (require 'creole)
-            (require 'cl)
-            (flet ((creole--get-file
-                    (filename)
-                    (let ((buf (get-buffer-create "wikibuf")))
-                      (with-current-buffer buf
-                        (insert ,page-text))
-                      buf)))
-              ,@child-lisp)))))
+      ((elnode--worker-lisp-helper (child-lisp)
+         `((progn
+             (require 'creole)
+             (require 'cl)
+             (flet ((creole--get-file (filename)
+                      (let ((buf (get-buffer-create "wikibuf")))
+                        (with-current-buffer buf
+                          (insert ,page-text))
+                        buf)))
+               ,@child-lisp)))))
     (elnode-wait-for-exit
      (elnode-worker-elisp
          out-buf

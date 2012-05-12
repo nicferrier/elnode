@@ -126,7 +126,8 @@ is just a test helper."
     (with-temp-buffer
       (let ((test-log-buf (current-buffer)))
         ;; Setup a fake server log buffer
-        (flet ((elnode--get-error-log-buffer () test-log-buf))
+        (flet ((elnode--get-error-log-buffer ()
+                 test-log-buf))
           (elnode-error err-message err-include))
         ;; Assert the message sent to the log buffer is correctly formatted.
         (should (string-match
@@ -141,7 +142,8 @@ is just a test helper."
     (with-temp-buffer
       (let ((test-log-buf (current-buffer)))
         ;; Setup a fake server log buffer
-        (flet ((elnode--get-error-log-buffer () test-log-buf))
+        (flet ((elnode--get-error-log-buffer ()
+                 test-log-buf))
           (elnode-error
            err-message
            "included value 1" "included value 2"))
@@ -481,11 +483,11 @@ Content-Type: text/html\r
      (equal
       ["a string in a list"]
       (json-read-from-string
-       (flet ((elnode-http-return
-               (con data)
-               (setq sent-data data)))
-         (fakir-mock-process ()
-           (elnode-send-json httpcon (list "a string in a list")))
+       (flet ((elnode-http-return (con data)
+                (setq sent-data data)))
+         (fakir-mock-process
+          ()
+          (elnode-send-json httpcon (list "a string in a list")))
          sent-data))))))
 
 (ert-deftest elnode--buffer-template ()
@@ -619,9 +621,8 @@ right thing."
   "A quick test for `elnode-method'."
   (let ((httpcon :fake)
         method)
-    (flet ((elnode-http-method
-            (http-con)
-            "GET"))
+    (flet ((elnode-http-method (http-con)
+             "GET"))
       (elnode-method
         (GET
          (setq method "GET"))
@@ -681,15 +682,12 @@ right thing."
 (ert-deftest elnode-docroot-for ()
   "Test the docroot protection macro."
   (let ((httpcon :fake))
-    (flet ((elnode-send-404
-            (httpcon)
-            (throw :test 404))
-           (elnode-send-status
-            (httpcon status &optional msg)
-            (throw :test status))
-           (send-200
-            (httpcon)
-            (throw :test 200)))
+    (flet ((elnode-send-404 (httpcon)
+             (throw :test 404))
+           (elnode-send-status (httpcon status &optional msg)
+             (throw :test status))
+           (send-200 (httpcon)
+             (throw :test 200)))
       ;; Test straight through
       (should
        (equal
@@ -782,18 +780,16 @@ via a child process."
        '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver))))
     ;; Setup the the Creole file handler mocking.
     (flet
-        ((elnode--worker-lisp-helper
-          (child-lisp)
-          `((progn
-              (require 'creole)
-              (require 'cl)
-              (flet ((creole--get-file
-                      (filename)
-                      (let ((buf (get-buffer-create "wikibuf")))
-                        (with-current-buffer buf
-                          (insert "= A Creole file ="))
-                        buf)))
-                ,@child-lisp)))))
+        ((elnode--worker-lisp-helper (child-lisp)
+           `((progn
+               (require 'creole)
+               (require 'cl)
+               (flet ((creole--get-file (filename)
+                        (let ((buf (get-buffer-create "wikibuf")))
+                          (with-current-buffer buf
+                            (insert "= A Creole file ="))
+                          buf)))
+                 ,@child-lisp)))))
       ;; Now the actual test
       (fakir-mock-file (fakir-file
                         :filename "test.creole"
