@@ -128,17 +128,6 @@ handles the MODE by either streaming the data to the CALLBACK or
 by collecting it and then batching it to the CALLBACK."
   (with-current-buffer (process-buffer con)
     (let ((header (process-get con :http-header)))
-      ;; FIXME
-      ;; how do we close the connection when the data has finished??
-      ;;
-      ;; which is REALLY what's the normal protocol for this??
-      ;;
-      ;; Had an idea on the way to otto - could have mode identifier
-      ;; in POST call; stream mode would cause elnode required
-      ;; behaviour, blob mode would collect everything before calling
-      ;; the callback
-      ;;
-      ;; the callbacks could have different sigs but probably not
       (if (and header (eq mode 'stream))
           (funcall callback con header data)
           (save-excursion
@@ -196,40 +185,55 @@ by collecting it and then batching it to the CALLBACK."
                   (funcall callback con header response-complete-data)
                   (delete-process con)))))))))
 
-
 (ert-deftest elnode-client-http-post-filter ()
-  "Test the filter."
+  "Test the filter in streaming mode."
   (let* (cb-hdr
          cd-data
+         deleted
          (con :fake)
          (cb (lambda (con hdr data)
-               (setq cb-hdr hdr)
-               (setq cb-data data))))
-    (fakir-mock-process ((:buffer "HTTP/1.1 200\r\nHost: hostname\r\n"))
-        (progn
-          (should-not cb-hdr)
-          (elnode--http-post-filter con "\r\n" cb 'stream)
-          (should cb-hdr)
-          (should
-           (equal "hostname"
-                  (gethash 'host cb-hdr)))
-          (should
-           (equal "200"
-                  (gethash 'status-code cb-hdr)))
-          (should
-           (equal "1.1"
-                  (gethash 'status-version cb-hdr)))))))
+               (unless cb-hdr
+                 (setq cb-hdr hdr)
+                 (setq cb-data data))
+               (when (elnode-client-chunked-end-p con data)
+                 (delete-process con)))))
+    (flet ((delete-process (proc)
+             (setq deleted t)))
+      (fakir-mock-process ((:buffer "HTTP/1.1 200\r
+Host: hostname\r
+Transfer-encoding: chunked\r\n"))
+          (progn
+            (should-not cb-hdr)
+            (elnode--http-post-filter con "\r\n" cb 'stream)
+            (should cb-hdr)
+            (should-not deleted)
+            ;; Some header tests
+            (should
+             (equal "hostname"
+                    (gethash 'host cb-hdr)))
+            (should
+             (equal "200"
+                    (gethash 'status-code cb-hdr)))
+            (should
+             (equal "1.1"
+                    (gethash 'status-version cb-hdr)))
+            ;; Now see if we can send data through the stream api
+            (elnode--http-post-filter con "11\r\nhello world" cb 'stream)
+            (should-not deleted)
+            (elnode--http-post-filter con "\r\n0\r\n" cb 'stream))))))
 
 (ert-deftest elnode-client-http-post-filter-batch-mode-content-length ()
   "Test the filter in batch mode."
   (let* (cb-hdr
          cd-data
+         deleted
          (con :fake)
          (cb (lambda (con hdr data)
                (setq cb-hdr hdr)
                (setq cb-data data))))
     ;; We need to flet delete-process to do nothing
-    (flet ((delete-process (proc)))
+    (flet ((delete-process (proc)
+             (setq deleted t)))
       (fakir-mock-process ((:buffer "HTTP/1.1 200\r
 Host: hostname\r
 Content-length: 11\r\n"))
@@ -239,6 +243,7 @@ Content-length: 11\r\n"))
             (should-not cb-hdr)
             (elnode--http-post-filter con "hello world" cb 'batch)
             (should cb-hdr)
+            (should deleted)
             (should
              (equal "hostname"
                     (gethash 'host cb-hdr)))
@@ -253,12 +258,14 @@ Content-length: 11\r\n"))
   "Test the filter in batch mode."
   (let* (cb-hdr
          cd-data
+         deleted
          (con :fake)
          (cb (lambda (con hdr data)
                (setq cb-hdr hdr)
                (setq cb-data data))))
     ;; We need to flet delete-process to do nothing
-    (flet ((delete-process (proc)))
+    (flet ((delete-process (proc)
+             (setq deleted t)))
       (fakir-mock-process ((:buffer "HTTP/1.1 200\r
 Transfer-encoding: chunked\r
 Host: hostname\r\n"))
@@ -270,6 +277,7 @@ Host: hostname\r\n"))
             (should-not cb-hdr)
             (elnode--http-post-filter con "\r\n0\r\n" cb 'batch)
             (should cb-hdr)
+            (should deleted)
             (should
              (equal "hostname"
                     (gethash 'host cb-hdr)))
@@ -320,15 +328,6 @@ Content-length:%d\r
 %s" path host type (length data) data)))
           (process-send-string con submission))
     con))
-
-(defun elnode-client-test ()
-  (interactive)
-  (let ((host "localhost")
-        (port "8001")
-        (path "/blah")
-        (callback (lambda (con hdr data)
-                    (message "%s %s" hdr data))))
-    (elnode-http-post host port path "blah" "text/plain" callback)))
 
 (defmacro with-stdout-to-elnode (httpcon &rest body)
   "Execute BODY so that any output gets sent to HTTPCON."
