@@ -410,10 +410,12 @@ of succesful parsing."
                (header-alist-strings
                 (mapcar
                  (lambda (hdrline)
-                   (if (string-match "\\([A-Za-z0-9_-]+\\): \\(.*\\)" hdrline)
-                       (cons
-                        (match-string 1 hdrline)
-                        (match-string 2 hdrline))))
+                   (when (string-match
+                          "\\([A-Za-z0-9_-]+\\):[ ]*\\(.*\\)"
+                          hdrline)
+                     (cons
+                      (match-string 1 hdrline)
+                      (match-string 2 hdrline))))
                  header))
                (header-alist-syms
                 (mapcar
@@ -1454,7 +1456,7 @@ LOG-NAME is an optional log-name."
                          (elnode-http-header httpcon "Host")
                          "")))
                    (save-match-data
-                     (string-match "\\([^:]+\\)\\(:[0-9]+.*\\)" host)
+                     (string-match "\\([^:]+\\)\\(:[0-9]+.*\\)*" host)
                      (match-string 1 host)))
                  (elnode-http-pathinfo httpcon))))
     (elnode--dispatch-proc
