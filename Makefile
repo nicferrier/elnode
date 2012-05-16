@@ -5,7 +5,7 @@ NAME=elnode
 VERSION=0.9.7
 DOC="A simple event handling HTTP server."
 REQUIREMENTS=requirements.txt
-package_parts = elnode.el elnode-tests.el
+package_parts = elnode.el elnode-tests.el elnode-client.el elnode-wiki.el
 
 # Everything beyond here should be generic
 PACKAGE=$(NAME)-$(VERSION)
