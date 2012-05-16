@@ -1190,12 +1190,11 @@ DATA must be a string, it's just passed to `elnode-http-send'."
     (progn
       (if data
           (elnode-http-send-string httpcon data))
-      ;; Need to close the chunked encoding here
-      (elnode-http-send-string httpcon "")
-      (process-send-string httpcon "\r\n")
       (let ((eof-func (process-get httpcon :send-eof-function)))
-        (when (functionp eof-func)
-          (funcall eof-func httpcon))))))
+        (if (functionp eof-func)
+            (funcall eof-func httpcon)
+            ;; Need to close the chunked encoding here
+            (elnode-http-send-string httpcon ""))))))
 
 (defun elnode-send-json (httpcon data &optional content-type)
   "Send a 200 OK to the HTTPCON along with DATA as JSON.
