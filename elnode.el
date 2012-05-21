@@ -378,7 +378,7 @@ This is used by `elnode-worker-elisp' to implement a protocol for
 sending data through an elnode connection transparently."
   (elnode-error "elnode--process-send-eof on %s" proc)
   (elnode-http-send-string proc "")
-  (process-send-string proc "\r\n")
+  ;;(process-send-string proc "\r\n")
   (elnode--http-end proc))
 
 (defun elnode--http-parse (httpcon)
