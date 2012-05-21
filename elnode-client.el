@@ -464,10 +464,10 @@ Content-length:%d\r
     (elnode-http-start httpcon
                        (gethash 'status-code hdr))
     (process-put httpcon :header-sent t))
-  (if (not (elnode-client-chunked-end-p con data))
+  (if (not (eq data :done))
       (elnode-http-send-string httpcon data)
       ;; Else we return and delete the con coz we finished
-      (elnode-http-return httpcon data)
+      (elnode-http-return httpcon)
       (delete-process con)))
 
 (defun elnode-client--handler-mapper (httpcon port)
