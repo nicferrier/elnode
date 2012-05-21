@@ -212,4 +212,7 @@ provided. Otherwise it will just error."
       (elnode-wiki-handler httpcon elnode-wikiserver-wikiroot)
     (elnode-send-500 httpcon "The Emacs feature 'creole is required.")))
 
+
+(provide 'elnode-wiki)
+
 ;;; elnode-wiki.el ends here
