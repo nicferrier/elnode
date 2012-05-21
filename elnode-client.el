@@ -75,44 +75,6 @@ Content-length: 1000\r
     (should (equal "text/html" (gethash 'content-type hdrs)))
     (should (equal "1000" (gethash 'content-length hdrs)))))
 
-(defun elnode-client--last-7 (existing new)
-  "Return the last 7 characters of EXISTING and NEW combined."
-  (let ((full (concat existing new)))
-    (cond
-      ((> (length full) 7)
-       (substring full (- (length full) 7)))
-      (t
-       full))))
-
-(ert-deftest elnode-client--last-7 ()
-  "Unit test the last-7."
-  (should
-   (equal "AB0ABAB"
-          (elnode-client--last-7
-           (elnode-client--last-7 "AB0AB" "A") "B"))))
-
-(defun elnode-client-chunked-end-p (connection data)
-  "Has the CONNECTION with DATA got the last chunk?
-
-A side effect of this is that the CONNECTION has it's `:last5'
-property updated with the current last-5 characters.
-
-Use this function if you are writing `stream' handlers with
-`elnode-client-post'.  It can be used to detect and of stream and
-close the connection approp."
-  (let* ((last7 (process-get connection :last7))
-         (newlast7 (elnode-client--last-7 last7 data)))
-    (process-put connection :last7 newlast7)
-    (string-match "\r\n0\r\n\r\n$" newlast7)))
-
-(ert-deftest elnode-client-chunked-end-p ()
-  (let* ((data "0\r\n\r\n")
-         :fakecon)
-    (fakir-mock-process ((:last7 "blah blah\r\n"))
-        (should (elnode-client-chunked-end-p :fakecon data)))
-    (fakir-mock-process ((:last7 "blah blah\r"))
-        (should-not (elnode-client-chunked-end-p :fakecon data)))))
-
 (defun elnode-client--chunked-decode-stream (con data consumer)
   "Decode the chunked encoding stream on the process CON.
 
@@ -239,7 +201,7 @@ CON is used to store state with the process property
             (should
              (equal "hello" res)))))))
 
-(defun elnode--http-post-filter (con data callback mode)
+(defun elnode-client--http-post-filter (con data callback mode)
   "Filter function for HTTP POST.
 
 Not actually a filter function because it also receives the
@@ -327,11 +289,11 @@ Host: hostname\r
 Transfer-encoding: chunked\r\n"))
           (progn
             (should-not cb-hdr)
-            (elnode--http-post-filter con "\r\n" callback 'stream)
+            (elnode-client--http-post-filter con "\r\n" callback 'stream)
             ;; Because there is no data yet the header is not set
             (should-not cb-hdr)
             ;; Now send a valid chunk through the stream api
-            (elnode--http-post-filter
+            (elnode-client--http-post-filter
              con "b\r\nhello world\r\n" callback 'stream)
             (should cb-hdr)
             (should-not deleted)
@@ -347,7 +309,7 @@ Transfer-encoding: chunked\r\n"))
              (equal "1.1"
                     (gethash 'status-version cb-hdr)))
             ;; Now send the final one
-            (elnode--http-post-filter con "0\r\n\r\n" callback 'stream)
+            (elnode-client--http-post-filter con "0\r\n\r\n" callback 'stream)
             (should (equal cb-data "hello world"))
             (should deleted))))))
 
@@ -368,9 +330,9 @@ Host: hostname\r
 Content-length: 11\r\n"))
           (progn
             (should-not cb-hdr)
-            (elnode--http-post-filter con "\r\n" callback 'batch)
+            (elnode-client--http-post-filter con "\r\n" callback 'batch)
             (should-not cb-hdr)
-            (elnode--http-post-filter con "hello world" callback 'batch)
+            (elnode-client--http-post-filter con "hello world" callback 'batch)
             (should cb-hdr)
             (should deleted)
             (should
@@ -400,12 +362,14 @@ Transfer-encoding: chunked\r
 Host: hostname\r\n"))
           (progn
             (should-not cb-hdr)
-            (elnode--http-post-filter con "\r\n" callback 'batch)
+            (elnode-client--http-post-filter con "\r\n" callback 'batch)
             (should-not cb-hdr)
-            (elnode--http-post-filter con "b\r\nhello world" callback 'batch)
+            (elnode-client--http-post-filter
+             con "b\r\nhello world" callback 'batch)
             (should-not cb-hdr)
             (should-not cb-data)
-            (elnode--http-post-filter con "\r\n0\r\n\r\n" callback 'batch)
+            (elnode-client--http-post-filter
+             con "\r\n0\r\n\r\n" callback 'batch)
             (should cb-hdr)
             (should (equal "hello world" cb-data))
             (should deleted)
@@ -454,7 +418,7 @@ data."
      (lambda (con data)
        (let ((mode mode)
              (cb callback))
-         (elnode--http-post-filter con data cb mode))))
+         (elnode-client--http-post-filter con data cb mode))))
     ;; Send the POST
     (let ((submission (format "POST %s HTTP/1.1\r
 Host: %s\r
