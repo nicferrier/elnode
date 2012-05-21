@@ -1082,11 +1082,7 @@ would result in:
    (elnode--http-parse-status httpcon :elnode-http-version)))
 
 (defun elnode-http-send-string (httpcon str)
-  "Send the string to the HTTP connection.
-
-This is really only a placeholder function for doing transfer-encoding."
-  ;; We should check that we are actually doing chunked encoding...
-  ;; ... but for now we just presume we're doing it.
+  "Send STR to HTTPCON, doing chunked encoding."
   (elnode-error "elnode-http-send-string %s [[%s]]" httpcon (elnode-trunc str))
   (let ((len (string-bytes str)))
     (process-put httpcon :elnode-bytes-written
