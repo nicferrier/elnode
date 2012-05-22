@@ -1,20 +1,54 @@
 ;;; elnode-client.el --- elnode HTTP client -*- lexical-binding: t -*-
 
+;; Copyright (C) 2012  Nic Ferrier
+
+;; Author: Nic Ferrier <nferrier@ferrier.me.uk>
+;; Maintainer: Nic Ferrier <nferrier@ferrier.me.uk>
+;; Created: 15th May 2012
+;; Keywords: lisp, http, hypermedia
+
+;; This file is NOT part of GNU Emacs.
+
+;; This program is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+;;; Commentary:
+;;
+;; This is an HTTP client and adapters for it's use with Elnode, the
+;; Emacs HTTP server.
+;;
+;;; Source code
+;;
+;; elnode's code can be found here:
+;;   http://github.com/nicferrier/elnode
+
+;;; Style note
+;;
+;; This codes uses the Emacs style of:
+;;
+;;    elnode-client--private-function
+;;
+;; for private functions.
+
+
+;;; Code:
+
+
 (require 'elnode)
 (eval-when-compile
   (require 'cl))
 (require 'fakir)
 
-
-(defun elnode--http-post-sentinel (con evt)
-  "Sentinel for the HTTP POST."
-  (case evt
-    ("closed\n"
-     (message "http post closed"))
-    ("connection broken by peer\n"
-     (message "http client went away"))
-    (t
-     (message "some message %s" evt))))
 
 (defun elnode--http-client-header-parse (data)
   "Parse an HTTP response header.
@@ -236,7 +270,7 @@ by collecting it and then batching it to the CALLBACK."
                   (process-put con :http-header hdr)
                   ;; If we have more data call ourselves to process it
                   (when part-data
-                    (elnode--http-post-filter con part-data callback mode)))))
+                    (elnode-client--http-post-filter con part-data callback mode)))))
           ;; We have the header, read the body and call callback
           (cond
             ((equal "chunked" (gethash 'transfer-encoding header))
@@ -383,15 +417,29 @@ Host: hostname\r\n"))
              (equal "1.1"
                     (gethash 'status-version cb-hdr))))))))
 
-(defun elnode-client-http-post (host
-                                port
-                                path
-                                data
-                                type
-                                callback &optional mode)
+(defun elnode-client--http-post-sentinel (con evt)
+  "Sentinel for the HTTP POST."
+  ;; FIXME I'm sure this needs to be different - but how? it needs to
+  ;; communicate to the filter function?
+  (case evt
+    ("closed\n"
+     (message "http client post closed"))
+    ("connection broken by peer\n"
+     (message "http client went away"))
+    (t
+     (message "some message %s" evt))))
+
+(defun* elnode-client-http-post (callback
+                                 path
+                                 port
+                                 &key
+                                 (host "localhost")
+                                 data
+                                 (type "application/form-www-url-encoded")
+                                 (mode 'batch))
   "Make an HTTP POST to the HOST on PORT with PATH and send DATA.
 
-DATA is of MimeType TYPE.
+DATA is of mime-type TYPE.
 
 When the request comes back the CALLBACK is called.
 
@@ -412,7 +460,7 @@ data."
                buf
                host
                port)))
-    (set-process-sentinel con 'elnode--http-post-sentinel)
+    (set-process-sentinel con 'elnode-client--http-post-sentinel)
     (set-process-filter
      con
      (lambda (con data)
@@ -442,11 +490,6 @@ Content-length:%d\r
            (append (list default-directory) load-path)
            lisp)))
 
-(defun elnode-test-handler (httpcon)
-  "Test handler for running in child emacs."
-  (elnode-http-start httpcon "200" '("Content-type" . "text/html"))
-  (elnode-http-return httpcon "hello world"))
-
 (require 'loadhist)
 
 (defvar elnode-client--remote-handlers
@@ -473,15 +516,17 @@ Content-length:%d\r
 (defun elnode-client--handler-mapper (httpcon port)
   "Elnode handler helper to call the HTTP server on PORT."
   (elnode-client-http-post
-   "localhost"
-   port
-   "/" "" "application/x-elnode"
    (lambda (con hdr data)
      (elnode-client--handler-mapper-client con hdr data httpcon))
-   'stream))
+   "/"
+   port
+   :host "localhost"
+   :data ""
+   :type "application/x-elnode"
+   :mode 'stream))
 
-(defun elnode-client--handler-lisp (handler port to-require)
-  "Return a file with Lisp to start HANDLER on PORT.
+(defun elnode-client--handler-lisp (handler to-require)
+  "Return a file with Lisp to start HANDLER.
 
 Used by `elnode-client-handler' to construct the lisp to send.
 You're unlikely to need to override this at all, the function is
@@ -499,11 +544,12 @@ allowed."
  (setq elnode-do-init nil)
  (setq elnode--do-error-logging nil)
  (require (quote %s))
- (elnode-start (quote %s) :port %d)
+ (let ((port (elnode-find-free-service)))
+   (elnode-start (quote %s) :port port)
+   (print (format \"\\nelnode-port=%%d\\n\" port)))
  (while t (sleep-for 60)))"
                 to-require
-                (symbol-name handler)
-                port))))
+                (symbol-name handler)))))
     temp-file))
 
 (defun elnode-client-handler (handler)
@@ -515,36 +561,65 @@ specified handler and start it being served by an Elnode server.
 Returns a function which will call the handler over HTTP."
   (let* ((handler-file (symbol-file handler))
          (handler-provide '(elnode-client)) ; (file-provides handler-file))
-         (ephemeral-port 9001)
          (proc-buffer (get-buffer-create
                        (format "* %s *" (symbol-name handler))))
          (emacsrun
           (format
            "emacs -q  -batch -l %s"
-           (elnode-client--handler-lisp handler
-                                        ephemeral-port
-                                        (car handler-provide))))
+           (elnode-client--handler-lisp
+            handler
+            (car handler-provide))))
          (proc
           (start-process-shell-command "elnode-client" proc-buffer emacsrun)))
     ;; Store the new server
-    (puthash ephemeral-port proc elnode-client--remote-handlers)
+    (puthash handler proc elnode-client--remote-handlers)
+    ;; Put a filter on to capture the port we're starting on
+    (set-process-filter
+     proc
+     (lambda (proc data)
+       (with-current-buffer (process-buffer proc)
+         (save-excursion
+           (goto-char (point-max))
+           (insert data)
+           (when (re-search-backward "^elnode-port=\\([0-9]+\\)$" nil t)
+             (process-put proc :port (match-string 1)))))))
     ;; Make a handler to call the server
     (process-put
      proc :handler
      (lambda (httpcon)
-       (elnode-client--handler-mapper httpcon ephemeral-port)))
+       (while (not (process-get proc :port))
+         (message "child server not allocated port yet")
+         (sit-for 1))
+       (let ((ephemeral-port (process-get proc :port)))
+         (elnode-client--handler-mapper httpcon ephemeral-port))))
     (process-get proc :handler)))
 
-(defun elnode-client-call-handler (httpcon port handler)
-  "Call the handler serving PORT with HANDLER.
+(defun elnode-client-make-handler (handler)
+  "Make an elnode handler that is a proxy for HANDLER.
 
-The process serving HANDLER is get or created."
-  (flet ((get-or-create-process (handler)
-           (let ((proc (gethash port elnode-client--remote-handlers)))
-             (if proc
-                 (process-get proc :handler)
-                 (elnode-client-handler handler)))))
-    (funcall (get-or-create-process handler) httpcon)))
+HANDLER runs in a child emacs, listening to HTTP on some port.
+
+The handler returned from here makes an HTTP client connection to
+the child Elnode's port and maps the resulting HTTP response."
+  (let ((handler (elnode-client-handler handler)))
+    (lambda (httpcon)
+      (funcall handler httpcon))))
+
+(defun elnode-test-handler (httpcon)
+  "Test handler for running in child emacs."
+  (elnode-http-start httpcon "200" '("Content-type" . "text/html"))
+  (elnode-http-return httpcon "hello world"))
+
+(defun elnode-start-proxy (handler port)
+  "Start a proxy server for HANDLER hosted on localhost:PORT.
+
+Starts HANDLER on a child."
+  (interactive
+   (let ((handler (completing-read "Handler function: "
+                                   obarray 'fboundp t nil nil))
+         (port (read-number "Port: " 9001)))
+     (list (intern handler) port)))
+  (elnode-start (elnode-client-make-handler handler) :port port))
 
 (provide 'elnode-client)
 
