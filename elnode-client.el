@@ -270,7 +270,8 @@ by collecting it and then batching it to the CALLBACK."
                   (process-put con :http-header hdr)
                   ;; If we have more data call ourselves to process it
                   (when part-data
-                    (elnode-client--http-post-filter con part-data callback mode)))))
+                    (elnode-client--http-post-filter
+                     con part-data callback mode)))))
           ;; We have the header, read the body and call callback
           (cond
             ((equal "chunked" (gethash 'transfer-encoding header))
@@ -417,6 +418,52 @@ Host: hostname\r\n"))
              (equal "1.1"
                     (gethash 'status-version cb-hdr))))))))
 
+(defun elnode-client--key-value-encode (key value)
+  "Encode a KEY and VALUE for url encoding."
+  (cond
+    ((or
+      (numberp value)
+      (stringp value))
+     (format
+      "%s=%s"
+      (url-hexify-string (format "%s" key))
+      (url-hexify-string (format "%s" value))))
+    (t
+     (format "%s" (url-hexify-string (format "%s" key))))))
+
+(defun elnode-client--to-query-string (object)
+  "Convert OBJECT to an HTTP query string.
+
+If OBJECT is of type `hash-table' then the keys and values of the
+hash are iterated into the string depending on their types.
+
+Keys with `number' and `string' values are encoded as
+\"key=value\" in the resulting query.
+
+Keys with a boolean value (or any other value not already
+described) are encoded just as \"key\"."
+  (cond
+    ((hash-table-p object)
+     (mapconcat
+      'identity
+      (let (result)
+        (maphash
+         (lambda (key value)
+           (setq result
+                 (cons
+                  (elnode-client--key-value-encode key value)
+                  result)))
+         object)
+        (reverse result))
+      "&"))))
+
+(ert-deftest elnode-client--to-query-string ()
+  "Test query string making."
+  (let ((t1 #s(hash-table size 5 data (a 1 b 2 c 3 d "str" e t))))
+    (should
+     (equal "a=1&b=2&c=3&d=str&e"
+            (elnode-client--to-query-string t1)))))
+
 (defun elnode-client--http-post-sentinel (con evt)
   "Sentinel for the HTTP POST."
   ;; FIXME I'm sure this needs to be different - but how? it needs to
@@ -435,11 +482,17 @@ Host: hostname\r\n"))
                                  &key
                                  (host "localhost")
                                  data
-                                 (type "application/form-www-url-encoded")
+                                 (mime-type 'application/form-www-url-encoded)
                                  (mode 'batch))
   "Make an HTTP POST to the HOST on PORT with PATH and send DATA.
 
-DATA is of mime-type TYPE.
+DATA is of MIME-TYPE.  We try to interpret DATA and MIME-TYPE
+usefully:
+
+If DATA is a `hash-table' or the MIME-TYPE is
+`application/form-www-url-encoded' then
+`elnode-client--to-query-string' is used to to format the POST
+body.
 
 When the request comes back the CALLBACK is called.
 
@@ -467,15 +520,51 @@ data."
        (let ((mode mode)
              (cb callback))
          (elnode-client--http-post-filter con data cb mode))))
-    ;; Send the POST
-    (let ((submission (format "POST %s HTTP/1.1\r
+    ;; Send the request
+    (let* ((to-send
+            (cond
+              ((or (eq (if (symbolp mime-type)
+                           mime-type
+                           (intern mime-type))
+                       'application/form-www-url-encoded)
+                   (hash-table-p data))
+               (elnode-client--to-query-string data))))
+           (submission (format "POST %s HTTP/1.1\r
 Host: %s\r
 Content-type: %s\r
 Content-length:%d\r
 \r
-%s" path host type (length data) data)))
-          (process-send-string con submission))
+%s" path host mime-type (length to-send) to-send)))
+      (process-send-string con submission))
     con))
+
+(ert-deftest elnode-client-http-post ()
+  "Do a full test of the client using an elnode server."
+  (let* (method
+         path
+         params
+         the-end
+         (port (elnode-find-free-service)))
+    ;; Start a server on the port
+    (elnode-start
+     (lambda (httpcon)
+       (setq method (elnode-http-method httpcon))
+       (setq path (elnode-http-pathinfo httpcon))
+       (setq params (elnode-http-params httpcon))
+       (elnode-http-start httpcon 200 '(Content-type . "text/plain"))
+       (elnode-http-return httpcon "hello world!"))
+     :port port)
+    (elnode-client-http-post
+     (lambda (con header data)
+       (setq the-end t)
+       (elnode-stop port))
+     "/"
+     port)
+    ;; Hang till we finish.
+    (while (not the-end)
+      (sit-for 0.1))
+    ;; Now test the stuff we found.
+    (should (equal "POST" method))))
 
 (defun elnode-client--load-path-ize (lisp)
   "Wrap LISP in the current load-path."
@@ -561,8 +650,9 @@ specified handler and start it being served by an Elnode server.
 Returns a function which will call the handler over HTTP."
   (let* ((handler-file (symbol-file handler))
          (handler-provide '(elnode-client)) ; (file-provides handler-file))
-         (proc-buffer (get-buffer-create
-                       (format "* %s *" (symbol-name handler))))
+         (proc-buffer
+          (get-buffer-create
+           (format "* %s *" (symbol-name handler))))
          (emacsrun
           (format
            "emacs -q  -batch -l %s"
