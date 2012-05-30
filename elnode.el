@@ -503,6 +503,12 @@ Does any necessary encoding."
 Does any necessary encoding."
     (elnode--process-send-eof con)))
 
+(defun elnode--handler-call (handler process)
+  "Simple function to wrap calling the HANDLER."
+  (elnode-error "filter: calling handler on %s" process)
+  (funcall handler process)
+  (elnode-error "filter: handler returned on %s" process))
+
 (defun elnode--filter (process data)
   "Filtering DATA sent from the client PROCESS..
 
@@ -556,10 +562,7 @@ port number of the connection."
              ;; This is where we call the user handler
              ;; TODO: this needs error protection so we can return an error?
              (condition-case signal-value
-                 (progn
-                   (elnode-error "filter: calling handler on %s" process)
-                   (funcall handler process)
-                   (elnode-error "filter: handler returned on %s" process))
+                 (elnode--handler-call handler process)
                ('elnode-defer
                 (elnode-error "filter: defer caught on %s" process)
                 (case (elnode--get-server-prop process :elnode-defer-mode)
@@ -675,7 +678,7 @@ For header and parameter names, strings MUST be used currently."
             (elnode--filter http-connection hdrtext)
             ;; Now we sleep till the-end is true
             (while (not the-end)
-              (sleep-for 0 10))
+              (sit-for 0.1))
             (when the-end
               (list
                :result-data
