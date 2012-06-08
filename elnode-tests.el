@@ -294,28 +294,39 @@ again."
 An HTTP request with an incomplete body is setup and tested, then
 we finish the request (fill out the content to content-length)
 and then test again."
-  (fakir-mock-process
-    ((:buffer
-      (elnode--http-make-hdr
-       'get "/"
-       '(host . "localhost")
-       '(user-agent . "test-agent")
-       `(content-length . ,(format "%d" (length "this is not finished")))
-       '(body . "this is not fin"))))
-    ;; Now parse
-    (should
-     (equal 'content
-            (catch 'elnode-parse-http
-              (elnode--http-parse nil))))
-    ;; Now put the rest of the text in the buffer
-    (with-current-buffer (process-buffer nil)
-      (goto-char (point-max))
-      (insert "ished"))
-    ;; And test again
-    (should
-     (equal 'done
-            (catch 'elnode-parse-http
-              (elnode--http-parse nil))))))
+  (let ((hdr
+         (elnode--http-make-hdr
+          'get "/"
+          '(host . "localhost")
+          '(user-agent . "test-agent")
+          `(content-length . ,(format "%d" (length "this is not finished")))
+          '(body . "this is not fin"))))
+    (fakir-mock-process
+        ((:buffer hdr))
+        ;; Now parse
+        (should
+         (equal 'content
+                (catch 'elnode-parse-http
+                  (elnode--http-parse nil))))
+      ;; Now put the rest of the text in the buffer
+      (with-current-buffer (process-buffer nil)
+        (goto-char (point-max))
+        (insert "ished"))
+      ;; And test again
+      (should
+       (equal 'done
+              (catch 'elnode-parse-http
+                (elnode--http-parse nil)))))))
+
+(defun elnode-test-handler (httpcon)
+  "A simple handler for testing `elnode-test-call'.
+
+The text spat out is tested, so is the status."
+  (elnode-http-start httpcon 200 '("Content-Type" . "text/html"))
+  (message "in special test handler")
+  (elnode-http-return
+   httpcon
+   "<html><body><h1>Hello World</h1></body></html>"))
 
 (ert-deftest elnode-test-call-page ()
   (with-elnode-mock-server
@@ -667,17 +678,17 @@ right thing."
                     :filename "page.creole"
                     :directory "/home/elnode/wiki"
                     :mtime "Mon, Feb 27 2012 22:10:21 GMT")
-    (fakir-mock-process
-      ((:elnode-http-header-syms
-        '((if-modified-since . "Mon, Feb 27 2012 22:10:24 GMT"))))
-      (should
-       (elnode-cached-p :httpcon "/home/elnode/wiki/page.creole")))
+      (fakir-mock-process
+          ((:elnode-http-header-syms
+            '((if-modified-since . "Mon, Feb 27 2012 22:10:24 GMT"))))
+          (should
+           (elnode-cached-p :httpcon "/home/elnode/wiki/page.creole")))
     ;; Test the case where there is no header
     (fakir-mock-process
-      ((:elnode-http-header-syms
-        '((user-agent . "Elnode test client"))))
-      (should-not
-       (elnode-cached-p :httpcon "/home/elnode/wiki/page.creole")))))
+        ((:elnode-http-header-syms
+          '((user-agent . "Elnode test client"))))
+        (should-not
+         (elnode-cached-p :httpcon "/home/elnode/wiki/page.creole")))))
 
 (ert-deftest elnode-docroot-for ()
   "Test the docroot protection macro."

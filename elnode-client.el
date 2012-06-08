@@ -478,13 +478,15 @@ described) are encoded just as \"key\"."
 
 (defun* elnode-client-http-post (callback
                                  path
-                                 port
                                  &key
                                  (host "localhost")
+                                 (port 80)
                                  data
                                  (mime-type 'application/form-www-url-encoded)
                                  (mode 'batch))
   "Make an HTTP POST to the HOST on PORT with PATH and send DATA.
+
+PORT is 80 by default.
 
 DATA is of MIME-TYPE.  We try to interpret DATA and MIME-TYPE
 usefully:
@@ -539,7 +541,9 @@ Content-length:%d\r
     con))
 
 (ert-deftest elnode-client-http-post ()
-  "Do a full test of the client using an elnode server."
+  "Do a full test of the client using an elnode server.
+
+This tests the parameter passing by having an elnode handler "
   (let* (method
          path
          params
@@ -554,17 +558,25 @@ Content-length:%d\r
        (elnode-http-start httpcon 200 '(Content-type . "text/plain"))
        (elnode-http-return httpcon "hello world!"))
      :port port)
+    ;; POST some parameters to the server
     (elnode-client-http-post
      (lambda (con header data)
        (setq the-end t)
        (elnode-stop port))
      "/"
-     port)
-    ;; Hang till we finish.
+     :port port
+     :data #s(hash-table size 5 data ("a" 10 "b" 20)))
+    ;; Hang till the client callback finishes
     (while (not the-end)
       (sit-for 0.1))
-    ;; Now test the stuff we found.
-    (should (equal "POST" method))))
+    ;; Now test the data that was POSTed
+    (should (equal "POST" method))
+    (should
+     (equal
+      '(("a" . "10")("b" . "20"))
+      (sort params
+            (lambda (a b)
+              (string-lessp (car a) (car b))))))))
 
 (defun elnode-client--load-path-ize (lisp)
   "Wrap LISP in the current load-path."
@@ -695,7 +707,7 @@ the child Elnode's port and maps the resulting HTTP response."
     (lambda (httpcon)
       (funcall handler httpcon))))
 
-(defun elnode-test-handler (httpcon)
+(defun elnode-client-test-handler (httpcon)
   "Test handler for running in child emacs."
   (elnode-http-start httpcon "200" '("Content-type" . "text/html"))
   (elnode-http-return httpcon "hello world"))

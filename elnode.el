@@ -700,15 +700,6 @@ For header and parameter names, strings MUST be used currently."
                 http-connection
                 :elnode-httpresponse-header)))))))))
 
-(defun elnode-test-handler (httpcon)
-  "A simple handler for testing `elnode-test-call'.
-
-The text spat out is tested, so is the status."
-  (elnode-http-start httpcon 200 '("Content-Type" . "text/html"))
-  (elnode-http-return
-   httpcon
-   "<html><body><h1>Hello World</h1></body></html>"))
-
 (defun elnode--log-fn (server con msg)
   "Log function for elnode.
 
@@ -1160,7 +1151,10 @@ header names, against values which should be strings."
   "Start the http response on the specified http connection.
 
 HTTPCON is the HTTP connection being handled.
-STATUS is the HTTP status, eg: 200 or 404
+
+STATUS is the HTTP status, eg: 200 or 404; integers or strings
+are acceptable types.
+
 HEADER is a sequence of (header-name . value) pairs.
 
 For example:
@@ -1173,17 +1167,20 @@ data.  This is done mainly for testing infrastructure."
       (elnode-error "Http already started on %s" httpcon)
     ;; Send the header
     (elnode-error "starting HTTP response on %s" httpcon)
-    (let ((header-alist (cons '("Transfer-encoding" . "chunked") header)))
+    (let ((header-alist (cons '("Transfer-encoding" . "chunked") header))
+          (status-code (if (stringp status)
+                           (string-to-number status)
+                           status)))
       ;; Store the meta data about the response.
-      (process-put httpcon :elnode-httpresponse-status status)
+      (process-put httpcon :elnode-httpresponse-status status-code)
       (process-put httpcon :elnode-httpresponse-header header)
       (process-send-string
        httpcon
        (format
-        "HTTP/1.1 %s %s\r\n%s\r\n"
-        status
+        "HTTP/1.1 %d %s\r\n%s\r\n"
+        status-code
         ;; The status text
-        (aget elnode-http-codes-alist status)
+        (aget elnode-http-codes-alist status-code)
         ;; The header
         (or
          (elnode--http-result-header header)
