@@ -213,6 +213,68 @@ provided. Otherwise it will just error."
     (elnode-send-500 httpcon "The Emacs feature 'creole is required.")))
 
 
+;; Tests
+
+(ert-deftest elnode-wiki-worker ()
+  "Test the worker elisp.
+
+Basically this is the same test as in the creole library but done
+via a child process."
+  (let* ((page "~/creole/index.creole")
+         (elnode--do-error-logging nil)
+         (outbuf (get-buffer-create
+                  (generate-new-buffer-name
+                   "elnode-worker-wiki-test"))))
+    (elnode--wiki-call
+     outbuf
+     "= A Creole file ="
+     page)
+    ;; What are our assertions??
+    (should
+     (let ((res
+            (with-current-buffer outbuf
+              (goto-char (point-min))
+              (re-search-forward
+               "<div id='top'></div><h1>A Creole file</h1>"
+               nil
+               t))))
+       (kill-buffer outbuf)
+       res))))
+
+(ert-deftest elnode-wiki-page ()
+  "Full stack Wiki test."
+  (with-elnode-mock-server
+    ;; The dispatcher function
+    (lambda (httpcon)
+      (elnode-hostpath-dispatcher
+       httpcon
+       '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver))))
+    ;; Setup the the Creole file handler mocking.
+    (flet
+        ((elnode--worker-lisp-helper (child-lisp)
+           `((progn
+               (require 'creole)
+               (require 'cl)
+               (flet ((creole--get-file (filename)
+                        (let ((buf (get-buffer-create "wikibuf")))
+                          (with-current-buffer buf
+                            (insert "= A Creole file ="))
+                          buf)))
+                 ,@child-lisp)))))
+      ;; Now the actual test
+      (fakir-mock-file (fakir-file
+                        :filename "test.creole"
+                        :directory "/home/elnode/wiki")
+        (let* ((elnode--do-error-logging nil)
+               (elnode--do-access-logging-on-dispatch nil)
+               (r (elnode-test-call "/wiki/test.creole")))
+          (elnode-error "result -> %s" r)
+          (message "elnode result data: %s" (plist-get r :result-string))
+          (should
+           (equal
+            (plist-get r :status)
+            200)))))))
+
 (provide 'elnode-wiki)
 
 ;;; elnode-wiki.el ends here
