@@ -786,6 +786,33 @@ right thing."
        ;; Now kill the buffer that was opened to serve the file.
        (kill-buffer "blah.html")))))
 
+(ert-deftest elnode--wrap-handler ()
+  "Test wrapping a handler held in a symbol with another."
+  (let ((wrapped-handler-counter 0)
+        (wrapping-handler-counter 0))
+    ;; Define the handler we'll wrap
+    (flet ((wrap-test-handler (httpcon)
+             (incf wrapped-handler-counter)))
+      (unwind-protect
+           (progn
+             ;; Wrap that handler
+             (elnode--wrap-handler
+              'wrap-test-handler
+              "testit/$"
+              (lambda (httpcon)
+                (incf wrapping-handler-counter)))
+             (with-elnode-mock-server 'wrap-test-handler
+                 (let ((r (elnode-test-call "/something/")))
+                   (should (equal wrapped-handler-counter 1))
+                   (should (equal wrapping-handler-counter 0)))
+               (let ((r (elnode-test-call "/testit/")))
+                 (should (equal wrapped-handler-counter 1))
+                 (should (equal wrapping-handler-counter 1)))))
+        ;; We need to clear the symbol and it's plist whenever the
+        ;; test runs, otherwise we keep state in the symbol.
+        (setplist 'wrap-test-handler nil)
+        (unintern 'wrap-test-handler)))))
+
 (provide 'elnode-tests)
 
 ;;; elnode-tests.el ends here

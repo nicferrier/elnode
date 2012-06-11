@@ -1871,10 +1871,8 @@ directed at the same http connection."
     (set-process-sentinel p 'elnode--child-process-sentinel)
     (elnode-error "Elnode-child-process init %s" httpcon)))
 
-;; Authentication handlers
 
-(defun elnode-auth (httpcon)
-  )
+;; File management
 
 (defcustom elnode-send-file-program "/bin/cat"
   "The program to use for sending files.
@@ -2290,6 +2288,34 @@ HTTPCON is the HTTP connection to the user agent."
    elnode-webserver-extra-mimetypes))
 
 
+;;; Elnode auth stuff
+
+(defun elnode--wrap-handler (handler-symbol wrapping-path wrapping-handler)
+  "Wrap the handler attached to HANDLER-SYMBOL with another handler.
+
+The WRAPPING-PATH is mapped to the WRAPPING-HANDLER before the
+wrapped handler is called.
+
+A single WRAPPING-PATH may only wrap a handler once.  Any
+subsequent attempt to wrap the same HANDLER-SYMBOL with the same
+WRAPPING-PATH will result in reinitialization.  This is designed
+to be consistent with Lisp evaluation semantics."
+  (let* ((nic1 (symbol-plist handler-symbol))
+         (sym-path (intern wrapping-path))
+         (wrapped-func (get handler-symbol sym-path))
+         (current-handler (if (and wrapped-func
+                                   (functionp wrapped-func))
+                              wrapped-func
+                              (symbol-function handler-symbol))))
+    ;; Store the current handler which is the wrapped func
+    (put handler-symbol sym-path current-handler)
+    ;; Set the function for the symbol to one wrapping the func
+    (fset handler-symbol
+          (lambda (httpcon)
+            (elnode-dispatcher
+             httpcon
+             (list (cons wrapping-path wrapping-handler)
+                   (cons "\\(.*\\)" current-handler)))))))
 
 ;;; Main customization stuff
 
