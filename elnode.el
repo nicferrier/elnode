@@ -2300,8 +2300,7 @@ A single WRAPPING-PATH may only wrap a handler once.  Any
 subsequent attempt to wrap the same HANDLER-SYMBOL with the same
 WRAPPING-PATH will result in reinitialization.  This is designed
 to be consistent with Lisp evaluation semantics."
-  (let* ((nic1 (symbol-plist handler-symbol))
-         (sym-path (intern wrapping-path))
+  (let* ((sym-path (intern wrapping-path))
          (wrapped-func (get handler-symbol sym-path))
          (current-handler (if (and wrapped-func
                                    (functionp wrapped-func))
