@@ -1453,7 +1453,7 @@ matched."
         httpcon
         pathinfo
         url-mapping-table
-        function-404)))))
+        :function-404 function-404)))))
 
 (defun* elnode-hostpath-dispatcher (httpcon
                                    hostpath-mapping-table
