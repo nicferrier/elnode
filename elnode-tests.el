@@ -530,6 +530,23 @@ Content-Type: text/html\r
       "Transfer-Encoding: chunked\r
 "))))
 
+(ert-deftest elnode-http-header-set ()
+  "Test the premature setting of HTTP headers."
+  (fakir-mock-process
+      ()
+      (should
+       (equal nil
+              (process-get :httpcon :elnode-headers-to-set)))
+    (elnode-http-header-set :httpcon "Content-Type" "text/html")
+    (elnode-http-header-set
+     :httpcon
+     (elnode-http-cookie-make "mycookie" "value"))
+    (should
+       (equal '(("Content-Type" . "text/html")
+                ("Set-Cookie" . "mycookie=value;"))
+              (process-get :httpcon :elnode-headers-to-set)))))
+
+
 
 (ert-deftest elnode-send-json ()
   "Test sending JSON."
