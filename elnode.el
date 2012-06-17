@@ -1137,26 +1137,94 @@ would result in:
               (cdr p)))
   "HTTP codes with string keys and integer keys.")
 
+
+(defun* elnode-http-cookie-make (name data &key expiry path)
+  "Make a set-cookie header pair from NAME and DATA.
+
+DATA should be a string to be used as the value of the cookie.
+
+Other key values are standard cookie attributes.
+
+Use this with `elnode-http-start' to make cookie headers:
+
+ (elnode-http-start
+    httpcon 200
+    '(content-type . \"text/html\")
+    (elnode-http-cookie-make \"pi\" 3.14579)
+    (elnode-http-cookie-make \"e\" 1.59
+       :expiry \"Mon, Feb 27 2012 22:10:21 GMT;\")
+
+This will send two Set-Cookie headers setting the cookies 'pi'
+and 'e'.
+
+The return value is a cons pair."
+  (cons
+   "Set-Cookie"
+   (format "%s=%s;%s"
+           name
+           data
+           (if (not (or expiry
+                        path))
+               ""
+               (loop for p in `((expires . ,expiry)
+                                (path . ,path))
+                  if (cdr p)
+                  concat
+                    (format
+                     " %s=%s;"
+                     (capitalize (symbol-name (car p)))
+                     (cdr p)))))))
+
+(defun elnode-http-header-set (httpcon header &optional value)
+  "Sets the HEADER for later processing.
+
+HEADER may be a pair of `name' and `value' or it may just be a
+String, or a Symbol in which case the VALUE must be specified.
+
+If HEADER is a pair and VALUE is also specified then VALUE is
+ignored.
+
+When the HTTP response is started any set headers will be merged
+with any requested headers and sent.
+
+If the response has been started it is an error to try to set a
+header.  This function will log the error and return `nil'.
+
+See `elnode-http-start'."
+  (if (process-get httpcon :elnode-http-started)
+      (elnode-error "can't set header, HTTP already started on %s" httpcon)
+      (let ((headers (process-get httpcon :elnode-headers-to-set)))
+        (process-put
+         httpcon
+         :elnode-headers-to-set
+         (append headers
+                 (list (if (consp header)
+                           header
+                           (cons header value))))))))
+
 (defun elnode--http-result-header (hdr-alist)
   "Turn the HDR-ALIST into a result header string.
 
 The HDR-ALIST is an alist of symbol or string keys which are
 header names, against values which should be strings."
-  (loop
-   for p in (append (list (cons 'transfer-encoding "chunked")) hdr-alist)
-   concat
-   (format
-    "%s: %s\r\n"
-    (let ((hname (car p)))
-      (capitalize
-       (cond
-        ((symbolp hname)
-         (symbol-name hname))
-        ((stringp hname)
-         hname)
-        (t
-         (error "unsupported header type")))))
-    (cdr p))))
+  (let ((hdr-pairs
+         (append
+          (list (cons 'transfer-encoding "chunked"))
+          hdr-alist)))
+    (loop for p in hdr-pairs
+       concat
+         (format
+          "%s: %s\r\n"
+          (let ((hname (car p)))
+            (capitalize
+             (cond
+               ((symbolp hname)
+                (symbol-name hname))
+               ((stringp hname)
+                hname)
+               (t
+                (error "unsupported header type")))))
+          (cdr p)))))
 
 (defun elnode-http-start (httpcon status &rest header)
   "Start the http response on the specified http connection.
@@ -1166,7 +1234,7 @@ HTTPCON is the HTTP connection being handled.
 STATUS is the HTTP status, eg: 200 or 404; integers or strings
 are acceptable types.
 
-HEADER is a sequence of (header-name . value) pairs.
+HEADER is a sequence of (`header-name' . `value') pairs.
 
 For example:
 
@@ -1178,13 +1246,17 @@ data.  This is done mainly for testing infrastructure."
       (elnode-error "Http already started on %s" httpcon)
     ;; Send the header
     (elnode-error "starting HTTP response on %s" httpcon)
-    (let ((header-alist (cons '("Transfer-encoding" . "chunked") header))
+    (let ((header-alist
+           (append
+            (process-get :httpcon :elnode-headers-to-set)
+            (list (cons "Transfer-encoding" "chunked"))
+            header))
           (status-code (if (stringp status)
                            (string-to-number status)
                            status)))
       ;; Store the meta data about the response.
       (process-put httpcon :elnode-httpresponse-status status-code)
-      (process-put httpcon :elnode-httpresponse-header header)
+      (process-put httpcon :elnode-httpresponse-header header-alist)
       (process-send-string
        httpcon
        (format
@@ -1194,7 +1266,7 @@ data.  This is done mainly for testing infrastructure."
         (aget elnode-http-codes-alist status-code)
         ;; The header
         (or
-         (elnode--http-result-header header)
+         (elnode--http-result-header header-alist)
          "\r\n")))
       (process-put httpcon :elnode-http-started 't))))
 

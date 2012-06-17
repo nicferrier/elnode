@@ -318,6 +318,25 @@ and then test again."
               (catch 'elnode-parse-http
                 (elnode--http-parse nil)))))))
 
+
+(ert-deftest elnode-http-start ()
+  "Test starting a response.
+
+Especially tests the mix of header setting techniques."
+  (fakir-mock-process
+      ()
+      (elnode-http-header-set :httpcon "Content-Type" "text/html")
+    (elnode-http-header-set :httpcon "Accept" "application/javascript")
+    (elnode-http-start :httpcon 200 '("Content-Type" . "text/plain"))
+    (with-current-buffer (process-buffer :httpcon)
+      (goto-char (point-min))
+      (should
+       (re-search-forward "^Content-Type: text/html\r\n" nil t))
+      (goto-char (point-min))
+      (should
+       (re-search-forward "^Accept: application/javascript\r\n" nil t)))))
+
+
 (defun elnode-test-handler (httpcon)
   "A simple handler for testing `elnode-test-call'.
 
@@ -378,28 +397,54 @@ The text spat out is tested, so is the status."
      (equal "Mon, Feb 27 2012 22:10:21 GMT"
             (elnode-http-header :httpcon 'if-modified-since)))))
 
-
 (ert-deftest elnode-test-cookie ()
   "Test the cookie retrieval"
-  (flet (;; Define this so that the cookie list is not retrieved
-         (process-get (proc key)
-           nil)
-         ;; Just define it to do nothing
-         (process-put (proc key data)
-           nil)
-         ;; Get an example cookie header
-         (elnode-http-header (httpcon name)
-           "csrf=213u21321321412nsfnwlv; username=nicferrier"))
-    (let ((con ""))
-      (should (equal
-               (pp-to-string (elnode-http-cookie con "username"))
-               "((\"username\" . \"nicferrier\"))\n"))
-      (should (equal
-               (cdr (assoc-string
-                     "username"
-                     (elnode-http-cookie con "username")))
-               "nicferrier")))))
+  (fakir-mock-process
+      ((:elnode-http-header
+        '(("Cookie" . "csrf=213u21321321412nsfnwlv; username=nicferrier"))))
+      (should
+       (equal
+        "((\"username\" . \"nicferrier\"))\n"
+        (pp-to-string (elnode-http-cookie :httpcon "username"))))
+    (should
+     (equal
+      "nicferrier"
+      (cdr (assoc-string
+            "username"
+            (elnode-http-cookie :httpcon "username")))))))
 
+(ert-deftest elnode-test-cookie-list ()
+  "Test that a cookie list property is set on the connection.
+
+Cookie lists are good fake up values for higher abstraction
+testing code so we specifically test that they work."
+  (fakir-mock-process
+      ;; Define a cookie with a faked cookie list
+      ((:elnode-http-cookie-list '(("name" . "value"))))
+      (should
+       (equal
+        '("name" . "value")
+        (elnode-http-cookie :httpcon "name"))))
+  ;; Not sure about what the property should contain here...
+  (fakir-mock-process
+      ((:elnode-http-header
+        '(("Cookie" . "name=value"))))
+      (elnode-http-cookie :httpcon "name")
+      (should
+       (equal
+        ;; ... is this really right? a list of a list of a list???
+        '((("name" . "value")))
+        (process-get :httpcon :elnode-http-cookie-list)))))
+
+(ert-deftest elnode-http-cookie-make ()
+  "Test the cookie header maker."
+  ;; Expiry using a string date
+  (should
+   (equal
+    '("Set-Cookie" . "mycookie=101; Expires=Mon, Feb 27 2012 22:10:21 GMT;")
+    (elnode-http-cookie-make
+     "mycookie" 101
+     :expiry "Mon, Feb 27 2012 22:10:21 GMT"))))
 
 (ert-deftest elnode-test-http-get-params ()
   "Test that the params are ok if they are on the status line.
