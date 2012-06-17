@@ -898,25 +898,36 @@ currently supported conversions are:
 
 
 (defun elnode-http-cookie (httpcon name)
-  "Return the cookie value for HTTPCON specified by NAME."
-  (let ((cookie-list (or
-                      (process-get httpcon :elnode-http-coookie-list)
-                      ;; Split out the cookies
-                      (let* ((cookie-hdr (elnode-http-header httpcon "Cookie"))
-                             (parts (split-string cookie-hdr ";")))
-                        (let ((lst
-                               (mapcar
-                                (lambda (s)
-                                  (url-parse-args
-                                   (if (string-match "[ \t]*\\(.*\\)[ \t]*$" s)
-                                       (replace-match "\\1" nil nil s)
-                                     s)))
-                                parts)))
-                          (process-put httpcon :elnode-http-cookie-list lst)
-                          lst)))))
+  "Return the cookie value for HTTPCON specified by NAME.
+
+The cookie is an association list where one of the elements is
+the named property; for example:
+
+  (elnode-http-cookie httpcon \"my-cookie\")
+  => '((\"my-cookie\" . \"value\")
+       (\"expires\" . \"Tue 4 Feb 2012 09:15:00\"))
+
+The other pairs in the association list are the other properties
+of the cookie."
+  (let ((cookie-list
+         (or
+          (process-get httpcon :elnode-http-cookie-list)
+          ;; Split out the cookies
+          (let* ((cookie-hdr (elnode-http-header httpcon "Cookie"))
+                 (parts (split-string cookie-hdr ";")))
+            (let ((lst
+                   (mapcar
+                    (lambda (s)
+                      (url-parse-args
+                       (if (string-match "[ \t]*\\(.*\\)[ \t]*$" s)
+                           (replace-match "\\1" nil nil s)
+                           s)))
+                    parts)))
+              (process-put httpcon :elnode-http-cookie-list lst)
+              lst)))))
     (loop for cookie in cookie-list
-          do (if (assoc-string name cookie)
-                 (return cookie)))))
+       do (if (assoc-string name cookie)
+              (return cookie)))))
 
 
 (defun elnode--http-parse-status (httpcon &optional property)
