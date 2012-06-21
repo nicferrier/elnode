@@ -212,7 +212,12 @@ by elnode iteslf."
 
 (progn
   ;; Sets up the elnode defer signal
-  (put 'elnode-defer 'error-conditions '(elnode-defer)))
+  (put 'elnode-defer
+       'error-conditions
+       '(error elnode elnode-defer))
+  (put 'elnode-defer
+       'error-message
+       "Elnode handler processing defered"))
 
 (defvar elnode--deferred '()
   "List of deferred pairs: (socket . handler).")
