@@ -328,6 +328,7 @@ Especially tests the mix of header setting techniques."
       (elnode-http-header-set :httpcon "Content-Type" "text/html")
     (elnode-http-header-set :httpcon "Accept" "application/javascript")
     (elnode-http-start :httpcon 200 '("Content-Type" . "text/plain"))
+    ;; Test that we have the correct text in the fake process buffer
     (with-current-buffer (process-buffer :httpcon)
       (goto-char (point-min))
       (should
