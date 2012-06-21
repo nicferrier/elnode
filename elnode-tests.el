@@ -400,6 +400,13 @@ The text spat out is tested, so is the status."
 
 (ert-deftest elnode-test-cookie ()
   "Test the cookie retrieval"
+  ;; First test no cookie header
+  (fakir-mock-process
+      ((:elnode-http-header
+        '(("Referer" . "http://somehost.example/com"))))
+      (should-not
+       (elnode-http-cookie :httpcon "username")))
+  ;; Now do we have a cookie?
   (fakir-mock-process
       ((:elnode-http-header
         '(("Cookie" . "csrf=213u21321321412nsfnwlv; username=nicferrier"))))

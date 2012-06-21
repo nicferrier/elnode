@@ -914,7 +914,7 @@ of the cookie."
           (process-get httpcon :elnode-http-cookie-list)
           ;; Split out the cookies
           (let* ((cookie-hdr (elnode-http-header httpcon "Cookie"))
-                 (parts (split-string cookie-hdr ";")))
+                 (parts (split-string (or cookie-hdr "") ";")))
             (let ((lst
                    (mapcar
                     (lambda (s)
