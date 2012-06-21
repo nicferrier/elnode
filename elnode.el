@@ -2407,6 +2407,209 @@ to be consistent with Lisp evaluation semantics."
              (list (cons wrapping-path wrapping-handler)
                    (cons "\\(.*\\)" current-handler)))))))
 
+(defvar elnode-auth-db (make-hash-table :test 'equal)
+  "Authentication database.
+
+This is the data structure storing usernames and hashed
+passwords.")
+
+(defvar elnode-secret-key "secret"
+  "Secret key used to hash secrets like passwords.")
+
+(defun elnode--auth-make-hash (username password)
+  "Hash the secret key and the USERNAME and PASSWORD."
+  (sha1 (format "%s:%s:%s"
+                elnode-secret-key
+                username
+                password)))
+
+(defun elnode-auth-user-p (username password)
+  "Is the user in the `elnode-auth-db'?
+
+The password is stored in the db hashed keyed by the USERNAME,
+this looks up and tests the hash."
+  (let ((token (elnode--auth-make-hash username password)))
+    (equal token (gethash username elnode-auth-db))))
+
+(defvar elnode-loggedin-db (make-hash-table :test 'equal)
+  "Stores logins; authentication sessions.")
+
+(progn
+  ;; Sets up the elnode auth errors
+  (put 'elnode-auth-credentials
+       'error-conditions
+       '(error elnode elnode-auth elnode-auth-credentials))
+  (put 'elnode-auth-credentials
+       'error-message
+       "Elnode authentication failed")
+
+  ;; For failing cookies
+  (put 'elnode-auth-token
+       'error-conditions
+       '(error elnode elnode-auth elnode-auth-token))
+  (put 'elnode-auth-token
+       'error-message
+       "Elnode authentication failed"))
+
+(defun elnode-auth-login (username password)
+  "Log a user in.
+
+Check the USERNAME and PASSWORD with `elnode-auth-user-p' and
+then update `elnode-loggedin-db' with the username and the login
+record."
+  (if (elnode-auth-user-p username password)
+      (let* ((rndstr (format "%d" (random)))
+             (hash (sha1 (format "%s:%s:%s"
+                                 username
+                                 rndstr
+                                 elnode-secret-key)))
+             (user-record
+              (list
+               :user username
+               :token rndstr
+               :hash hash)))
+        (puthash username user-record elnode-loggedin-db)
+        hash)
+      ;; Else it was bad so throw an error.
+      (signal 'elnode-auth-credentials (list username password))))
+
+(defun elnode-auth-check-p (username token)
+  "Check login status of the USERNAME against the hashed TOKEN."
+  (let ((record (gethash username elnode-loggedin-db)))
+    (equal token (plist-get record :hash))))
+
+(defun elnode-auth-cookie-check-p (httpcon)
+  "Check that the user is loggedin according to the cookie."
+  (let ((cookie-value
+         (cdr-safe
+          (assoc-string
+           "elnode-auth"
+           (elnode-http-cookie httpcon "elnode-auth")))))
+    (if (not (string-match "\\(.*\\)::\\(.*\\)" (or cookie-value "")))
+        (signal 'elnode-auth-token cookie-value)
+        (let ((username (match-string 1 cookie-value))
+              (token (match-string 2 cookie-value)))
+          (elnode-auth-check-p username token)))))
+
+(defun elnode-auth-http-login (httpcon username password logged-in)
+  "Log the USERNAME in on the HTTPCON if PASSWORD is correct.
+
+If authentication succeeds set the relevant cookie and redirect
+the user to LOGGED-IN."
+  (let ((hash
+         ;; FIXME: or this errors. What to do if it errors??
+         ;; We need to send the user the login page/form with errors
+         (elnode-auth-login username password)))
+    (elnode-http-header-set
+     httpcon
+     (elnode-http-cookie-make "elnode-auth"
+                              (format "%s::%s" username hash)))
+    (elnode-send-redirect httpcon logged-in)))
+
+(defcustom elnode-auth-login-page "<html>
+<body>
+<form method='POST' action='<!##E target E##!>'>
+<input type='hidden' name='redirect' value='<!##E redirect E##!>'/>
+username: <input type='text' name='username'/><br/>
+password: <input type='password' name='password'/><br/>
+</form>
+</body>
+</html>"
+  "A standard login page, used by `elnode-auth-login-sender'."
+  :group 'elnode
+  :type '(string))
+
+(defun elnode-auth-login-sender (httpcon target redirect)
+  "Send the login page for auth to HTTPCON.
+
+The login page will send it's authentication request to TARGET.
+
+The authentication will include username, password AND REDIRECT,
+which is the URL to redirect to when login is successful.
+
+This function sends the contents of the custom variable
+`elnode-auth-login-page' after templating it."
+  (elnode-http-start httpcon 200 `("Content-type" . "text/html"))
+  ;; It would be nice to support preambles... not sure how.
+  ;;  (when preamble (elnode-http-send-string httpcon preamble))
+  (elnode-http-return
+   httpcon
+   (with-temp-buffer
+     (insert elnode-auth-login-page)
+     (elnode--buffer-template
+      (current-buffer)
+      `(("target" . ,target)
+        ("redirect" . ,redirect))))))
+
+(defun* elnode-auth-make-login-wrapper (wrap-target
+                                         &key
+                                         (sender elnode-auth-login-sender)
+                                         (target "login/"))
+  "Make an auth wrapper around WRAP-TARGET with content from SENDER.
+
+SENDER is a function that sends the login page to the client."
+  (list wrap-target
+        (lambda (httpcon)
+          (elnode-method
+              (GET
+               (funcall sender httpcon target))
+              (POST
+               (let ((username (elnode-http-param httpcon "username"))
+                     (password (elnode-http-param httpcon "password"))
+                     (logged-in (elnode-http-param httpcon "loggedin")))
+                 (elnode-auth-http-login
+                  httpcon
+                  username password logged-in)))))
+        target))
+
+(defmacro* elnode-with-auth ((&key
+                              (test :cookie)
+                              (cookie-name 'auth)
+                              (failure-type :redirect)
+                              (redirect "/login/"))
+                             &rest body)
+  "Protect code with authentication.
+
+ (elnode-with-auth (:test :cookie
+                    :cookie-name 'secure
+                    :redirect '(my-app-dispatcher my-login-handler))
+   (elnode-http-start httpcon 200 '(Content-type . \"text/html\"))
+   (elnode-http-return httpcon \"hello world\"))
+
+Will protect the code with something expecting the cookie
+'secure."
+  (declare (indent defun))
+  (let ((testv (make-symbol "testv"))
+        (cookie-namev (make-symbol "cookie-namev"))
+        (redirectv (make-symbol "redirectv")))
+    `(let ((,testv ,test)
+           (,cookie-namev ,cookie-name)
+           (,redirectv ,redirect))
+       (if (not (eq ,testv :cookie))
+           (error "Elnode has no other auth test than `:cookie' possible")
+           (assert cookie-name)
+           (let ((cookie
+                  (elnode-http-cookie httpcon (symbol-name cookie-name))))
+             ;; But what should the cookie contain??  it's obviously
+             ;; fucked - the cookie needs to be created by the thing
+             ;; we redirect to so we can't test it. More work needed.
+             (list ,testv ,cookie-namev ,redirectv returnvalue))))))
+
+(ert-deftest elnode-with-auth ()
+  "Test protection of code with authentication."
+  (flet ((auth-reqd-handler (httpcon)
+           (elnode-with-auth (:test :cookie
+                                    :cookie-name 'secret
+                                    :redirect "/auth/")
+               (elnode-http-start httpcon 200 '(content-type . "text/html"))
+             (elnode-http-return
+              httpcon
+              "<html><body>You are logged in!</body></html>"))))
+    (with-elnode-mock-server 'auth-reqd-handler
+        (let ((r (elnode-test-call "/")))
+          (should (equal 200
+                         (plist-get r :status)))))))
+
 
 ;;; Main customization stuff
 

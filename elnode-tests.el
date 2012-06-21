@@ -883,6 +883,94 @@ right thing."
         (setplist 'wrap-test-handler nil)
         (unintern 'wrap-test-handler)))))
 
+
+;; Elnode auth tests
+
+(defun elnode--auth-init-user-db (user-alist)
+  "Initialize the auth database.
+
+USER-ALIST is an assoc list of username and passwords."
+  (loop for pair in user-alist
+       do
+       (puthash
+        (car pair)
+        (elnode--auth-make-hash
+         (car pair)
+         (cdr pair))
+        elnode-auth-db)))
+
+(ert-deftest elnode-auth-user-p ()
+  "Check the authentication check.
+
+This tests the authentication database check."
+  (let ((elnode-auth-db (make-hash-table :test 'equal)))
+    ;; The only time we really need clear text passwords is when
+    ;; faking records for test
+    (elnode--auth-init-user-db '(("nferrier" . "password")
+                                 ("someuser" . "secret")))
+    (should
+     (elnode-auth-user-p "someuser" "secret"))))
+
+(ert-deftest elnode-auth-check-p ()
+  "Test basic login.
+
+Tess that we can login a user and then assert that they are
+authenticated."
+  (let ((elnode-loggedin-db (make-hash-table :test 'equal))
+        (elnode-auth-db (make-hash-table :test 'equal)))
+    ;; The only time we really need clear text passwords is when
+    ;; faking records for test
+    (elnode--auth-init-user-db '(("nferrier" . "password")
+                                 ("someuser" "secret")))
+    ;; Test a failure
+    (should
+     (equal "an error occured!"
+            (condition-case credentials
+                (elnode-auth-login "nferrier" "secret")
+              (elnode-auth
+               "an error occured!"))))
+
+    ;; Now test
+    (let ((hash (elnode-auth-login "nferrier" "password")))
+      (should (elnode-auth-check-p "nferrier" hash)))))
+
+(ert-deftest elnode-auth-cookie-check-p ()
+  "Check that a cookie can be used for auth."
+  (let ((elnode-loggedin-db (make-hash-table :test 'equal))
+        (elnode-auth-db (make-hash-table :test 'equal)))
+    ;; The only time we really need clear text passwords is when
+    ;; faking records for test
+    (elnode--auth-init-user-db '(("nferrier" . "password")
+                                 ("someuser" "secret")))
+    ;; Now test
+    (let ((hash (elnode-auth-login "nferrier" "password")))
+      (fakir-mock-process
+          ((:elnode-http-header
+            `(("Cookie" . ,(concat "elnode-auth=nferrier::" hash)))))
+          (should (elnode-auth-cookie-check-p :httpcon))))
+    ;; Test what happens without a cookie
+    (let ((hash (elnode-auth-login "nferrier" "password")))
+      (fakir-mock-process
+          ((:elnode-http-header
+            `(("Referer" . "http://somehost.example.com"))))
+          (should-not
+           (condition-case token
+               (elnode-auth-cookie-check-p :httpcon)
+             (elnode-auth-token (cdr token))))))))
+
+(ert-deftest elnode-auth-login-sender ()
+  "Low levelish test of the login page sender."
+  (fakir-mock-process
+   ()
+      (elnode-auth-login-sender :httpcon "/login/" "/myapp/loggedin")
+    (with-current-buffer (process-buffer :httpcon)
+      (goto-char (point-min))
+      (should (re-search-forward
+               "<form method='POST' action='/login/'>" nil 't))
+      (should (re-search-forward
+               "<input type='hidden' name='redirect' value='/myapp/loggedin'/>"
+               nil 't)))))
+
 (provide 'elnode-tests)
 
 ;;; elnode-tests.el ends here
