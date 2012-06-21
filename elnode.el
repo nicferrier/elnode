@@ -2478,13 +2478,16 @@ record."
   (let ((record (gethash username elnode-loggedin-db)))
     (equal token (plist-get record :hash))))
 
-(defun elnode-auth-cookie-check-p (httpcon)
-  "Check that the user is loggedin according to the cookie."
+(defun* elnode-auth-cookie-check-p (httpcon &key (cookie-name "elnode-auth"))
+  "Check that the user is loggedin according to the cookie.
+
+The name of the cookie can be supplied with :COOKIE-NAME - by
+default is is \"elnode-auth\"."
   (let ((cookie-value
          (cdr-safe
           (assoc-string
-           "elnode-auth"
-           (elnode-http-cookie httpcon "elnode-auth")))))
+           cookie-name
+           (elnode-http-cookie httpcon cookie-name)))))
     (if (not (string-match "\\(.*\\)::\\(.*\\)" (or cookie-value "")))
         (signal 'elnode-auth-token cookie-value)
         (let ((username (match-string 1 cookie-value))
