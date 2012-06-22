@@ -483,24 +483,42 @@ parsing. That checks the ':elnode-http-method':
   "Test that the params are ok if they are in the body.
 
 Does a full http parse of a dummy buffer."
-  (let ((post-body "a=10&b=20&c=this+is+finished"))
+  (let ((httpcon :httpcon))
+    (let ((post-body "a=10&b=20&c=this+is+finished"))
+      (fakir-mock-process
+          ((:buffer
+            (elnode--http-make-hdr
+             'post "/"
+             '(host . "localhost")
+             '(user-agent . "test-agent")
+             `(content-length . ,(format "%d" (length post-body)))
+             `(body . ,post-body))))
+          ;; Now parse
+          (should
+           (equal 'done
+                  (catch 'elnode-parse-http
+                    (elnode--http-parse httpcon))))
+        ;; Now test some params
+        (should (equal "10" (elnode-http-param httpcon "a")))
+        (should (equal "20" (elnode-http-param httpcon "b")))
+        (should (equal "this is finished" (elnode-http-param httpcon "c")))))
+    ;; Test get of params that aren't there
     (fakir-mock-process
-      ((:buffer
-        (elnode--http-make-hdr
-         'post "/"
-         '(host . "localhost")
-         '(user-agent . "test-agent")
-         `(content-length . ,(format "%d" (length post-body)))
-         `(body . ,post-body))))
-      ;; Now parse
-      (should
-       (equal 'done
-              (catch 'elnode-parse-http
-                (elnode--http-parse nil))))
-      ;; Now test some params
-      (should (equal "10" (elnode-http-param nil "a")))
-      (should (equal "20" (elnode-http-param nil "b")))
-      (should (equal "this is finished" (elnode-http-param nil "c"))))))
+        ((:buffer
+          (elnode--http-make-hdr
+           'post "/"
+           '(host . "localhost")
+           '(user-agent . "test-agent")
+           `(content-length . "0")
+           `(body . ""))))
+        ;; Now parse
+        (should
+         (equal 'done
+                (catch 'elnode-parse-http
+                  (elnode--http-parse httpcon))))
+      (should-not (elnode-http-param httpcon "a"))
+      (should-not (elnode-http-param httpcon "b"))
+      (should-not (elnode-http-param httpcon "c")))))
 
 (ert-deftest elnode-test-http-post-empty-params ()
   "Test that the params are ok if they are just empty in the body."
