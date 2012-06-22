@@ -2546,16 +2546,39 @@ This function sends the contents of the custom variable
 
 (defun* elnode-auth-make-login-wrapper (wrap-target
                                          &key
-                                         (sender elnode-auth-login-sender)
+                                         (sender 'elnode-auth-login-sender)
                                          (target "login/"))
   "Make an auth wrapper around WRAP-TARGET with content from SENDER.
 
-SENDER is a function that sends the login page to the client."
+Wrappers are high level ways of specifying redirect targets for
+authentication.  A wrapper is a list with 2 or 3 elements:
+
+  a handler function name to wrap
+
+  a function to handle login (the wrapping handler function)
+
+  optionally a url for the wrap point, \"/login/\" by default.
+
+In the case of authentication, the handler function to wrap
+should be the main handler for your application.  It is wrapped
+to add the authentication url which will be handled by the
+wrapping function.
+
+So if you have a top level handler `my-app-handler' and you make
+a wrapper with this function then you will change
+`my-app-handler' so that requests for \"/login/\" go to the
+authentication handler produced by this function.
+
+SENDER is a function that sends the login page to the client.
+The SENDER is passed the TARGET as well as the `to' parameter
+from the HTTPCON.  `to' is / by default (if it cannot be found in
+the HTTP request)."
   (list wrap-target
         (lambda (httpcon)
           (elnode-method
               (GET
-               (funcall sender httpcon target))
+               (let ((to (or (elnode-http-param httpcon "to") "/")))
+                 (funcall sender httpcon target to)))
               (POST
                (let ((username (elnode-http-param httpcon "username"))
                      (password (elnode-http-param httpcon "password"))
