@@ -2598,15 +2598,49 @@ the HTTP request)."
                              &rest body)
   "Protect code with authentication using HTTPCON.
 
- (elnode-with-auth (httpcon
-                    :test :cookie
-                    :cookie-name 'secure
-                    :redirect '(my-app-dispatcher my-login-handler))
-   (elnode-http-start httpcon 200 '(Content-type . \"text/html\"))
-   (elnode-http-return httpcon \"hello world\"))
+This macro protects code in a handler with a check for an
+authenticated request (the check is configurable).  If the check
+fails then an appropriate action is taken; for example, sending a
+login page.
+
+How to redirect to things is quite flexible and includes a well
+typed option involving wrappers.
+
+As an example:
+
+ (defun my-secret-handler (httpcon)
+   \"Handler sending a very secret thing.\"
+   (elnode-with-auth (httpcon
+                      :test :cookie
+                      :cookie-name 'secure
+                      :redirect '(my-app-dispatcher my-login-handler))
+     (elnode-http-start httpcon 200 '(Content-type . \"text/html\"))
+     (elnode-http-return httpcon \"hello world\"))
 
 Will protect the code with something expecting the cookie
-'secure."
+\"secure\" and automatically decorating `my-app-dispatcher' with
+the handler for login `my-login-handler'.
+
+:TEST is the type of test to do to check for authenticated
+requests.  Currently this is only `:cookie' which is implemented
+by `elnode-auth-cookie-check-p'; in the future more
+authentication checks might be supported.  :TEST is `:cookie' by
+default.
+
+:COOKIE-NAME is used when the :TEST is `:cookie'.  It is the name
+of the cookie to use for authentication.  By default this is
+`elnode-auth'.  It can be specified as a symbol or a string.
+
+:FAILURE-TYPE is what to do if authentication fails.  Currently
+only `:redirect' is supported.  To redirect on failure means to
+send a 302 with a location to visit a login page.  :FAILURE-TYPE
+is `:redirect' by default.
+
+:REDIRECT is where to redirect to if :FAILURE-TYPE is
+`:redirect'.  This can be either a String (in which case it
+should indicate a path where a user can login, for example
+\"/login/\") or it can be a wrapper.  See
+`elnode-auth-make-login-wrapper' for a description of wrappers."
   (declare (indent defun))
   (let ((httpconv (make-symbol "httpconv"))
         (testv (make-symbol "testv"))
