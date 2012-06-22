@@ -2615,15 +2615,17 @@ Will protect the code with something expecting the cookie
     ;; If redirect is a list it's a wrapper and we must apply it.
     (let ((redir redirect))
       (when (listp redir)
+        (when (eq 'elnode-auth-make-login-wrapper (car redir))
+          (setq redir (apply (car redir) (cdr redir))))
         (elnode--wrap-handler
          (car redir)
-         (cadr redir)
-         "login/"))
+         "login/"
+         (cadr redir)))
       ;; Now the macro body
       `(let ((,httpconv ,httpcon)
              (,testv ,test)
              (,cookie-namev ,cookie-name)
-             (,redirectv ,redir)) ;; not sure we want to do redirect again?
+             (,redirectv (quote ,redir)))
          (if (not (eq ,testv :cookie))
              (error "Elnode has no other auth test than `:cookie' possible")
              (assert ,cookie-namev)
@@ -2634,35 +2636,19 @@ Will protect the code with something expecting the cookie
                          :cookie-name (symbol-name ,cookie-namev))))
                    ;; Do whatever the code was now.
                    ,@body)
+               ;; On auth failure send the redirect to the login url
                (elnode-auth-token
-                (elnode-send-redirect
-                 ,httpconv
-                 (cond
-                   ((listp ,redirectv)
-                    "/login/") ; really we should pull it from the list
-                   ((stringp ,redirectv)
-                    ,redirectv)
-                   (t
-                    (error
-                     "Elnode auth redirect is a list or a string")))))))))))
-
-(ert-deftest elnode-with-auth ()
-  "Test protection of code with authentication."
-  (flet ((auth-reqd-handler (httpcon)
-           (elnode-with-auth (httpcon
-                              :test :cookie
-                              :cookie-name 'secret
-                              :redirect "/auth/")
-               (elnode-http-start httpcon 200 '(content-type . "text/html"))
-             (elnode-http-return
-              httpcon
-              "<html><body>You are logged in!</body></html>"))))
-    (with-elnode-mock-server 'auth-reqd-handler
-        (let ((r (elnode-test-call "/")))
-          (should
-           (equal 302
-                  (plist-get r :status)))))))
-
+                (let ((to
+                       (cond
+                         ((listp ,redirectv)
+                          ;; really we should pull it from the list
+                          "/login/?to=/")
+                         ((stringp ,redirectv)
+                          ,redirectv)
+                         (t
+                          (error
+                           "Elnode auth redirect is a list or a string")))))
+                  (elnode-send-redirect ,httpconv to)))))))))
 
 ;;; Main customization stuff
 

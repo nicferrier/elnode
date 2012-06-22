@@ -989,6 +989,41 @@ authenticated."
                "<input type='hidden' name='redirect' value='/myapp/loggedin'/>"
                nil 't)))))
 
+(ert-deftest elnode-with-auth ()
+  "Test protection of code with authentication.
+
+This tests that the auth protection macro does its job, including
+the wrapping of a specified handler with the login sender."
+  (flet ((auth-reqd-handler (httpcon)
+           (elnode-with-auth
+               (httpcon
+                :test :cookie
+                :cookie-name 'secret
+                :redirect (elnode-auth-make-login-wrapper auth-reqd-handler))
+               (elnode-http-start httpcon 200 '(content-type . "text/html"))
+             (elnode-http-return
+              httpcon
+              "<html><body>You are logged in!</body></html>"))))
+    ;; Test that we are redirected to login when we don't have cookie
+    (with-elnode-mock-server 'auth-reqd-handler
+        (let ((r (elnode-test-call "/")))
+          (should
+           (equal 302
+                  (plist-get r :status)))
+          (should
+           (equal "/login/?to=/"
+                  (aget (plist-get r :header) "Location"))))
+      ;; Test that we get the login page - this tests that the main
+      ;; handler was wrapped
+      (let ((r (elnode-test-call "/login/")))
+        (should
+         (equal 200
+                (plist-get r :status)))
+        (should
+         (string-match
+          "<input type='hidden' name='redirect' value='/'/>"
+          (plist-get r :result-string)))))))
+
 (provide 'elnode-tests)
 
 ;;; elnode-tests.el ends here
