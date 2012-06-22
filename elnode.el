@@ -2591,7 +2591,6 @@ the HTTP request)."
 (defmacro* elnode-with-auth ((httpcon
                               &key
                               (test :cookie)
-                              httpcon ; this should not be necessary?
                               (cookie-name 'elnode-auth)
                               (failure-type :redirect)
                               (redirect "/login/"))
