@@ -2544,6 +2544,7 @@ the user to LOGGED-IN."
 <input type='hidden' name='redirect' value='<!##E redirect E##!>'/>
 username: <input type='text' name='username'/><br/>
 password: <input type='password' name='password'/><br/>
+<input type='submit' name='login'/>
 </form>
 </body>
 </html>"
@@ -2582,7 +2583,7 @@ This function sends the contents of the custom variable
     (POST
      (let ((username (elnode-http-param httpcon "username"))
            (password (elnode-http-param httpcon "password"))
-           (logged-in (elnode-http-param httpcon "loggedin")))
+           (logged-in (elnode-http-param httpcon "redirect")))
        (elnode-auth-http-login
         httpcon
         username password logged-in)))))
