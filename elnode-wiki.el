@@ -148,12 +148,43 @@ If PAGEINFO is specified it's the HTTP path to the Wiki page."
        :body-header header
        :body-footer footer))))
 
+(defun elnode-wiki--text-param (httpcon)
+  "Get the text param from HTTPCON and convert it."
+  (replace-regexp-in-string
+   "\r" "" ; browsers send text in DOS line ending format
+   (elnode-http-param httpcon "wikitext")))
+
+(defun elnode-wiki--save-request (httpcon path text)
+  "Process an update request."
+  (let* ((page (if path
+                   (save-match-data
+                     (string-match "/wiki/\\(.*\\)$" path)
+                     (match-string 1 path))))
+         (comment (elnode-http-param httpcon "comment"))
+         (file-name (concat wikiroot "/" page))
+         (buffer (find-file-noselect file-name)))
+    (with-current-buffer buffer
+      (erase-buffer)
+      (insert text)
+      (save-buffer)
+      (let ((git-buf
+             (get-buffer-create
+              (generate-new-buffer-name
+               "* elnode wiki commit buf *"))))
+        (shell-command
+         (format "git commit -m '%s' %s" comment file-name)
+         git-buf)
+        (kill-buffer git-buf))
+      (elnode-wiki-send httpcon file-name))))
+
 (defun elnode-wiki-handler (httpcon wikiroot)
   "A low level handler for Wiki operations.
 
 Send the Wiki page requested, which must be a file existing under
-the WIKIROOT, back to the HTTPCON."
-  (elnode-method
+the WIKIROOT, back to the HTTPCON.
+
+Update operations are protected by authentication."
+  (elnode-method httpcon
     (GET
      (elnode-docroot-for wikiroot
        with target-path
@@ -163,38 +194,21 @@ the WIKIROOT, back to the HTTPCON."
            (elnode-wiki-page httpcon (concat wikiroot "/index.creole"))
          (elnode-wiki-page httpcon target-path))))
     (POST
-     (let* ((path (elnode-http-pathinfo httpcon))
-            (comment (elnode-http-param httpcon "comment"))
-            (text (replace-regexp-in-string
-                   "\r" "" ; browsers send text in DOS line ending format
-                   (elnode-http-param httpcon "wikitext")))
-            (page (if path
-                      (save-match-data
-                        (string-match "/wiki/\\(.*\\)$" path)
-                        (match-string 1 path)))))
-       (if (not (elnode-http-param httpcon "preview"))
-           ;; A save request in which case save the new text and then
-           ;; send the wiki text.
-           (let* ((file-name (concat wikiroot "/" page))
-                  (buffer (find-file-noselect file-name)))
-             (with-current-buffer buffer
-               (erase-buffer)
-               (insert text)
-               (save-buffer)
-               (let ((git-buf
-                      (get-buffer-create
-                       (generate-new-buffer-name
-                        "* elnode wiki commit buf *"))))
-                 (shell-command
-                  (format "git commit -m '%s' %s" comment file-name)
-                  git-buf)
-                 (kill-buffer git-buf))
-               (elnode-wiki-send httpcon file-name)))
-         ;; Might be a preview request in which case send back the WIKI
-         ;; text that's been sent.
-         (with-temp-file "/tmp/preview"
-           (insert text))
-         (elnode-wiki-send httpcon "/tmp/preview" path))))))
+     (elnode-with-auth (httpcon
+                        :redirect (elnode-auth-make-login-wrapper
+                                   elnode-wikiserver
+                                   :target "wiki/login/"))
+         (let* ((path (elnode-http-pathinfo httpcon))
+                (text (elnode-wiki--text-param httpcon)))
+           (if (not (elnode-http-param httpcon "preview"))
+               ;; A save request in which case save the new text and then
+               ;; send the wiki text.
+               (elnode-wiki--save-request httpcon path text)
+               ;; Might be a preview request in which case send back the WIKI
+               ;; text that's been sent.
+               (with-temp-file "/tmp/preview"
+                 (insert text))
+               (elnode-wiki-send httpcon "/tmp/preview" path)))))))
 
 (defun elnode-wikiserver-test ()
   "Test whether we should serve Wiki or not."

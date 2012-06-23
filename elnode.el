@@ -2079,7 +2079,7 @@ templating system before being sent.  See
            elnode-send-file-program
            targetfile))))))
 
-(defmacro elnode-method (&rest method-mappings)
+(defmacro elnode-method (httpcon &rest method-mappings)
   "Map the HTTP method.
 
 Write code like this:
@@ -2092,15 +2092,22 @@ Write code like this:
    (different code)
    (evenmorecode)))"
   (declare
-   (debug (&rest (sexp &rest form)))
+   (debug (sexp &rest (sexp &rest form)))
    (indent defun))
-  (let ((var (make-symbol "v")))
-    `(let ((,var (intern "GET"))) ;; (elnode-http-method httpcon))))
+  (let* ((var (make-symbol "v"))
+         (conv (make-symbol "con")))
+     `(let* ((,conv ,httpcon)
+             (,var (intern (elnode-http-method ,conv))))
        (cond
         ,@(loop
            for d in method-mappings
            collect `((eq ,var (quote ,(car d)))
-                     ,@(cdr d)))))))
+                     ,@(cdr d)))
+        ;; If we don't map then send an error
+        ;;
+        ;; probably should be 405
+        (t
+         (elnode-send-500 ,conv))))))
 
 
 ;; Make simple handlers automatically
@@ -2577,7 +2584,7 @@ from the HTTPCON.  `to' is / by default (if it cannot be found in
 the HTTP request)."
   (list wrap-target
         (lambda (httpcon)
-          (elnode-method
+          (elnode-method httpcon
               (GET
                (let ((to (or (elnode-http-param httpcon "to") "/")))
                  (funcall sender httpcon target to)))

@@ -722,7 +722,7 @@ right thing."
         method)
     (flet ((elnode-http-method (http-con)
              "GET"))
-      (elnode-method
+      (elnode-method httpcon
         (GET
          (setq method "GET"))
         (POST
