@@ -2719,7 +2719,9 @@ should indicate a path where a user can login, for example
                               ;; The "to" is wrong here... it should
                               ;; be the current url or some specified
                               ;; url
-                              (format "%s?to=/" (cadr ,redirectv)))
+                              (format "%s?to=%s"
+                                      (cadr ,redirectv)
+                                      (elnode-http-pathinfo ,httpconv)))
                              ((stringp ,redirectv)
                               ,redirectv)
                              (t
