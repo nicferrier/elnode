@@ -998,7 +998,7 @@ the wrapping of a specified handler with the login sender."
            (elnode-with-auth
                (httpcon
                 :test :cookie
-                :cookie-name 'secret
+                :cookie-name "secret"
                 :redirect (elnode-auth-make-login-wrapper auth-reqd-handler))
                (elnode-http-start httpcon 200 '(content-type . "text/html"))
              (elnode-http-return

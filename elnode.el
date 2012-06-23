@@ -2600,7 +2600,7 @@ the HTTP request)."
 (defmacro* elnode-with-auth ((httpcon
                               &key
                               (test :cookie)
-                              (cookie-name 'elnode-auth)
+                              (cookie-name "elnode-auth")
                               (failure-type :redirect)
                               (redirect "/login/"))
                              &rest body)
@@ -2675,7 +2675,7 @@ should indicate a path where a user can login, for example
                  (let ((cookie
                         (elnode-auth-cookie-check-p
                          ,httpconv
-                         :cookie-name (symbol-name ,cookie-namev))))
+                         :cookie-name ,cookie-namev)))
                    ;; Do whatever the code was now.
                    ,@body)
                ;; On auth failure send the redirect to the login url
