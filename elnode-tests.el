@@ -354,7 +354,7 @@ The text spat out is tested, so is the status."
     (lambda (httpcon)
       (elnode-hostpath-dispatcher
        httpcon
-       '(("[^/]+/test/.*" . elnode-test-handler))))
+       '(("[^/]+//test/.*" . elnode-test-handler))))
     (let ((r (elnode-test-call "/test/test.something")))
       (should
        (equal
@@ -630,26 +630,26 @@ Content-Type: text/html\r
    (should
     (equal
      (elnode--mapper-find
-      :fake
-      "localhost/wiki/somefile.creole"
-      '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver)
-        ("[^/]+/.*" . elnode-webserver)))
+      :httpcon
+      "localhost//wiki/somefile.creole"
+      '(("[^/]+//wiki/\\(.*\\)" . elnode-wikiserver)
+        ("[^/]+//.*" . elnode-webserver)))
      'elnode-wikiserver))
    (should
     (equal
-     (elnode-http-mapping :fake)
-     "localhost/wiki/somefile.creole"))
+     (elnode-http-mapping :httpcon)
+     "localhost//wiki/somefile.creole"))
    (should
     (equal
-     (elnode-http-mapping :fake 1)
+     (elnode-http-mapping :httpcon 1)
      "somefile.creole"))
    (should
     (equal
      (elnode--mapper-find
-      :fake
-      "anyhost/wiki/somefile.creole"
-      '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver)
-        ("[^/]+/.*" . elnode-webserver)))
+      :httpcon
+      "anyhost//wiki/somefile.creole"
+      '(("[^/]+//wiki/\\(.*\\)" . elnode-wikiserver)
+        ("[^/]+//.*" . elnode-webserver)))
      'elnode-wikiserver))))
 
 
@@ -662,15 +662,15 @@ Content-Type: text/html\r
       'elnode-wikiserver
       (elnode--mapper-find
        :fake
-       "localhost/wiki/index.creole"
-       '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver)
-         ("[^/]+/\\(.*\\)" . elnode-webserver)))))
+       "localhost//wiki/index.creole"
+       '(("[^/]+//wiki/\\(.*\\)" . elnode-wikiserver)
+         ("[^/]+//\\(.*\\)" . elnode-webserver)))))
     (fakir-mock-file (fakir-file
                       :filename "index.creole"
                       :directory "/home/elnode/wiki")
       (should
        (equal
-        (elnode-get-targetfile :fake "/home/elnode/wiki")
+        (elnode-get-targetfile :httpcon "/home/elnode/wiki")
         "/home/elnode/wiki/index.creole"))))
   ;; Now alter the mapping to NOT declare the mapped part...
   (fakir-mock-process
@@ -680,16 +680,16 @@ Content-Type: text/html\r
      (equal
       'elnode-webserver
       (elnode--mapper-find
-       :fake
-       "localhost/blah/thing.txt"
-       '(("[^/]+/.*" . elnode-webserver)))))
+       :httpcon
+       "localhost//blah/thing.txt"
+       '(("[^/]+//.*" . elnode-webserver)))))
     ;; ... but finding a file WILL NOT work (because there is no mapping)
     (fakir-mock-file (fakir-file
                       :filename "thing.txt"
                       :directory "/home/elnode/www/blah")
       (should-not
        (equal
-        (elnode-get-targetfile :fake "/home/elnode/www")
+        (elnode-get-targetfile :httpcon "/home/elnode/www")
         "/home/elnode/www/blah/thing.txt")))))
 
 (ert-deftest elnode-worker-elisp ()
@@ -988,6 +988,40 @@ authenticated."
       (should (re-search-forward
                "<input type='hidden' name='redirect' value='/myapp/loggedin'/>"
                nil 't)))))
+
+(ert-deftest elnode--with-auth-do-wrap ()
+  "Test wrapper destructuring."
+  ;; First test with a specified path
+  (flet ((elnode--wrap-handler (wrap-target path wrapping-func)
+           (should
+            (equal
+             wrap-target
+             'blah))
+           (should
+            (equal
+             path
+             "/doit/"))))
+    (elnode--with-auth-do-wrap
+     (list
+      'blah
+      (lambda (httpcon)
+        (elnode-send-500 httpcon))
+      "/doit/")))
+  ;; Now with the default path
+  (flet ((elnode--wrap-handler (wrap-target path wrapping-func)
+           (should
+            (equal
+             wrap-target
+             'blah))
+           (should
+            (equal
+             path
+             "/login/"))))
+    (elnode--with-auth-do-wrap
+     (list
+      'blah
+      (lambda (httpcon)
+        (elnode-send-500 httpcon))))))
 
 (ert-deftest elnode-with-auth ()
   "Test protection of code with authentication.

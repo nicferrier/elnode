@@ -1397,12 +1397,7 @@ This function also establishes the `:elnode-http-mapping'
 property, adding it to the HTTPCON so it can be accessed from
 inside your handler with `elnode-http-mapping'."
   ;; First find the mapping in the mapping table
-  (let* ((match-path (save-match-data
-                       ;; remove leading slash
-                       (if (string-match "^/\\(.*\\)" path)
-                           (match-string 1 path)
-                         path)))
-         (m (elnode--mapper-find-mapping match-path mapping-table)))
+  (let ((m (elnode--mapper-find-mapping path mapping-table)))
     ;; Now work out if we found one and what it was mapped to
     (when (and m
                (or (functionp (cdr m))
@@ -1412,9 +1407,9 @@ inside your handler with `elnode-http-mapping'."
       (process-put
        httpcon
        :elnode-http-mapping
-       (when (string-match (car m) match-path)
-         (loop for i from 0 to (- (/ (length (match-data match-path)) 2) 1)
-               collect (match-string i match-path))))
+       (when (string-match (car m) path)
+         (loop for i from 0 to (- (/ (length (match-data path)) 2) 1)
+               collect (match-string i path))))
       ;; Check if it's a function or a variable pointing to a
       ;; function
       (cond
@@ -1434,7 +1429,7 @@ This results only from a call via `elnode-dispatcher'.
 It returns the string which matched your url-mapping, with the
 match-data attached. So given the mapping:
 
- (\"static/\\(.*\\)\" . my-handler)
+ (\"/static/\\(.*\\)\" . my-handler)
 
 and the request:
 
@@ -1442,16 +1437,14 @@ and the request:
 
 The following is true inside the handler:
 
- (equals \"/somedir/somefile.jpg\"
-         (match-string 1 (elnode-http-mapping httpcon)))
+ (equal \"/somedir/somefile.jpg\"
+        (match-string 1 (elnode-http-mapping httpcon)))
 
 The function `elnode-test-path' uses this facility to work out a
 target path."
   (elt
    (process-get httpcon :elnode-http-mapping)
    (if part part 0)))
-
-
 
 (defun elnode-get-targetfile (httpcon docroot)
   "Get the targetted file from the HTTPCON.
@@ -1495,7 +1488,8 @@ it it's found to be a function, or as a last resort
 `elnode-send-404'."
   (let ((handler-func
          (elnode--mapper-find
-          httpcon path
+          httpcon
+          path
           url-mapping-table)))
     (when elnode--do-access-logging-on-dispatch
       (process-put httpcon :elnode-access-log-name log-name))
@@ -1515,20 +1509,20 @@ URL-MAPPING-TABLE is an alist of:
 
 To map the root url you should use:
 
-  \"^$\"
+  \"^/$\"
 
 To ensure paths end in /, `elnode-dispatcher' uses
 `elnode-normalize-path'.  To map another url you should use:
 
-  \"^path/$\" or \"^path/sub-path/$\"
+  \"^/path/$\" or \"^/path/sub-path/$\"
 
 An example server setup:
 
   (defun my-server (httpcon)
     (elnode-dispatcher
      httpcon
-     '((\"^$\" . root-view)
-       (\"^1/$\" . view-1))))
+     '((\"^/$\" . root-view)
+       (\"^/1/$\" . view-1))))
 
 If FUNCTION-404 is non-nil then it is called when no regexp is
 matched."
@@ -1550,21 +1544,22 @@ matched."
                                    (log-name "elnode"))
   "Dispatch HTTPCON to a handler based on the HOSTPATH-MAPPING-TABLE.
 
-HOSTPATH-MAPPING-TABLE has a regex of the host and the path slash
-separated, thus:
+HOSTPATH-MAPPING-TABLE has regexs of the host and the path double
+slash separated, thus:
 
- (\"^localhost/pastebin.*\" . pastebin-handler)
+ (\"^localhost//pastebin.*\" . pastebin-handler)
 
 FUNCTION-404 should be a 404 handling function, by default it's
 `elnode-send-404'.
 
 LOG-NAME is an optional log-name."
   (let ((hostpath
-         (format "%s%s"
+         (format "%s/%s"
                  (let ((host
                         (or
                          (elnode-http-header httpcon "Host")
                          "")))
+                   ;; Separate the hostname from any port in the host header
                    (save-match-data
                      (string-match "\\([^:]+\\)\\(:[0-9]+.*\\)*" host)
                      (match-string 1 host)))
@@ -1578,8 +1573,8 @@ LOG-NAME is an optional log-name."
 
 ;;;###autoload
 (defcustom elnode-hostpath-default-table
-  '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver)
-    ("[^/]+/\\(.*\\)" . elnode-webserver))
+  '(("[^/]+//wiki/\\(.*\\)" . elnode-wikiserver)
+    ("[^/]+//\\(.*\\)" . elnode-webserver))
   "Defines mappings for `elnode-hostpath-default-handler'.
 
 This is the default mapping table for Elnode, out of the box. If
@@ -2385,13 +2380,23 @@ HTTPCON is the HTTP connection to the user agent."
 
 ;;; Elnode auth stuff
 
+(defun elnode--wrap-implementation (httpcon
+                                    wrapping-path
+                                    wrapping-handler
+                                    current-handler)
+  "A handler used by the wrapping stuff."
+  (elnode-dispatcher
+   httpcon
+   (list (cons wrapping-path wrapping-handler))
+   current-handler))
+
 (defun elnode--wrap-handler (handler-symbol wrapping-path wrapping-handler)
   "Wrap the handler attached to HANDLER-SYMBOL with another handler.
 
 The WRAPPING-PATH is mapped to the WRAPPING-HANDLER before the
-wrapped handler is called.
-
-The WRAPPING-PATH should omit any leading /
+wrapped handler is called.  The WRAPPING-PATH is a non-hostpath
+path.  It does not match the hostname, so just a path match is
+necessary, such as \"^/\" for a root match.
 
 A single WRAPPING-PATH may only wrap a handler once.  Any
 subsequent attempt to wrap the same HANDLER-SYMBOL with the same
@@ -2409,10 +2414,11 @@ to be consistent with Lisp evaluation semantics."
     ;; Set the function for the symbol to one wrapping the func
     (fset handler-symbol
           (lambda (httpcon)
-            (elnode-dispatcher
+            (elnode--wrap-implementation
              httpcon
-             (list (cons wrapping-path wrapping-handler)
-                   (cons "\\(.*\\)" current-handler)))))))
+             wrapping-path
+             wrapping-handler
+             current-handler)))))
 
 (defvar elnode-auth-db (make-hash-table :test 'equal)
   "Authentication database.
@@ -2553,10 +2559,24 @@ This function sends the contents of the custom variable
       `(("target" . ,target)
         ("redirect" . ,redirect))))))
 
+(defun elnode-auth--wrapping-login-handler (httpcon target)
+  "The implementation of the login handler for wrapping."
+  (elnode-method httpcon
+      (GET
+       (let ((to (or (elnode-http-param httpcon "to") "/")))
+         (funcall sender httpcon target to)))
+    (POST
+     (let ((username (elnode-http-param httpcon "username"))
+           (password (elnode-http-param httpcon "password"))
+           (logged-in (elnode-http-param httpcon "loggedin")))
+       (elnode-auth-http-login
+        httpcon
+        username password logged-in)))))
+
 (defun* elnode-auth-make-login-wrapper (wrap-target
                                          &key
                                          (sender 'elnode-auth-login-sender)
-                                         (target "login/"))
+                                         (target "/login/"))
   "Make an auth wrapper around WRAP-TARGET with content from SENDER.
 
 Wrappers are high level ways of specifying redirect targets for
@@ -2584,18 +2604,17 @@ from the HTTPCON.  `to' is / by default (if it cannot be found in
 the HTTP request)."
   (list wrap-target
         (lambda (httpcon)
-          (elnode-method httpcon
-              (GET
-               (let ((to (or (elnode-http-param httpcon "to") "/")))
-                 (funcall sender httpcon target to)))
-              (POST
-               (let ((username (elnode-http-param httpcon "username"))
-                     (password (elnode-http-param httpcon "password"))
-                     (logged-in (elnode-http-param httpcon "loggedin")))
-                 (elnode-auth-http-login
-                  httpcon
-                  username password logged-in)))))
+          (elnode-auth--wrapping-login-handler httpcon target))
         target))
+
+(defun elnode--with-auth-do-wrap (wrapper-spec)
+  "Do the wrapping based on WRAPPER-SPEC."
+  (flet ((wrapper (wrapped-target wrapping-func &optional (path "/login/"))
+           (elnode--wrap-handler
+            wrapped-target
+            path
+            wrapping-func)))
+    (apply 'wrapper wrapper-spec)))
 
 (defmacro* elnode-with-auth ((httpcon
                               &key
@@ -2661,10 +2680,7 @@ should indicate a path where a user can login, for example
       (when (listp redir)
         (when (eq 'elnode-auth-make-login-wrapper (car redir))
           (setq redir (apply (car redir) (cdr redir))))
-        (elnode--wrap-handler
-         (car redir)
-         "login/"
-         (cadr redir)))
+        (elnode--with-auth-do-wrap redir))
       ;; Now the macro body
       `(let ((,httpconv ,httpcon)
              (,testv ,test)

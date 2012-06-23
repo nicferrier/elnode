@@ -197,7 +197,7 @@ Update operations are protected by authentication."
      (elnode-with-auth (httpcon
                         :redirect (elnode-auth-make-login-wrapper
                                    elnode-wikiserver
-                                   :target "wiki/login/"))
+                                   :target "/wiki/login/"))
          (let* ((path (elnode-http-pathinfo httpcon))
                 (text (elnode-wiki--text-param httpcon)))
            (if (not (elnode-http-param httpcon "preview"))
@@ -262,7 +262,7 @@ via a child process."
     (lambda (httpcon)
       (elnode-hostpath-dispatcher
        httpcon
-       '(("[^/]+/wiki/\\(.*\\)" . elnode-wikiserver))))
+       '(("[^/]+//wiki/\\(.*\\)" . elnode-wikiserver))))
     ;; Setup the the Creole file handler mocking.
     (flet
         ((elnode--worker-lisp-helper (child-lisp)
