@@ -2685,7 +2685,6 @@ should indicate a path where a user can login, for example
 
 ;;; Main customization stuff
 
-;;;###autoload
 (defcustom elnode-init-port 8000
   "The port that `elnode-init' starts the default server on."
   :group 'elnode)
@@ -2719,7 +2718,6 @@ the handler and listening on `elnode-init-host'"
   ;;    (elnode--init-deferring))
   )
 
-;;;###autoload
 (defcustom elnode-do-init 't
   "Should elnode start a server on load?
 
@@ -2734,7 +2732,6 @@ in `elnode-webserver-docroot', which by default is ~/public_html."
   :type '(boolean)
   )
 
-;;;###autoload
 (defvar elnode--inited nil
   "Records when elnode is initialized.
 This is autoloading mechanics, see the eval-after-load for doing init.")
