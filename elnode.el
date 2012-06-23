@@ -2401,7 +2401,10 @@ necessary, such as \"^/\" for a root match.
 A single WRAPPING-PATH may only wrap a handler once.  Any
 subsequent attempt to wrap the same HANDLER-SYMBOL with the same
 WRAPPING-PATH will result in reinitialization.  This is designed
-to be consistent with Lisp evaluation semantics."
+to be consistent with Lisp evaluation semantics.
+
+Returns the wrapping specification which is exactly the same as
+the argument list."
   (let* ((sym-path (intern wrapping-path))
          (wrapped-func (get handler-symbol sym-path))
          (current-handler (if (and
@@ -2418,13 +2421,14 @@ to be consistent with Lisp evaluation semantics."
              httpcon
              wrapping-path
              wrapping-handler
-             current-handler)))))
+             current-handler)))
+    (list handler-symbol wrapping-path wrapping-handler)))
 
 (defvar elnode-auth-db (make-hash-table :test 'equal)
   "Authentication database.
 
-This is the data structure storing usernames and hashed
-passwords.")
+This is the data structure storing hashed passwords against
+username keys.")
 
 (defvar elnode-secret-key "secret"
   "Secret key used to hash secrets like passwords.")
@@ -2680,35 +2684,37 @@ should indicate a path where a user can login, for example
       (when (listp redir)
         (when (eq 'elnode-auth-make-login-wrapper (car redir))
           (setq redir (apply (car redir) (cdr redir))))
-        (elnode--with-auth-do-wrap redir))
-      ;; Now the macro body
-      `(let ((,httpconv ,httpcon)
-             (,testv ,test)
-             (,cookie-namev ,cookie-name)
-             (,redirectv (quote ,redir)))
-         (if (not (eq ,testv :cookie))
-             (error "Elnode has no other auth test than `:cookie' possible")
-             (assert ,cookie-namev)
-             (condition-case token
-                 (let ((cookie
-                        (elnode-auth-cookie-check-p
-                         ,httpconv
-                         :cookie-name ,cookie-namev)))
-                   ;; Do whatever the code was now.
-                   ,@body)
-               ;; On auth failure send the redirect to the login url
-               (elnode-auth-token
-                (let ((to
-                       (cond
-                         ((listp ,redirectv)
-                          ;; really we should pull it from the list
-                          "/login/?to=/")
-                         ((stringp ,redirectv)
-                          ,redirectv)
-                         (t
-                          (error
-                           "Elnode auth redirect is a list or a string")))))
-                  (elnode-send-redirect ,httpconv to)))))))))
+        (let ((redirect-spec (elnode--with-auth-do-wrap redir)))
+          ;; Now the macro body
+          `(let ((,httpconv ,httpcon)
+                 (,testv ,test)
+                 (,cookie-namev ,cookie-name)
+                 (,redirectv (quote ,redirect-spec)))
+             (if (not (eq ,testv :cookie))
+                 (error "Elnode has no other auth test than `:cookie' possible")
+                 (assert ,cookie-namev)
+                 (condition-case token
+                     (let ((cookie
+                            (elnode-auth-cookie-check-p
+                             ,httpconv
+                             :cookie-name ,cookie-namev)))
+                       ;; Do whatever the code was now.
+                       ,@body)
+                   ;; On auth failure send the redirect to the login url
+                   (elnode-auth-token
+                    (let ((to
+                           (cond
+                             ((listp ,redirectv)
+                              ;; The "to" is wrong here... it should
+                              ;; be the current url or some specified
+                              ;; url
+                              (format "%s?to=/" (cadr ,redirectv)))
+                             ((stringp ,redirectv)
+                              ,redirectv)
+                             (t
+                              (error
+                               "Elnode auth redirect is a list or a string")))))
+                      (elnode-send-redirect ,httpconv to)))))))))))
 
 ;;; Main customization stuff
 
