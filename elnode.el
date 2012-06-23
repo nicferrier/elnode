@@ -2432,7 +2432,9 @@ this looks up and tests the hash."
     (equal token (gethash username elnode-auth-db))))
 
 (defvar elnode-loggedin-db (make-hash-table :test 'equal)
-  "Stores logins; authentication sessions.")
+  "Stores logins - authentication sessions.
+
+See `elnode-auth-login' for how this is updated.")
 
 (progn
   ;; Sets up the elnode auth errors
