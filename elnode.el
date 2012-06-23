@@ -2656,7 +2656,7 @@ default.
 
 :COOKIE-NAME is used when the :TEST is `:cookie'.  It is the name
 of the cookie to use for authentication.  By default this is
-`elnode-auth'.  It can be specified as a symbol or a string.
+`elnode-auth'.  It must be specified as a string.
 
 :FAILURE-TYPE is what to do if authentication fails.  Currently
 only `:redirect' is supported.  To redirect on failure means to
