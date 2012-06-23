@@ -2574,7 +2574,7 @@ This function sends the contents of the custom variable
       `(("target" . ,target)
         ("redirect" . ,redirect))))))
 
-(defun elnode-auth--wrapping-login-handler (httpcon target)
+(defun elnode-auth--wrapping-login-handler (httpcon sender target)
   "The implementation of the login handler for wrapping."
   (elnode-method httpcon
       (GET
@@ -2619,7 +2619,7 @@ from the HTTPCON.  `to' is / by default (if it cannot be found in
 the HTTP request)."
   (list wrap-target
         (lambda (httpcon)
-          (elnode-auth--wrapping-login-handler httpcon target))
+          (elnode-auth--wrapping-login-handler httpcon sender target))
         target))
 
 (defun elnode--with-auth-do-wrap (wrapper-spec)
