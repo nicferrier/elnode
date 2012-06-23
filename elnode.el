@@ -2440,6 +2440,16 @@ username keys.")
                 username
                 password)))
 
+(defun elnode-auth-user-add (username password)
+  "Comand to add a user to the internal authentication database."
+  (interactive (list (read-from-minibuffer "username: ")
+                     (read-passwd "password: ")))
+  (puthash
+   username
+   (elnode--auth-make-hash username password)
+   elnode-auth-db)
+  (message "username is %s" username))
+
 (defun elnode-auth-user-p (username password)
   "Is the user in the `elnode-auth-db'?
 
