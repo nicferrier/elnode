@@ -2649,7 +2649,9 @@ is `:redirect' by default.
 should indicate a path where a user can login, for example
 \"/login/\") or it can be a wrapper.  See
 `elnode-auth-make-login-wrapper' for a description of wrappers."
-  (declare (indent defun))
+  (declare
+   (debug (sexp &rest form))
+   (indent defun))
   (let ((httpconv (make-symbol "httpconv"))
         (testv (make-symbol "testv"))
         (cookie-namev (make-symbol "cookie-namev"))
