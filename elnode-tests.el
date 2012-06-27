@@ -1028,35 +1028,48 @@ authenticated."
 
 This tests that the auth protection macro does its job, including
 the wrapping of a specified handler with the login sender."
-  (flet ((auth-reqd-handler (httpcon)
-           (elnode-with-auth
-               (httpcon
-                :test :cookie
-                :cookie-name "secret"
-                :redirect (elnode-auth-make-login-wrapper auth-reqd-handler))
+  ;; Setup the user db
+  (let ((elnode-auth-db (make-hash-table :test 'equal)))
+    ;; The only time we really need clear text passwords is when
+    ;; faking records for test
+    (elnode--auth-init-user-db '(("nferrier" . "password")
+                                 ("someuser" . "secret")))
+    ;; Setup a handler to wrap
+    (flet ((auth-reqd-handler (httpcon)
+             (elnode-with-auth httpcon 'test-auth
                (elnode-http-start httpcon 200 '(content-type . "text/html"))
-             (elnode-http-return
-              httpcon
-              "<html><body>You are logged in!</body></html>"))))
-    ;; Test that we are redirected to login when we don't have cookie
-    (with-elnode-mock-server 'auth-reqd-handler
-        (let ((r (elnode-test-call "/")))
+               (elnode-http-return
+                httpcon
+                "<html><body>You are logged in!</body></html>"))))
+      ;; Make the auth scheme
+      ;;
+      ;; Since we use fset in elnode--wrap-handler this should work ok.
+      (elnode-auth-define-scheme
+       'test-auth
+       :test :cookie
+       :cookie-name "secret"
+       :redirect (elnode-auth-make-login-wrapper
+                  'auth-reqd-handler
+                  :target "/my-login/"))
+      ;; Test that we are redirected to login when we don't have cookie
+      (with-elnode-mock-server 'auth-reqd-handler
+          (let ((r (elnode-test-call "/")))
+            (should
+             (equal 302
+                    (plist-get r :status)))
+            (should
+             (equal "/my-login/?to=/"
+                    (aget (plist-get r :header) "Location"))))
+        ;; Test that we get the login page - this tests that the main
+        ;; handler was wrapped
+        (let ((r (elnode-test-call "/my-login/")))
           (should
-           (equal 302
+           (equal 200
                   (plist-get r :status)))
           (should
-           (equal "/login/?to=/"
-                  (aget (plist-get r :header) "Location"))))
-      ;; Test that we get the login page - this tests that the main
-      ;; handler was wrapped
-      (let ((r (elnode-test-call "/login/")))
-        (should
-         (equal 200
-                (plist-get r :status)))
-        (should
-         (string-match
-          "<input type='hidden' name='redirect' value='/'/>"
-          (plist-get r :result-string)))))))
+           (string-match
+            "<input type='hidden' name='redirect' value='/'/>"
+            (plist-get r :result-string))))))))
 
 (provide 'elnode-tests)
 
