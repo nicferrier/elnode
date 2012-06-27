@@ -2534,8 +2534,10 @@ the user to LOGGED-IN."
          (elnode-auth-login username password)))
     (elnode-http-header-set
      httpcon
-     (elnode-http-cookie-make "elnode-auth"
-                              (format "%s::%s" username hash)))
+     (elnode-http-cookie-make
+      "elnodeauth"
+      (format "%s::%s" username hash)
+      :path logged-in))
     (elnode-send-redirect httpcon logged-in)))
 
 (defcustom elnode-auth-login-page "<html>
