@@ -154,7 +154,7 @@ If PAGEINFO is specified it's the HTTP path to the Wiki page."
    "\r" "" ; browsers send text in DOS line ending format
    (elnode-http-param httpcon "wikitext")))
 
-(defun elnode-wiki--save-request (httpcon path text)
+(defun elnode-wiki--save-request (httpcon wikiroot path text)
   "Process an update request."
   (let* ((page (if path
                    (save-match-data
@@ -192,23 +192,20 @@ Update operations are protected by authentication."
        do
        (if (equal target-path (concat wikiroot "/"))
            (elnode-wiki-page httpcon (concat wikiroot "/index.creole"))
-         (elnode-wiki-page httpcon target-path))))
+           (elnode-wiki-page httpcon target-path))))
     (POST
-     (elnode-with-auth (httpcon
-                        :redirect (elnode-auth-make-login-wrapper
-                                   elnode-wikiserver
-                                   :target "/wiki/login/"))
-         (let* ((path (elnode-http-pathinfo httpcon))
-                (text (elnode-wiki--text-param httpcon)))
-           (if (not (elnode-http-param httpcon "preview"))
-               ;; A save request in which case save the new text and then
-               ;; send the wiki text.
-               (elnode-wiki--save-request httpcon path text)
-               ;; Might be a preview request in which case send back the WIKI
-               ;; text that's been sent.
-               (with-temp-file "/tmp/preview"
-                 (insert text))
-               (elnode-wiki-send httpcon "/tmp/preview" path)))))))
+     (elnode-with-auth httpcon 'elnode-wiki-auth
+       (let* ((path (elnode-http-pathinfo httpcon))
+              (text (elnode-wiki--text-param httpcon)))
+         (if (not (elnode-http-param httpcon "preview"))
+             ;; A save request in which case save the new text and then
+             ;; send the wiki text.
+             (elnode-wiki--save-request httpcon wikiroot path text)
+             ;; Might be a preview request in which case send back the WIKI
+             ;; text that's been sent.
+             (with-temp-file "/tmp/preview"
+               (insert text))
+             (elnode-wiki-send httpcon "/tmp/preview" path)))))))
 
 (defun elnode-wikiserver-test ()
   "Test whether we should serve Wiki or not."
@@ -226,6 +223,13 @@ provided. Otherwise it will just error."
       (elnode-wiki-handler httpcon elnode-wikiserver-wikiroot)
     (elnode-send-500 httpcon "The Emacs feature 'creole is required.")))
 
+
+;; Define the authentication scheme for the wiki
+(elnode-auth-define-scheme
+ 'elnode-wiki-auth
+ :redirect (elnode-auth-make-login-wrapper
+            'elnode-wikiserver
+            :target "/wiki/login/"))
 
 ;; Tests
 

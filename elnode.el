@@ -2616,13 +2616,22 @@ authentication handler produced by this function.
 SENDER is a function that sends the login page to the client.
 The SENDER is passed the TARGET as well as the `to' parameter
 from the HTTPCON.  `to' is / by default (if it cannot be found in
-the HTTP request)."
-  (list wrap-target
+the HTTP request).
+
+This function returns the wrapper spec as a list with the car
+being the symbol `elnode-wrapper-spec'."
+  (list :elnode-wrapper-spec
+        wrap-target
         (lambda (httpcon)
           (elnode-auth--wrapping-login-handler httpcon sender target))
         target))
 
-(defun elnode--with-auth-do-wrap (wrapper-spec)
+
+(defvar elnode--defined-authentication-schemes
+  (make-hash-table :test 'equal)
+  "The hash of defined authentication schemes.")
+
+(defun elnode--auth-define-scheme-do-wrap (wrapper-spec)
   "Do the wrapping based on WRAPPER-SPEC."
   (flet ((wrapper (wrapped-target wrapping-func &optional (path "/login/"))
            (elnode--wrap-handler
@@ -2631,43 +2640,22 @@ the HTTP request)."
             wrapping-func)))
     (apply 'wrapper wrapper-spec)))
 
-(defmacro* elnode-with-auth ((httpcon
-                              &key
-                              (test :cookie)
-                              (cookie-name "elnode-auth")
-                              (failure-type :redirect)
-                              (redirect "/login/"))
-                             &rest body)
-  "Protect code with authentication using HTTPCON.
+;; Want to do this instead of the complex macro
+(defmacro* elnode-auth-define-scheme (scheme-name
+                                      &key
+                                      (test :cookie)
+                                      (cookie-name "elnodeauth")
+                                      (failure-type :redirect)
+                                      (redirect "/login/"))
+  "Define an Elnode authentication scheme.
 
-This macro protects code in a handler with a check for an
-authenticated request (the check is configurable).  If the check
-fails then an appropriate action is taken; for example, sending a
-login page.
+An authentication scheme consists of the following attributes:
 
-How to redirect to things is quite flexible and includes a well
-typed option involving wrappers.
-
-As an example:
-
- (defun my-secret-handler (httpcon)
-   \"Handler sending a very secret thing.\"
-   (elnode-with-auth (httpcon
-                      :test :cookie
-                      :cookie-name 'secure
-                      :redirect '(my-app-dispatcher my-login-handler))
-     (elnode-http-start httpcon 200 '(Content-type . \"text/html\"))
-     (elnode-http-return httpcon \"hello world\"))
-
-Will protect the code with something expecting the cookie
-\"secure\" and automatically decorating `my-app-dispatcher' with
-the handler for login `my-login-handler'.
-
-:TEST is the type of test to do to check for authenticated
-requests.  Currently this is only `:cookie' which is implemented
-by `elnode-auth-cookie-check-p'; in the future more
-authentication checks might be supported.  :TEST is `:cookie' by
-default.
+:TEST what sort of test is used to test the authentication, by
+default this is `:cookie'.  No other authentication tests are
+possible right now but in the future there might be many (there
+might also be a general `:function' test that allows calling of a
+function to implement the test).
 
 :COOKIE-NAME is used when the :TEST is `:cookie'.  It is the name
 of the cookie to use for authentication.  By default this is
@@ -2683,51 +2671,73 @@ is `:redirect' by default.
 should indicate a path where a user can login, for example
 \"/login/\") or it can be a wrapper.  See
 `elnode-auth-make-login-wrapper' for a description of wrappers."
+  ;;      (let ((redirect-spec (elnode--with-auth-do-wrap redir)))
+  (let ((redirect-specv (make-symbol "redirectv"))
+        (scheme-namev (make-symbol "scheme-namev")))
+    `(let ((,scheme-namev ,scheme-name)
+           (,redirect-specv ,redirect))
+       ;; Do some type checking
+       (cond
+         ((and (listp ,redirect-specv)
+               (eq :elnode-wrapper-spec (car ,redirect-specv)))
+          (elnode--auth-define-scheme-do-wrap (cdr ,redirect-specv)))
+         ((not (stringp ,redirect-specv))
+          (error ":REDIRECT must be a string or a wrapper specification")))
+       ;; Now just add the scheme to the list of defined schemes
+       (puthash ,scheme-namev
+                (list :test ,test
+                      :cookie-name ,cookie-name
+                      :failure-type ,failure-type
+                      :redirect ,redirect-specv)
+                elnode--defined-authentication-schemes))))
+
+(defmacro* elnode-with-auth (httpcon scheme &rest body)
+  "Protect code with authentication using HTTPCON and SCHEME.
+
+This macro protects code in a handler with a check for an
+authenticated request (the check is configurable).  If the check
+fails then an appropriate action is taken; for example, sending a
+login page.
+
+SCHEME is the authentication scheme to use as defined by
+`elnode-auth-define-scheme'."
   (declare
-   (debug (sexp &rest form))
+   (debug (sexp sexp &rest form))
    (indent defun))
   (let ((httpconv (make-symbol "httpconv"))
-        (testv (make-symbol "testv"))
-        (cookie-namev (make-symbol "cookie-namev"))
-        (redirectv (make-symbol "redirectv")))
-    ;; If redirect is a list it's a wrapper and we must apply it.
-    (let ((redir redirect))
-      (when (listp redir)
-        (when (eq 'elnode-auth-make-login-wrapper (car redir))
-          (setq redir (apply (car redir) (cdr redir))))
-        (let ((redirect-spec (elnode--with-auth-do-wrap redir)))
-          ;; Now the macro body
-          `(let ((,httpconv ,httpcon)
-                 (,testv ,test)
-                 (,cookie-namev ,cookie-name)
-                 (,redirectv (quote ,redirect-spec)))
-             (if (not (eq ,testv :cookie))
-                 (error "Elnode has no other auth test than `:cookie' possible")
-                 (assert ,cookie-namev)
-                 (condition-case token
-                     (let ((cookie
-                            (elnode-auth-cookie-check-p
-                             ,httpconv
-                             :cookie-name ,cookie-namev)))
-                       ;; Do whatever the code was now.
-                       ,@body)
-                   ;; On auth failure send the redirect to the login url
-                   (elnode-auth-token
-                    (let ((to
-                           (cond
-                             ((listp ,redirectv)
-                              ;; The "to" is wrong here... it should
-                              ;; be the current url or some specified
-                              ;; url
-                              (format "%s?to=%s"
-                                      (cadr ,redirectv)
-                                      (elnode-http-pathinfo ,httpconv)))
-                             ((stringp ,redirectv)
-                              ,redirectv)
-                             (t
-                              (error
-                               "Elnode auth redirect is a list or a string")))))
-                      (elnode-send-redirect ,httpconv to)))))))))))
+        (schemev (make-symbol "schemev")))
+    `(let ((,httpconv ,httpcon)
+           (scheme-list
+            (gethash ,scheme
+                     elnode--defined-authentication-schemes)))
+       (when (eq :cookie (plist-get scheme-list :test))
+         (condition-case token
+             (let ((cookie
+                    (elnode-auth-cookie-check-p
+                     ,httpconv
+                     :cookie-name (plist-get scheme-list :cookie-name))))
+               ;; Do whatever the code was now.
+               ,@body)
+           ;; On auth failure send the redirect to the login url
+           (elnode-auth-token
+            (let ((to
+                   (cond
+                     (;; We have a wrapper... other lists other
+                      ;; than wrappers are probably possible; we
+                      ;; should qualify the test here to be
+                      ;; wrapper specific
+                      (listp (plist-get scheme-list :redirect))
+                      (format
+                       "%s?to=%s"
+                       (elt (plist-get scheme-list :redirect) 3)
+                       (elnode-http-pathinfo ,httpconv)))
+                     ;; A plain string can be used directly
+                     ((stringp (plist-get scheme-list :redirect))
+                      (plist-get scheme-list :redirect))
+                     (t
+                      (error
+                       ":redirect MUST be  a list or a string")))))
+              (elnode-send-redirect ,httpconv to))))))))
 
 ;;; Main customization stuff
 
