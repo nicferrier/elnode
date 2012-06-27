@@ -989,8 +989,11 @@ authenticated."
                "<input type='hidden' name='redirect' value='/myapp/loggedin'/>"
                nil 't)))))
 
-(ert-deftest elnode--with-auth-do-wrap ()
-  "Test wrapper destructuring."
+(ert-deftest elnode--auth-define-scheme-do-wrap ()
+  "Test wrapper destructuring.
+
+The function under test uses some slightly exotic destructuring
+so we test it deliberately here."
   ;; First test with a specified path
   (flet ((elnode--wrap-handler (wrap-target path wrapping-func)
            (should
@@ -1001,7 +1004,7 @@ authenticated."
             (equal
              path
              "/doit/"))))
-    (elnode--with-auth-do-wrap
+    (elnode--auth-define-scheme-do-wrap
      (list
       'blah
       (lambda (httpcon)
@@ -1017,7 +1020,7 @@ authenticated."
             (equal
              path
              "/login/"))))
-    (elnode--with-auth-do-wrap
+    (elnode--auth-define-scheme-do-wrap
      (list
       'blah
       (lambda (httpcon)
