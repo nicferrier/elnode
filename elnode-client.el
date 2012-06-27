@@ -548,35 +548,47 @@ This tests the parameter passing by having an elnode handler "
          path
          params
          the-end
+         data-received
          (port (elnode-find-free-service)))
     ;; Start a server on the port
-    (elnode-start
-     (lambda (httpcon)
-       (setq method (elnode-http-method httpcon))
-       (setq path (elnode-http-pathinfo httpcon))
-       (setq params (elnode-http-params httpcon))
-       (elnode-http-start httpcon 200 '(Content-type . "text/plain"))
-       (elnode-http-return httpcon "hello world!"))
-     :port port)
-    ;; POST some parameters to the server
-    (elnode-client-http-post
-     (lambda (con header data)
-       (setq the-end t)
-       (elnode-stop port))
-     "/"
-     :port port
-     :data #s(hash-table size 5 data ("a" 10 "b" 20)))
-    ;; Hang till the client callback finishes
-    (while (not the-end)
-      (sit-for 0.1))
-    ;; Now test the data that was POSTed
+    (unwind-protect
+         (let ((init-data (make-hash-table :test 'equal
+                                           :size 5)))
+           (puthash "a" 10 init-data)
+           (puthash "b" 20 init-data)
+           ;; Start the server
+           (elnode-start
+            (lambda (httpcon)
+              (setq method (elnode-http-method httpcon))
+              (setq path (elnode-http-pathinfo httpcon))
+              (setq params (elnode-http-params httpcon))
+              (elnode-http-start httpcon 200 '(Content-type . "text/plain"))
+              (elnode-http-return httpcon "hello world!"))
+            :port port)
+           ;; POST some parameters to the server
+           (elnode-client-http-post
+            (lambda (con header data)
+              (setq data-received data)
+              (setq the-end t))
+            "/"
+            :port port
+            :data init-data)
+           ;; Hang till the client callback finishes
+           (while (not the-end)
+             (sit-for 0.1)))
+      ;; And when we're done with the server...
+      (elnode-stop port))
+    ;; Now test the data that was POSTed and collected inside the
+    ;; elnode handler
     (should (equal "POST" method))
     (should
      (equal
       '(("a" . "10")("b" . "20"))
       (sort params
             (lambda (a b)
-              (string-lessp (car a) (car b))))))))
+              (string-lessp (car a) (car b))))))
+    ;; And a quick check of the clients receipt of the data from the handler
+    (should (equal "hello world!" data-received))))
 
 (defun elnode-client--load-path-ize (lisp)
   "Wrap LISP in the current load-path."
