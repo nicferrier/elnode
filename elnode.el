@@ -2424,6 +2424,47 @@ the argument list."
              current-handler)))
     (list handler-symbol wrapping-path wrapping-handler)))
 
+;; Use byte compile to dump objects - good enough for simple databases
+;; http://permalink.gmane.org/gmane.emacs.devel/115821
+(defun elnode--dump-object (obj file)
+  "Save symbol object `obj' to the byte compiled version of `file'.
+
+OBJ can be any lisp object, list, hash-table, etc...
+
+FILE is an elisp file with ext *.el.
+
+Loading the *.elc file will restitute the object."
+  (with-temp-file file
+    (erase-buffer)
+    (let* ((str-obj (symbol-name obj))
+           (fmt-obj (format
+                     "(setq %s (eval-when-compile %s))"
+                     str-obj
+                     str-obj)))
+      (insert fmt-obj)))
+  (byte-compile-file file) (delete-file file)
+  (message "`%s' dumped to %sc" obj file))
+
+
+;; TODO - to use this as a storage we need
+;;
+;; * to have a custom field which will store the filename for the db -
+;; or just the directory?
+;;
+;; * to auto-create that directory on save
+;;
+;; * to try to load the database from that directory on startup
+;;
+;; * to try to save the database whenever there is a change
+(defun elnode--restore-object (file)
+  "Restore the object from FILE.
+
+Presumably the object was dumped with `elnode--dump-object'.
+
+This is really just an alias for `load-file'."
+  (load-file file))
+
+
 (defvar elnode-auth-db (make-hash-table :test 'equal)
   "Authentication database.
 
