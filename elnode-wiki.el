@@ -80,6 +80,15 @@
   :type '(string)
   :group 'elnode-wikiserver)
 
+(defcustom elnode-wikiserver-body-footer-not-loggedin
+  "<div id='footer'>
+    <a href='/wiki/login/'>login to edit</a>
+  </div>"
+  "HTML BODY footter for a rendered Wiki page."
+  :type '(string)
+  :group 'elnode-wikiserver)
+
+
 (defun elnode--wiki-call (out-buf page-text page)
   "Call a wiki page sending output OUT-BUF.
 
@@ -136,17 +145,20 @@ If PAGEINFO is specified it's the HTTP path to the Wiki page."
 ;; New version of elnode-wiki-send, basically
 (defun elnode-wiki-page (httpcon wikipage &optional pageinfo)
   "Creole render a WIKIPAGE back to the HTTPCON."
-  (elnode-http-start httpcon 200 `("Content-type" . "text/html"))
-  (with-stdout-to-elnode httpcon
-    (let ((page-info (or pageinfo (elnode-http-pathinfo httpcon)))
-          (header elnode-wikiserver-body-header)
-          (footer elnode-wikiserver-body-footer))
-      (creole-wiki
-       wikipage
-       :destination t
-       :variables `((page . ,page-info))
-       :body-header header
-       :body-footer footer))))
+  (let ((authenticated (elnode-http-cookie httpcon "elnodeauth")))
+    (elnode-http-start httpcon 200 `("Content-type" . "text/html"))
+    (with-stdout-to-elnode httpcon
+        (let ((page-info (or pageinfo (elnode-http-pathinfo httpcon)))
+              (header elnode-wikiserver-body-header)
+              (footer (if authenticated
+                          elnode-wikiserver-body-footer
+                          elnode-wikiserver-body-footer-not-loggedin)))
+          (creole-wiki
+           wikipage
+           :destination t
+           :variables `((page . ,page-info))
+           :body-header header
+           :body-footer footer)))))
 
 (defun elnode-wiki--text-param (httpcon)
   "Get the text param from HTTPCON and convert it."
