@@ -187,7 +187,7 @@ If PAGEINFO is specified it's the HTTP path to the Wiki page."
          (format "git commit -m '%s' %s" comment file-name)
          git-buf)
         (kill-buffer git-buf))
-      (elnode-wiki-send httpcon file-name))))
+      (elnode-wiki-page httpcon file-name))))
 
 (defun elnode-wiki-handler (httpcon wikiroot)
   "A low level handler for Wiki operations.
