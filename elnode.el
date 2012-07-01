@@ -2429,8 +2429,10 @@ the argument list."
 ;; Elnode authentication stuff
 
 (defcustom elnode-auth-db-spec
-  `(elnode-db-hash :filename
-                   ,(directory-file-name user-init-file))
+  `(elnode-db-hash
+    :filename
+    ,(format "%s/elnode-auth.el"
+             (directory-file-name user-init-file)))
   "The elnode-db specification of where the auth db is."
   :group 'elnode
   :type '(list symbol symbol string))
