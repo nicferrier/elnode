@@ -910,7 +910,7 @@ right thing."
 USER-ALIST is an assoc list of username and passwords."
   (loop for pair in user-alist
        do
-       (puthash
+       (elnode-db-put
         (car pair)
         (elnode--auth-make-hash
          (car pair)
@@ -921,7 +921,7 @@ USER-ALIST is an assoc list of username and passwords."
   "Check the authentication check.
 
 This tests the authentication database check."
-  (let ((elnode-auth-db (make-hash-table :test 'equal)))
+  (let ((elnode-auth-db (elnode-db-make '(elnode-db-hash))))
     ;; The only time we really need clear text passwords is when
     ;; faking records for test
     (elnode--auth-init-user-db '(("nferrier" . "password")
@@ -935,7 +935,7 @@ This tests the authentication database check."
 Tess that we can login a user and then assert that they are
 authenticated."
   (let ((elnode-loggedin-db (make-hash-table :test 'equal))
-        (elnode-auth-db (make-hash-table :test 'equal)))
+        (elnode-auth-db (elnode-db-make '(elnode-db-hash))))
     ;; The only time we really need clear text passwords is when
     ;; faking records for test
     (elnode--auth-init-user-db '(("nferrier" . "password")
@@ -955,7 +955,7 @@ authenticated."
 (ert-deftest elnode-auth-cookie-check-p ()
   "Check that a cookie can be used for auth."
   (let ((elnode-loggedin-db (make-hash-table :test 'equal))
-        (elnode-auth-db (make-hash-table :test 'equal)))
+        (elnode-auth-db (elnode-db-make '(elnode-db-hash))))
     ;; The only time we really need clear text passwords is when
     ;; faking records for test
     (elnode--auth-init-user-db '(("nferrier" . "password")
@@ -1032,7 +1032,7 @@ so we test it deliberately here."
 This tests that the auth protection macro does its job, including
 the wrapping of a specified handler with the login sender."
   ;; Setup the user db
-  (let ((elnode-auth-db (make-hash-table :test 'equal)))
+  (let ((elnode-auth-db (elnode-db-make '(elnode-db-hash))))
     ;; The only time we really need clear text passwords is when
     ;; faking records for test
     (elnode--auth-init-user-db '(("nferrier" . "password")

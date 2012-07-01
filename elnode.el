@@ -54,6 +54,7 @@
 (require 'mailcap)
 (require 'url-util)
 (require 'json)
+(require 'elnode-db)
 (eval-when-compile (require 'cl))
 
 (defconst ELNODE-FORM-DATA-TYPE "application/x-www-form-urlencoded"
@@ -2378,7 +2379,7 @@ HTTPCON is the HTTP connection to the user agent."
    elnode-webserver-extra-mimetypes))
 
 
-;;; Elnode auth stuff
+;;; Elnode wrapper stuff
 
 (defun elnode--wrap-implementation (httpcon
                                     wrapping-path
@@ -2424,52 +2425,25 @@ the argument list."
              current-handler)))
     (list handler-symbol wrapping-path wrapping-handler)))
 
-;; Use byte compile to dump objects - good enough for simple databases
-;; http://permalink.gmane.org/gmane.emacs.devel/115821
-(defun elnode--dump-object (obj file)
-  "Save symbol object `obj' to the byte compiled version of `file'.
 
-OBJ can be any lisp object, list, hash-table, etc...
+;; Elnode authentication stuff
 
-FILE is an elisp file with ext *.el.
+(defcustom elnode-auth-db-spec
+  `(elnode-db-hash :filename
+                   ,(directory-file-name user-init-file))
+  "The elnode-db specification of where the auth db is."
+  :group 'elnode
+  :type '(list symbol symbol string))
 
-Loading the *.elc file will restitute the object."
-  (with-temp-file file
-    (erase-buffer)
-    (let* ((str-obj (symbol-name obj))
-           (fmt-obj (format
-                     "(setq %s (eval-when-compile %s))"
-                     str-obj
-                     str-obj)))
-      (insert fmt-obj)))
-  (byte-compile-file file) (delete-file file)
-  (message "`%s' dumped to %sc" obj file))
-
-
-;; TODO - to use this as a storage we need
-;;
-;; * to have a custom field which will store the filename for the db -
-;; or just the directory?
-;;
-;; * to auto-create that directory on save
-;;
-;; * to try to load the database from that directory on startup
-;;
-;; * to try to save the database whenever there is a change
-(defun elnode--restore-object (file)
-  "Restore the object from FILE.
-
-Presumably the object was dumped with `elnode--dump-object'.
-
-This is really just an alias for `load-file'."
-  (load-file file))
-
-
-(defvar elnode-auth-db (make-hash-table :test 'equal)
+(defvar elnode-auth-db
+  (elnode-db-make elnode-auth-db-spec)
   "Authentication database.
 
 This is the data structure storing hashed passwords against
-username keys.")
+username keys.
+
+It is an elnode database which can be one of several
+implementations.")
 
 (defvar elnode-secret-key "secret"
   "Secret key used to hash secrets like passwords.")
@@ -2485,7 +2459,7 @@ username keys.")
   "Comand to add a user to the internal authentication database."
   (interactive (list (read-from-minibuffer "username: ")
                      (read-passwd "password: ")))
-  (puthash
+  (elnode-db-put
    username
    (elnode--auth-make-hash username password)
    elnode-auth-db)
@@ -2497,7 +2471,7 @@ username keys.")
 The password is stored in the db hashed keyed by the USERNAME,
 this looks up and tests the hash."
   (let ((token (elnode--auth-make-hash username password)))
-    (equal token (gethash username elnode-auth-db))))
+    (equal token (elnode-db-get username elnode-auth-db))))
 
 (defvar elnode-loggedin-db (make-hash-table :test 'equal)
   "Stores logins - authentication sessions.
