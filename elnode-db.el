@@ -136,16 +136,6 @@ If the filename exists then it is loaded into the database."
     (elnode-db-hash--save db)
     v))
 
-(ert-deftest elnode-db-get ()
-  ;; Make a hash-db with no filename
-  (let ((db (elnode-db-make '(elnode-db-hash))))
-    (should-not (elnode-db-get "test-key" db))
-    (elnode-db-put "test-key" 321 db)
-    (should
-     (equal
-      321
-      (elnode-db-get "test-key" db)))))
-
 (provide 'elnode-db)
 
 ;;; elnode-db.el ends here
