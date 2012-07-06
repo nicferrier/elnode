@@ -339,24 +339,33 @@ The function `elnode-send-status' also uses these."
 (defun elnode--sentinel (process status)
   "Sentinel function for the main server and for the client sockets."
   (elnode-error
-   "elnode--sentinel %s for process  %s"
+   "elnode--sentinel '%s' for process  %s with buffer %s"
    (elnode-trunc status)
-   (process-name process))
+   (process-name process)
+   (process-buffer process))
   (cond
    ;; Server status
    ((and
      (assoc (process-contact process :service) elnode-server-socket)
      (equal status "deleted\n"))
-    (kill-buffer (process-buffer process))
+    (if (equal
+	 (process-buffer
+	  ;; Get the server process
+	  (cdr (assoc 
+		(process-contact process :service)
+		elnode-server-socket)))
+	 (process-buffer process))
+	(message "found the server process - NOT deleting")
+      (message "aha! deleting the connection process")
+      (kill-buffer (process-buffer process)))
     (elnode-error "Elnode server stopped"))
 
    ;; Client socket status
    ((equal status "connection broken by remote peer\n")
-    (if (process-buffer process)
-        (progn
-          (kill-buffer (process-buffer process))
-          (elnode-error "Elnode connection dropped %s" process))))
-
+    (when (process-buffer process)
+      (kill-buffer (process-buffer process))
+      (elnode-error "Elnode connection dropped %s" process)))
+   
    ((equal status "open\n") ;; this says "open from ..."
     (elnode-error "Elnode opened new connection"))
 
@@ -644,7 +653,7 @@ or:
 
 For header and parameter names, strings MUST be used currently."
   (let ((fakir-mock-process-require-specified-buffer t))
-    (fakir-mock-process ()
+    (fakir-mock-process :httpcon ()
       (let ((hdrtext
              (apply
               'elnode--http-make-hdr
@@ -652,7 +661,7 @@ For header and parameter names, strings MUST be used currently."
                 ,path
                 ,@headers
                 (body ""))))
-            (http-connection t))
+            (http-connection :httpcon))
         ;; Capture the real eof-func and then override it to do fake ending.
         (let ((eof-func (elnode--make-send-eof))
               (main-send-string (symbol-function 'elnode-http-send-string))
@@ -813,21 +822,21 @@ elnode servers on the same port on different hosts."
   "Stop the elnode server attached to PORT."
   (interactive "nPort: ")
   (let ((server (assoc port elnode-server-socket)))
-    (if server
-        (progn
-          (delete-process (cdr server))
-          (setq elnode-server-socket
-                ;; remove-if
-                (let ((test (lambda (elem)
-                              (= (car elem) port)))
-                      (l elnode-server-socket)
-                      result)
-                  (while (car l)
-                    (let ((p (pop l))
-                          (r (cdr l)))
-                      (if (not (funcall test p))
-                          (setq result (cons p result)))))
-                  result))))))
+    (when server
+      (message "deleting server process")
+      (delete-process (cdr server))
+      (setq elnode-server-socket
+	    ;; remove-if
+	    (let ((test (lambda (elem)
+			  (= (car elem) port)))
+		  (l elnode-server-socket)
+		  result)
+	      (while (car l)
+		(let ((p (pop l))
+		      (r (cdr l)))
+		  (if (not (funcall test p))
+		      (setq result (cons p result)))))
+	      result)))))
 
 (defun elnode-find-free-service ()
   "Return a free (unused) TCP port.
@@ -1280,7 +1289,7 @@ data.  This is done mainly for testing infrastructure."
         "HTTP/1.1 %d %s\r\n%s\r\n"
         status-code
         ;; The status text
-        (aget elnode-http-codes-alist status-code)
+        (assoc-default status-code elnode-http-codes-alist)
         ;; The header
         (or
          (elnode--http-result-header header-alist)
@@ -1626,24 +1635,6 @@ table.  It calls `elnode-hostpath-dispatcher' with
             ,hv
             (buffer-substring (point-min) (point-max)))
            (elnode-http-return ,hv))))))
-
-(ert-deftest elnode-client-with-stdout ()
-  "Test the stdout macro.
-
-Test that we get the right chunked encoding stuff going on."
-  (with-temp-buffer
-    (let ((process :fake)
-          (test-buffer (current-buffer)))
-      (fakir-mock-process ((:elnode-http-started t))
-          (progn
-            (set-process-buffer process test-buffer)
-            (with-stdout-to-elnode process
-                (princ "hello!")))
-          (should
-           (equal
-            (let ((str "hello!"))
-              (format "%d\r\n%s\r\n0\r\n\r\n" (length str) str))
-            (buffer-substring (point-min) (point-max))))))))
 
 
 ;; Elnode child process functions
@@ -2014,7 +2005,7 @@ being returned."
         (t
          ;; Presume it's an alist
          (or
-          (aget replacements (match-string 1 matched) t) ""))))
+          (assoc-default (match-string 1 matched) replacements nil t)))))
      (buffer-substring (point-min)(point-max)))))
 
 (defvar elnode-webserver-visit-file nil
@@ -2443,7 +2434,9 @@ the argument list."
   `(elnode-db-hash
     :filename
     ,(format "%s/elnode-auth.el"
-             (directory-file-name user-init-file)))
+             (directory-file-name
+              (or user-init-file
+                  "/tmp"))))
   "The elnode-db specification of where the auth db is."
   :group 'elnode
   :type '(list symbol symbol string))
@@ -2804,6 +2797,7 @@ the handler and listening on `elnode-init-host'"
   ;;    (elnode--init-deferring))
   )
 
+;;;###autoload
 (defcustom elnode-do-init 't
   "Should elnode start a server on load?
 
@@ -2825,7 +2819,10 @@ This is autoloading mechanics, see the eval-after-load for doing init.")
 ;; Auto start elnode if we're ever loaded
 ;;;###autoload
 (eval-after-load 'elnode
-  (if (and elnode-do-init (not elnode--inited))
+  (if (and (boundp 'elnode-do-init)
+           elnode-do-init
+	   (or (not (boundp 'elnode--inited))
+	       (not elnode--inited)))
       (progn
         (elnode-init)
         (setq elnode--inited nil))))
