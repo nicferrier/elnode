@@ -157,6 +157,7 @@ is just a test helper."
 (ert-deftest elnode-test-access-log ()
   "Test the access logging."
   (fakir-mock-process
+    :httpcon
     ((:buffer
       (elnode--http-make-hdr
        'get "/"
@@ -168,7 +169,7 @@ is just a test helper."
      (equal
       'done
       (catch 'elnode-parse-http
-        (elnode--http-parse nil))))
+        (elnode--http-parse :httpcon))))
     (let* ((logname "ert-test")
            (buffername (format "*%s-elnode-access*" logname)))
       (flet ((elnode--log-filename
@@ -245,6 +246,7 @@ my data")))
 (ert-deftest elnode--http-parse-header-complete ()
   "Test the HTTP parsing."
   (fakir-mock-process
+    :httpcon
     ((:buffer
       (elnode--http-make-hdr
        'get "/"
@@ -254,11 +256,11 @@ my data")))
     (should
      (equal 'done
             (catch 'elnode-parse-http
-              (elnode--http-parse nil))))
+              (elnode--http-parse :httpcon))))
     ;; Now check the side effects
     (should
      (equal
-      (process-get nil :elnode-http-header)
+      (process-get :httpcon :elnode-http-header)
       '(("Host" . "localhost")
         ("User-Agent" . "test-agent"))))))
 
@@ -269,6 +271,7 @@ An HTTP request with an incomplete header is setup and tested,
 then we finish the request (fill out the header) and then test
 again."
   (fakir-mock-process
+    :httpcon
     ((:buffer
       "GET / HTTP/1.1\r\nHost: localh"))
     ;; Now parse
@@ -276,16 +279,16 @@ again."
      ;; It fails with incomplete 'header signal
      (equal 'header
             (catch 'elnode-parse-http
-              (elnode--http-parse nil))))
+              (elnode--http-parse :httpcon))))
     ;; Now put the rest of the header in the buffer
-    (with-current-buffer (process-buffer nil)
+    (with-current-buffer (process-buffer :httpcon)
       (goto-char (point-max))
       (insert "ost\r\n\r\n"))
     (should
      ;; Now it succeeds with the 'done signal
      (equal 'done
             (catch 'elnode-parse-http
-              (elnode--http-parse nil))))))
+              (elnode--http-parse :httpcon))))))
 
 
 (ert-deftest elnode--http-parse-body-incomplete ()
@@ -302,21 +305,22 @@ and then test again."
           `(content-length . ,(format "%d" (length "this is not finished")))
           '(body . "this is not fin"))))
     (fakir-mock-process
+        :httpcon
         ((:buffer hdr))
         ;; Now parse
         (should
          (equal 'content
                 (catch 'elnode-parse-http
-                  (elnode--http-parse nil))))
+                  (elnode--http-parse :httpcon))))
       ;; Now put the rest of the text in the buffer
-      (with-current-buffer (process-buffer nil)
+      (with-current-buffer (process-buffer :httpcon)
         (goto-char (point-max))
         (insert "ished"))
       ;; And test again
       (should
        (equal 'done
               (catch 'elnode-parse-http
-                (elnode--http-parse nil)))))))
+                (elnode--http-parse :httpcon)))))))
 
 
 (ert-deftest elnode-http-start ()
@@ -324,8 +328,9 @@ and then test again."
 
 Especially tests the mix of header setting techniques."
   (fakir-mock-process
-      ()
-      (elnode-http-header-set :httpcon "Content-Type" "text/html")
+    :httpcon
+    ()
+    (elnode-http-header-set :httpcon "Content-Type" "text/html")
     (elnode-http-header-set :httpcon "Accept" "application/javascript")
     (elnode-http-start :httpcon 200 '("Content-Type" . "text/plain"))
     ;; Test that we have the correct text in the fake process buffer
@@ -368,6 +373,7 @@ The text spat out is tested, so is the status."
 (ert-deftest elnode-http-header ()
   "Test that we have headers."
   (fakir-mock-process
+    :httpcon
     ((:buffer
       (elnode--http-make-hdr
        'get "/"
@@ -380,7 +386,7 @@ The text spat out is tested, so is the status."
     (should
      (equal 'done
             (catch 'elnode-parse-http
-              (elnode--http-parse nil))))
+              (elnode--http-parse :httpcon))))
     (should
      (equal "test-agent"
             (elnode-http-header :httpcon "User-Agent")))
@@ -402,18 +408,20 @@ The text spat out is tested, so is the status."
   "Test the cookie retrieval"
   ;; First test no cookie header
   (fakir-mock-process
-      ((:elnode-http-header
-        '(("Referer" . "http://somehost.example/com"))))
-      (should-not
-       (elnode-http-cookie :httpcon "username")))
+    :httpcon
+    ((:elnode-http-header
+      '(("Referer" . "http://somehost.example/com"))))
+    (should-not
+     (elnode-http-cookie :httpcon "username")))
   ;; Now do we have a cookie?
   (fakir-mock-process
-      ((:elnode-http-header
-        '(("Cookie" . "csrf=213u21321321412nsfnwlv; username=nicferrier"))))
-      (should
-       (equal
-        "((\"username\" . \"nicferrier\"))\n"
-        (pp-to-string (elnode-http-cookie :httpcon "username"))))
+    :httpcon
+    ((:elnode-http-header
+      '(("Cookie" . "csrf=213u21321321412nsfnwlv; username=nicferrier"))))
+    (should
+     (equal
+      "((\"username\" . \"nicferrier\"))\n"
+      (pp-to-string (elnode-http-cookie :httpcon "username"))))
     (should
      (equal
       "nicferrier"
@@ -427,22 +435,24 @@ The text spat out is tested, so is the status."
 Cookie lists are good fake up values for higher abstraction
 testing code so we specifically test that they work."
   (fakir-mock-process
-      ;; Define a cookie with a faked cookie list
-      ((:elnode-http-cookie-list '(("name" . "value"))))
-      (should
-       (equal
-        '("name" . "value")
-        (elnode-http-cookie :httpcon "name"))))
+    :httpcon
+    ;; Define a cookie with a faked cookie list
+    ((:elnode-http-cookie-list '(("name" . "value"))))
+    (should
+     (equal
+      '("name" . "value")
+      (elnode-http-cookie :httpcon "name"))))
   ;; Not sure about what the property should contain here...
   (fakir-mock-process
-      ((:elnode-http-header
-        '(("Cookie" . "name=value"))))
-      (elnode-http-cookie :httpcon "name")
-      (should
-       (equal
-        ;; ... is this really right? a list of a list of a list???
-        '((("name" . "value")))
-        (process-get :httpcon :elnode-http-cookie-list)))))
+    :httpcon
+    ((:elnode-http-header
+      '(("Cookie" . "name=value"))))
+    (elnode-http-cookie :httpcon "name")
+    (should
+     (equal
+      ;; ... is this really right? a list of a list of a list???
+      '((("name" . "value")))
+      (process-get :httpcon :elnode-http-cookie-list)))))
 
 (ert-deftest elnode-http-cookie-make ()
   "Test the cookie header maker."
@@ -467,17 +477,19 @@ parsing. That checks the ':elnode-http-method':
 
 *** WARNING:: This test so far only handles GET ***"
   (fakir-mock-process
+    :httpcon
     (:elnode-http-params
      (:elnode-http-method "GET")
      (:elnode-http-query "a=10"))
-    (should (equal "10" (elnode-http-param 't "a"))))
+    (should (equal "10" (elnode-http-param :httpcon "a"))))
   ;; Test some more complex params
   (fakir-mock-process
+    :httpcon
     (:elnode-http-params
      (:elnode-http-method "GET")
      (:elnode-http-query "a=10&b=lah+dee+dah&c+a=blah+blah"))
-    (should (equal "lah dee dah" (elnode-http-param 't "b")))
-    (should (equal "blah blah" (elnode-http-param 't "c a")))))
+    (should (equal "lah dee dah" (elnode-http-param :httpcon "b")))
+    (should (equal "blah blah" (elnode-http-param :httpcon "c a")))))
 
 (ert-deftest elnode-test-http-post-params ()
   "Test that the params are ok if they are in the body.
@@ -486,6 +498,7 @@ Does a full http parse of a dummy buffer."
   (let ((httpcon :httpcon))
     (let ((post-body "a=10&b=20&c=this+is+finished"))
       (fakir-mock-process
+	  :httpcon
           ((:buffer
             (elnode--http-make-hdr
              'post "/"
@@ -504,18 +517,19 @@ Does a full http parse of a dummy buffer."
         (should (equal "this is finished" (elnode-http-param httpcon "c")))))
     ;; Test get of params that aren't there
     (fakir-mock-process
-        ((:buffer
-          (elnode--http-make-hdr
-           'post "/"
-           '(host . "localhost")
-           '(user-agent . "test-agent")
-           `(content-length . "0")
-           `(body . ""))))
-        ;; Now parse
-        (should
-         (equal 'done
-                (catch 'elnode-parse-http
-                  (elnode--http-parse httpcon))))
+      :httpcon
+      ((:buffer
+	(elnode--http-make-hdr
+	 'post "/"
+	 '(host . "localhost")
+	 '(user-agent . "test-agent")
+	 `(content-length . "0")
+	 `(body . ""))))
+      ;; Now parse
+      (should
+       (equal 'done
+	      (catch 'elnode-parse-http
+		(elnode--http-parse httpcon))))
       (should-not (elnode-http-param httpcon "a"))
       (should-not (elnode-http-param httpcon "b"))
       (should-not (elnode-http-param httpcon "c")))))
@@ -524,6 +538,7 @@ Does a full http parse of a dummy buffer."
   "Test that the params are ok if they are just empty in the body."
   (let ((post-body ""))
     (fakir-mock-process
+      :httpcon
       ((:buffer
         (elnode--http-make-hdr
          'post "/"
@@ -559,10 +574,11 @@ Content-Type: text/html\r
 (ert-deftest elnode-http-header-set ()
   "Test the premature setting of HTTP headers."
   (fakir-mock-process
-      ()
-      (should
-       (equal nil
-              (process-get :httpcon :elnode-headers-to-set)))
+    :httpcon
+    ()
+    (should
+     (equal nil
+	    (process-get :httpcon :elnode-headers-to-set)))
     (elnode-http-header-set :httpcon "Content-Type" "text/html")
     (elnode-http-header-set
      :httpcon
@@ -585,6 +601,7 @@ Content-Type: text/html\r
        (flet ((elnode-http-return (con data)
                 (setq sent-data data)))
          (fakir-mock-process
+	  httpcon
           ()
           (elnode-send-json httpcon (list "a string in a list")))
          sent-data))))))
@@ -626,6 +643,7 @@ Content-Type: text/html\r
 (ert-deftest elnode--mapper-find ()
   "Test the mapper find function."
   (fakir-mock-process
+   :httpcon
    ((:nothing))
    (should
     (equal
@@ -656,12 +674,13 @@ Content-Type: text/html\r
 (ert-deftest elnode-get-targetfile ()
   "Test the target file resolution stuff."
   (fakir-mock-process
+    :httpcon
     ((:elnode-http-pathinfo "/wiki/index.creole"))
     (should
      (equal
       'elnode-wikiserver
       (elnode--mapper-find
-       :fake
+       :httpcon
        "localhost//wiki/index.creole"
        '(("[^/]+//wiki/\\(.*\\)" . elnode-wikiserver)
          ("[^/]+//\\(.*\\)" . elnode-webserver)))))
@@ -674,6 +693,7 @@ Content-Type: text/html\r
         "/home/elnode/wiki/index.creole"))))
   ;; Now alter the mapping to NOT declare the mapped part...
   (fakir-mock-process
+    :httpcon
     ((:elnode-http-pathinfo "/blah/thing.txt"))
     ;; ... the mapper-find should still work...
     (should
@@ -767,12 +787,14 @@ right thing."
                     :directory "/home/elnode/wiki"
                     :mtime "Mon, Feb 27 2012 22:10:21 GMT")
       (fakir-mock-process
+	  :httpcon
           ((:elnode-http-header-syms
             '((if-modified-since . "Mon, Feb 27 2012 22:10:24 GMT"))))
           (should
            (elnode-cached-p :httpcon "/home/elnode/wiki/page.creole")))
-    ;; Test the case where there is no header
-    (fakir-mock-process
+      ;; Test the case where there is no header
+      (fakir-mock-process
+	:httpcon
         ((:elnode-http-header-syms
           '((user-agent . "Elnode test client"))))
         (should-not
@@ -793,6 +815,7 @@ right thing."
         200
         (catch :test
           (fakir-mock-process
+	    :fake
             ((:elnode-http-pathinfo "/wiki/test.creole")
              (:elnode-http-mapping '("/wiki/test.creole" "test.creole")))
             (fakir-mock-file
@@ -810,6 +833,7 @@ right thing."
         404
         (catch :test
           (fakir-mock-process
+	    :fake
             ((:elnode-http-pathinfo "/wiki/test.creole")
              (:elnode-http-mapping '("/wiki/test.creole" "test.creole")))
             (fakir-mock-file
@@ -827,6 +851,7 @@ right thing."
         304
         (catch :test
           (fakir-mock-process
+	    :fake
             ((:elnode-http-pathinfo "/wiki/test.creole")
              (:elnode-http-mapping '("/wiki/test.creole" "test.creole"))
              (:elnode-http-header-syms
@@ -873,6 +898,26 @@ right thing."
              (plist-get r :result-string))))
        ;; Now kill the buffer that was opened to serve the file.
        (kill-buffer "blah.html")))))
+
+
+(ert-deftest elnode-client-with-stdout ()
+  "Test the stdout macro.
+
+Test that we get the right chunked encoding stuff going on."
+  (with-temp-buffer
+    (let ((process :fake)
+          (test-buffer (current-buffer)))
+      (fakir-mock-process :fake ((:elnode-http-started t))
+          (progn
+            (set-process-buffer process test-buffer)
+            (with-stdout-to-elnode process
+                (princ "hello!")))
+          (should
+           (equal
+            (let ((str "hello!"))
+              (format "%d\r\n%s\r\n0\r\n\r\n" (length str) str))
+            (buffer-substring (point-min) (point-max))))))))
+
 
 (ert-deftest elnode--wrap-handler ()
   "Test wrapping a handler held in a symbol with another."
@@ -963,24 +1008,27 @@ authenticated."
     ;; Now test
     (let ((hash (elnode-auth-login "nferrier" "password")))
       (fakir-mock-process
-          ((:elnode-http-header
-            `(("Cookie" . ,(concat "elnode-auth=nferrier::" hash)))))
-          (should (elnode-auth-cookie-check-p :httpcon))))
+	:httpcon
+	((:elnode-http-header
+	  `(("Cookie" . ,(concat "elnode-auth=nferrier::" hash)))))
+	(should (elnode-auth-cookie-check-p :httpcon))))
     ;; Test what happens without a cookie
     (let ((hash (elnode-auth-login "nferrier" "password")))
       (fakir-mock-process
-          ((:elnode-http-header
-            `(("Referer" . "http://somehost.example.com"))))
-          (should-not
-           (condition-case token
-               (elnode-auth-cookie-check-p :httpcon)
-             (elnode-auth-token (cdr token))))))))
+	:httpcon
+	((:elnode-http-header
+	  `(("Referer" . "http://somehost.example.com"))))
+	(should-not
+	 (condition-case token
+	     (elnode-auth-cookie-check-p :httpcon)
+	   (elnode-auth-token (cdr token))))))))
 
 (ert-deftest elnode-auth-login-sender ()
   "Low levelish test of the login page sender."
   (fakir-mock-process
-   ()
-      (elnode-auth-login-sender :httpcon "/login/" "/myapp/loggedin")
+    :httpcon
+    ()
+    (elnode-auth-login-sender :httpcon "/login/" "/myapp/loggedin")
     (with-current-buffer (process-buffer :httpcon)
       (goto-char (point-min))
       (should (re-search-forward
@@ -1062,7 +1110,7 @@ the wrapping of a specified handler with the login sender."
                     (plist-get r :status)))
             (should
              (equal "/my-login/?to=/"
-                    (aget (plist-get r :header) "Location"))))
+                    (assoc-default "Location" (plist-get r :header)))))
         ;; Test that we get the login page - this tests that the main
         ;; handler was wrapped
         (let ((r (elnode-test-call "/my-login/")))
