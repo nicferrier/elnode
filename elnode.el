@@ -567,24 +567,35 @@ port number of the connection."
                   (elnode--get-server-prop process :elnode-http-handler)))
              ;; This is where we call the user handler
              ;; TODO: this needs error protection so we can return an error?
-             (condition-case signal-value
-                 (elnode--handler-call handler process)
-               ('elnode-defer
-                (elnode-error "filter: defer caught on %s" process)
-                (case (elnode--get-server-prop process :elnode-defer-mode)
-                  ((:managed 'managed)
-                   (elnode--deferred-add process
-                                         (cdr signal-value)))
-                  ((:immediate 'immediate)
-                   (elnode-error "filter: immediate defer on %s" process)
-                   (funcall (cdr signal-value) process))))
-               ('t
-                ;; FIXME: we need some sort of check to see if the
-                ;; header has been written
-                (elnode-error "elnode--filter: default handling")
-                (process-send-string
-                 process
-                 (elnode--format-response 500)))))))))))
+             (unwind-protect
+                  (condition-case signal-value
+                      (elnode--handler-call handler process)
+                    ('elnode-defer
+                     (elnode-error "filter: defer caught on %s" process)
+                     (case (elnode--get-server-prop process :elnode-defer-mode)
+                       ((:managed 'managed)
+                        (elnode--deferred-add process
+                                              (cdr signal-value)))
+                       ((:immediate 'immediate)
+                        (elnode-error "filter: immediate defer on %s" process)
+                        (funcall (cdr signal-value) process))))
+                    ('t
+                     ;; FIXME: we need some sort of check to see if the
+                     ;; header has been written
+                     (elnode-error "elnode--filter: default handling")
+                     (process-send-string
+                      process
+                      (elnode--format-response 500))))
+               ;; Handle unwind errors
+	       (when
+		   (and 
+		    (not (process-get process :elnode-http-started))
+		    (not (process-get process :elnode-child-process)))
+		 (elnode-error "filter: caught an error in the handling")
+		 (process-send-string
+		  process
+		  (elnode--format-response 500))
+		 (delete-process process))))))))))
 
 (defmacro with-elnode-mock-server (handler &rest body)
   "Execute BODY with a fake server which is bound to HANDLER.
