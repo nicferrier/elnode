@@ -2,10 +2,10 @@
 
 # These are the variables that are specific to the package
 NAME=elnode
-VERSION=0.9.7
+VERSION=0.9.8
 DOC="A simple event handling HTTP server."
 REQUIREMENTS=requirements.txt
-package_parts = elnode.el elnode-tests.el elnode-client.el elnode-db.el elnode-wiki.el
+package_parts = elnode.el elnode-tests.el elnode-client.el elnode-db.el elnode-db-tests.el elnode-wiki.el
 
 # Everything beyond here should be generic
 PACKAGE=$(NAME)-$(VERSION)
