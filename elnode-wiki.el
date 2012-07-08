@@ -202,7 +202,7 @@ Update operations are protected by authentication."
        with target-path
        on httpcon
        do
-       (if (equal target-path (concat wikiroot "/"))
+       (if (equal target-path (expand-file-name (concat wikiroot "/")))
            (elnode-wiki-page httpcon (concat wikiroot "/index.creole"))
            (elnode-wiki-page httpcon target-path))))
     (POST
