@@ -670,6 +670,22 @@ Content-Type: text/html\r
         ("[^/]+//.*" . elnode-webserver)))
      'elnode-wikiserver))))
 
+(ert-deftest elnode--strip-leading-slash ()
+  "Test slash stripping.
+
+That sounds more fun than it is."
+  (should
+   (equal "blah"
+          (elnode--strip-leading-slash "/blah")))
+  (should
+   (equal "blah"
+          (elnode--strip-leading-slash "blah")))
+  (should
+   (equal "blah/"
+          (elnode--strip-leading-slash "/blah/")))
+  (should
+   (equal "blah/"
+          (elnode--strip-leading-slash "blah/"))))
 
 (ert-deftest elnode-get-targetfile ()
   "Test the target file resolution stuff."
@@ -693,7 +709,7 @@ Content-Type: text/html\r
         "/home/elnode/wiki/index.creole"))))
   ;; Now alter the mapping to NOT declare the mapped part...
   (fakir-mock-process
-    :httpcon
+      :httpcon
     ((:elnode-http-pathinfo "/blah/thing.txt"))
     ;; ... the mapper-find should still work...
     (should
@@ -703,14 +719,25 @@ Content-Type: text/html\r
        :httpcon
        "localhost//blah/thing.txt"
        '(("[^/]+//.*" . elnode-webserver)))))
-    ;; ... but finding a file WILL NOT work (because there is no mapping)
+    ;; ... but now there is no mapping so it only maps because of path-info
     (fakir-mock-file (fakir-file
                       :filename "thing.txt"
                       :directory "/home/elnode/www/blah")
-      (should-not
+        (should
+         (equal
+          (elnode-get-targetfile :httpcon "/home/elnode/www")
+          "/home/elnode/www/blah/thing.txt"))))
+  ;; Test without a mapping
+  (fakir-mock-process
+      :httpcon
+      ((:elnode-http-pathinfo "/index.creole"))
+    (fakir-mock-file (fakir-file
+                      :filename "index.creole"
+                      :directory "/home/elnode/wiki")
+      (should
        (equal
-        (elnode-get-targetfile :httpcon "/home/elnode/www")
-        "/home/elnode/www/blah/thing.txt")))))
+        (elnode-get-targetfile :httpcon "/home/elnode/wiki")
+        "/home/elnode/wiki/index.creole")))))
 
 (ert-deftest elnode-worker-elisp ()
   "Test the `elnode-worker-elisp' macro.

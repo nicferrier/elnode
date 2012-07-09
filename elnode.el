@@ -1467,27 +1467,30 @@ target path."
    (process-get httpcon :elnode-http-mapping)
    (if part part 0)))
 
+(defun elnode--strip-leading-slash (str)
+  "Strip any leading slash from STR.
+
+If there is no leading slash then just return STR."
+  (if (string-match "^/\\(.*\\)" str)
+      (match-string 1 str)
+      str))
+
 (defun elnode-get-targetfile (httpcon docroot)
   "Get the targetted file from the HTTPCON.
 
 Attempts to resolve the matched path of the HTTPCON against the
-DOCROOT.
+DOCROOT.  If that doesn't work then it attempts to use just the
+pathinfo of the request.
 
 The resulting file is NOT checked for existance or safety."
   (let* ((pathinfo (elnode-http-pathinfo httpcon))
          (path (elnode-http-mapping httpcon 1))
          (targetfile
           (format
-           "%s%s"
+           "%s/%s"
            (expand-file-name docroot)
-           (format (or (and path
-                            (save-match-data
-                              (string-match "^/" path))
-                            "%s")
-                       "/%s")
-                   (if (or (not path) (equal path "/"))
-                       ""
-                     path)))))
+           (elnode--strip-leading-slash
+            (or path pathinfo)))))
     targetfile))
 
 (defvar elnode--do-access-logging-on-dispatch t
