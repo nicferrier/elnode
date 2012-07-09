@@ -2378,10 +2378,17 @@ See `elnode-webserver-handler-maker' for more possibilities for
 making webserver functions.
 
 HTTPCON is the HTTP connection to the user agent."
-  (elnode--webserver-handler-proc
-   httpcon
-   elnode-webserver-docroot
-   elnode-webserver-extra-mimetypes))
+  (let (use-webserver-handler-maker )
+    (if use-webserver-handler-maker
+        (elnode--webserver-handler-proc
+         httpcon
+         elnode-webserver-docroot
+         elnode-webserver-extra-mimetypes)
+        ;; Otherwise DO use the handler maker...
+        (let ((webserver (elnode-webserver-handler-maker
+                          elnode-webserver-docroot
+                          elnode-webserver-extra-mimetypes)))
+          (funcall webserver httpcon)))))
 
 
 ;;; Elnode wrapper stuff
