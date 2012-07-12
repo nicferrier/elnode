@@ -1,0 +1,16 @@
+
+
+* v1.00 todo
+** stuff
+*** vagrant image
+*** heroku update
+**** vulcan helps build the version of unix you need to host the build pack
+***** http://quickleft.com/blog/hacking-heroku-with-custom-build-packs
+**** the buildpack
+***** https://github.com/technomancy/heroku-buildpack-emacs/tree/master/bin
+*** ami?
+** code
+*** defer bugs?
+*** logging to processes
+*** client server stuff
+*** htmlize bugs?
