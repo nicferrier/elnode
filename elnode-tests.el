@@ -40,6 +40,15 @@
 (require 'fakir)
 (require 'elnode)
 
+(ert-deftest elnode-join ()
+  "Test the path joining."
+  (should
+   (equal "/la/la/file"
+          (elnode-join "/la" "la" "file")))
+  (should
+   (equal "/la/la/file/"
+          (elnode-join "/la" "la" "file/"))))
+
 (ert-deftest elnode-url-encode-path ()
   "Test the path encoding."
   (should
@@ -905,7 +914,7 @@ right thing."
     (fakir-mock-file
      (fakir-file
       :filename "blah.html"
-      :directory "/home/elnode/public_html"
+      :directory elnode-webserver-docroot-default
       :content "<html>Fake HTML file</html>")
      (unwind-protect
          ;; Ensure the webserver uses Emacs to open files so fakir can
@@ -924,7 +933,8 @@ right thing."
              "<html>Fake HTML file</html>"
              (plist-get r :result-string))))
        ;; Now kill the buffer that was opened to serve the file.
-       (kill-buffer "blah.html")))))
+       (if (get-buffer "blah.html")
+           (kill-buffer "blah.html"))))))
 
 
 (ert-deftest elnode-client-with-stdout ()

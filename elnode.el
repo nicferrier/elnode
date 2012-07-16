@@ -87,6 +87,59 @@ This is an alist of proc->server-process:
   (string-match "^[ \t\n\r]*" str)
   (replace-match "" nil nil str))
 
+(defun elnode-join (&rest parts)
+  "Path join the parts together.
+
+EmacsLisp should really provide this by default."
+  (let* (savedpart
+         (path
+          (loop for p in parts
+             concat
+               (progn
+                 (setq savedpart p)
+                 (file-name-as-directory p)))))
+    (if (equal (elt savedpart (- (length savedpart) 1)) ?\/)
+        path
+        (substring path 0 (- (length path) 1)))))
+
+(defun elnode--dir-setup (dir default default-file-name
+                          &optional target-file-name)
+  "Install a DIR and DEFAULT-FILE-NAME if it's not setup already.
+
+This is a packaging helper.  It helps an ELPA package install
+files from it's package base into the user's Emacs.  If the DIR
+is specified under `user-emacs-directory'.
+
+DIR is the directory to install, DEFAULT is the default for that
+directory, unless DIR equals DEFAULT nothing is done.
+
+DEFAULT-FILE-NAME is the name of the file that will be installed
+in DIR.  It is the expected name of the source file inside the
+package.  Unless TARGET-FILE-NAME is specified it is also the
+name the installed file will be given.  If the TARGET-FILE-NAME
+is specified then that is the the name the file is installed as."
+  (when  (and
+          (equal
+           dir
+           default)
+          (not (file-exists-p dir)))
+    ;; Do install
+    (let ((source-default-file
+           (concat
+            (file-name-directory
+             (or (buffer-file-name)
+                 (symbol-file 'elnode-wiki--setup)))
+            ;; This should probably tie in with the makefile somehow
+            default-file-name)))
+      (when (and source-default-file
+                 (file-exists-p source-default-file))
+        (let ((to (concat
+                   dir
+                   (or target-file-name default-file-name))))
+          (make-directory dir t)
+          (message "copying %s elnode wiki default page to %s" dir to)
+          (dired-copy-file source-default-file to nil))))))
+
 (defcustom elnode-log-files-directory "~/.elnodelogs"
   "The directory to store any Elnode log files.
 
@@ -1486,8 +1539,7 @@ The resulting file is NOT checked for existance or safety."
   (let* ((pathinfo (elnode-http-pathinfo httpcon))
          (path (elnode-http-mapping httpcon 1))
          (targetfile
-          (format
-           "%s/%s"
+          (elnode-join
            (expand-file-name docroot)
            (elnode--strip-leading-slash
             (or path pathinfo)))))
@@ -2222,7 +2274,15 @@ date copy) then `elnode-cached' is called."
 
 ;; Webserver stuff
 
-(defcustom elnode-webserver-docroot "~/public_html"
+(defconst elnode-webserver-docroot-default
+  (expand-file-name (concat elnode-config-directory "public_html/"))
+  "The default location of the website.
+
+This is used to detect whether elnode needs to create this
+directory or not.")
+
+(defcustom elnode-webserver-docroot
+  elnode-webserver-docroot-default
   "The document root of the webserver.
 
 Webserver functions are free to use this or not.  The
@@ -2246,6 +2306,13 @@ Anyone of the values of this list may be picked as the index page
 for a directory."
   :group 'elnode
   :type '(repeat string))
+
+(defun elnode--webserver-setup ()
+  "Setup the Elnode webserver by making a default public_html dir."
+  (elnode--dir-setup elnode-wikiserver-wikiroot
+                     elnode-wikiserver-wikiroot-default
+                     "default-wiki-index.creole"
+                     "index.creole"))
 
 (defun elnode-url-encode-path (path)
   "Return a url encoded version of PATH.
@@ -2378,6 +2445,7 @@ See `elnode-webserver-handler-maker' for more possibilities for
 making webserver functions.
 
 HTTPCON is the HTTP connection to the user agent."
+  (elnode--webserver-setup)
   (let (use-webserver-handler-maker )
     (if use-webserver-handler-maker
         (elnode--webserver-handler-proc
@@ -2440,13 +2508,26 @@ the argument list."
 
 ;; Elnode authentication stuff
 
-(defcustom elnode-auth-db-spec
+;;;###autoload
+(defconst elnode-config-directory
+  (expand-file-name (concat user-emacs-directory "elnode/"))
+  "The config directory for elnode to store peripheral files.
+
+This is used as a base for other constant directory or file
+names (the elnode auth database is a file in this directory, the
+elnode webserver has a docroot directory in this directory).
+
+It is based on the `user-emacs-directory' which always seems to
+be set, even when emacs is started with -Q.")
+
+(defconst elnode-auth-db-spec-default
   `(elnode-db-hash
     :filename
-    ,(format "%s/elnode-auth.el"
-             (directory-file-name
-              (or user-init-file
-                  "/tmp"))))
+    ,(expand-file-name (concat elnode-config-directory "elnode-auth")))
+  "The default elnode-auth-db specification.")
+
+(defcustom elnode-auth-db-spec
+  elnode-auth-db-spec-default
   "The elnode-db specification of where the auth db is."
   :group 'elnode
   :type '(list symbol symbol string))
