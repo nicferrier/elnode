@@ -1678,7 +1678,9 @@ table.  It calls `elnode-hostpath-dispatcher' with
 
 (defmacro with-stdout-to-elnode (httpcon &rest body)
   "Execute BODY so that any output gets sent to HTTPCON."
-  (declare (indent defun))
+  (declare
+   (debug (sexp &rest form))
+   (indent defun))
   (let ((hv (make-symbol "httpconvar"))
         (val (make-symbol "value")))
     `(with-temp-buffer
