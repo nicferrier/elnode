@@ -2292,11 +2292,13 @@ Webserver functions are free to use this or not.  The
   :group 'elnode
   :type 'file)
 
-(defcustom elnode-webserver-extra-mimetypes '(("text/plain" . "creole")
-                                               ("text/plain" . "el"))
-  "this is just a way of hacking the mime type discovery so we
-can add more file mappings more easily than editing
-/etc/mime.types"
+(defcustom elnode-webserver-extra-mimetypes
+  '(("text/plain" . "creole")
+    ("text/plain" . "el"))
+  "Extra mime types to identify special file types.
+
+This is just a way of hacking the mime type discovery so we can
+add more file mappings more easily than editing `/etc/mime.types'."
   :group 'elnode
   :type '(alist :key-type string
                 :value-type string))
