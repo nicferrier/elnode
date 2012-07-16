@@ -2312,11 +2312,14 @@ for a directory."
   :type '(repeat string))
 
 (defun elnode--webserver-setup ()
-  "Setup the Elnode webserver by making a default public_html dir."
-  (elnode--dir-setup elnode-wikiserver-wikiroot
-                     elnode-wikiserver-wikiroot-default
-                     "default-wiki-index.creole"
-                     "index.creole"))
+  "Setup the Elnode webserver by making a default public_html dir.
+
+The server has a single `test.html' file, this is so we can show
+off the standard webserver indexing in elnode's webserver."
+  (elnode--dir-setup elnode-webserver-docroot
+                     elnode-webserver-docroot-default
+                     "default-webserver-test.html"
+                     "test.html"))
 
 (defun elnode-url-encode-path (path)
   "Return a url encoded version of PATH.

@@ -12,6 +12,7 @@ package_parts = elnode.el \
 	elnode-db-tests.el \
 	elnode-wiki.el \
 	default-wiki-index.creole \
+	default-webserver-test.html \
 	README COPYING
 
 # Everything beyond here should be generic
