@@ -1,0 +1,5 @@
+= Elnode Wiki =
+
+This is Elnode's Wiki.  It is based on the {{{creole}}} wiki language
+and is written completely in EmacsLisp.
+
