@@ -24,12 +24,15 @@
 
 ;;; Commentary:
 ;;
-;; These are the tests for elnode-db. 
+;; These are the tests for elnode-db.
 ;;
 ;; elnode-db needs it's own tests because elnode-db is a depend of
 ;; elnode itself and thus it gets loaded before elnode.  If it did not
 ;; have it's own tests it would cause a dependancy on ERT for all of
 ;; elnode.
+
+;; This code originated from this gmane thread:
+;; http://permalink.gmane.org/gmane.emacs.devel/115821 by Thierry Volpiatto
 
 ;;; Source code
 ;;
@@ -60,6 +63,29 @@
      (equal
       321
       (elnode-db-get "test-key" db)))))
+
+(ert-deftest elnode-db-hash--save ()
+  "Test the saving of a hash db."
+  (unwind-protect
+       (progn
+         (let ((db (elnode-db-make
+                    ;; You shouldn't use an extension but let elnode deal
+                    ;; with it.
+                    '(elnode-db-hash :filename "/tmp/elnode-test-db"))))
+           ;; Override the save so it does nothing from put
+           (flet ((elnode-db-hash--save (db)
+                    t))
+             (elnode-db-put 'test1 "value1" db)
+             (elnode-db-put 'test2 "value2" db))
+           ;; And now save
+           (elnode-db-hash--save db))
+         ;; And now load in a different scope
+         (let ((db (elnode-db-make
+                    '(elnode-db-hash :filename "/tmp/elnode-test-db"))))
+           (should
+            (equal "value1"
+                   (elnode-db-get 'test1 db)))))
+    (delete-file "/tmp/elnode-test-db.elc")))
 
 (provide 'elnode-db-tests)
 
