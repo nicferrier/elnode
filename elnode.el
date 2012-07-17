@@ -95,7 +95,7 @@ EmacsLisp should really provide this by default."
          (path
           (loop for p in parts
              concat
-               (progn
+               (when (> (length p) 0)
                  (setq savedpart p)
                  (file-name-as-directory p)))))
     (if (equal (elt savedpart (- (length savedpart) 1)) ?\/)

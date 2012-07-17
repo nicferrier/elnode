@@ -47,7 +47,10 @@
           (elnode-join "/la" "la" "file")))
   (should
    (equal "/la/la/file/"
-          (elnode-join "/la" "la" "file/"))))
+          (elnode-join "/la" "la" "file/")))
+  (should
+   (equal "/la/la/file/"
+          (elnode-join "/la" "la/file/" ""))))
 
 (ert-deftest elnode-url-encode-path ()
   "Test the path encoding."
