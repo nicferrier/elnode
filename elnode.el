@@ -55,6 +55,7 @@
 (require 'url-util)
 (require 'json)
 (require 'elnode-db)
+(require 'dired) ; needed for the setup
 (eval-when-compile (require 'cl))
 
 (defconst ELNODE-FORM-DATA-TYPE "application/x-www-form-urlencoded"
@@ -132,7 +133,7 @@ is specified then that is the the name the file is installed as."
            (concat
             (file-name-directory
              (or (buffer-file-name)
-                 (symbol-file 'elnode-wiki--setup)))
+                 (symbol-file 'elnode--dir-setup))) ; this not very portable
             ;; This should probably tie in with the makefile somehow
             default-file-name)))
       (when (and source-default-file
