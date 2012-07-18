@@ -60,6 +60,10 @@
 (defconst ELNODE-FORM-DATA-TYPE "application/x-www-form-urlencoded"
   "The type of HTTP Form POSTs.")
 
+(defconst http-referrer 'referer
+  "Helper to bypass idiot spelling of the word `referrer'.")
+
+
 (defgroup elnode nil
   "An extensible asynchronous web server for Emacs."
   :group 'applications)
@@ -1381,6 +1385,11 @@ DATA must be a string, it's just passed to `elnode-http-send'."
             ;; Need to close the chunked encoding here
             (elnode-http-send-string httpcon ""))))))
 
+(defun elnode-send-html (httpcon html)
+  "Simple send for HTML."
+  (elnode-http-start httpcon 200 '("Content-Type" . "text/html"))
+  (elnode-http-return httpcon html))
+
 (defun elnode-send-json (httpcon data &optional content-type)
   "Send a 200 OK to the HTTPCON along with DATA as JSON.
 
@@ -2699,15 +2708,24 @@ This function sends the contents of the custom variable
   "The implementation of the login handler for wrapping."
   (elnode-method httpcon
       (GET
-       (let ((to (or (elnode-http-param httpcon "to") "/")))
+       (let ((to (or (elnode-http-param httpcon "to")
+                     (elnode-http-header httpcon http-referrer)
+                     "/")))
          (funcall sender httpcon target to)))
     (POST
      (let ((username (elnode-http-param httpcon "username"))
            (password (elnode-http-param httpcon "password"))
-           (logged-in (elnode-http-param httpcon "redirect")))
-       (elnode-auth-http-login
-        httpcon
-        username password logged-in)))))
+           (logged-in (elnode-http-param httpcon "to")))
+       (condition-case err
+           (elnode-auth-http-login
+            httpcon
+            username password logged-in)
+         (elnode-auth-credentials
+          (elnode-send-redirect
+           httpcon
+           (if (not logged-in)
+               target
+               (format "%s?to=%s" target logged-in)))))))))
 
 (defun* elnode-auth-make-login-wrapper (wrap-target
                                          &key
