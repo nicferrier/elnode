@@ -2780,7 +2780,6 @@ being the symbol `elnode-wrapper-spec'."
             wrapping-func)))
     (apply 'wrapper wrapper-spec)))
 
-;; Want to do this instead of the complex macro
 (defmacro* elnode-auth-define-scheme (scheme-name
                                       &key
                                       (test :cookie)
