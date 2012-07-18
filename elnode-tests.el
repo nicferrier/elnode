@@ -40,6 +40,18 @@
 (require 'fakir)
 (require 'elnode)
 
+(defmacro should-equal (a b)
+  "Simple shortcut for `(should (equal a b))'."
+  `(should
+    (equal ,a ,b)))
+
+(defmacro should-match (regex a)
+  "Simple shortcut for a `string-match' with `should'."
+  `(should
+   (string-match
+    ,regex
+    ,a)))
+
 (ert-deftest elnode-join ()
   "Test the path joining."
   (should
