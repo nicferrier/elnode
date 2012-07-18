@@ -2206,7 +2206,10 @@ details."
 ;; Docroot protection
 
 (defun elnode--under-docroot-p (target-file doc-root)
-  (let ((docroot (expand-file-name doc-root)))
+  "Is the TARGET-FILE under the DOC-ROOT?"
+  (let ((docroot
+         (directory-file-name
+          (expand-file-name doc-root))))
     (and
      (string-match
       (format "^%s\\($\\|/\\)" docroot)
