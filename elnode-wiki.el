@@ -95,7 +95,7 @@ This is where elnode-wikiserver serves wiki files from."
 
 (defcustom elnode-wikiserver-body-footer-not-loggedin
   "<div id='footer'>
-    <a href='/wiki/login/'>login to edit</a>
+    <a href='/wiki/login/?redirect={{page}}'>login to edit</a>
   </div>"
   "HTML BODY footter for a rendered Wiki page."
   :type '(string)

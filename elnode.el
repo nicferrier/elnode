@@ -2661,8 +2661,6 @@ default is is \"elnode-auth\"."
 If authentication succeeds set the relevant cookie and redirect
 the user to LOGGED-IN."
   (let ((hash
-         ;; FIXME: or this errors. What to do if it errors??
-         ;; We need to send the user the login page/form with errors
          (elnode-auth-login username password)))
     (elnode-http-header-set
      httpcon
@@ -2670,7 +2668,7 @@ the user to LOGGED-IN."
       "elnodeauth"
       (format "%s::%s" username hash)
       :path logged-in))
-    (elnode-send-redirect httpcon logged-in)))
+    (elnode-send-redirect httpcon (or logged-in "/"))))
 
 (defcustom elnode-auth-login-page "<html>
 <body>
@@ -2712,14 +2710,13 @@ This function sends the contents of the custom variable
   "The implementation of the login handler for wrapping."
   (elnode-method httpcon
       (GET
-       (let ((to (or (elnode-http-param httpcon "to")
-                     (elnode-http-header httpcon http-referrer)
+       (let ((to (or (elnode-http-param httpcon "redirect")
                      "/")))
          (funcall sender httpcon target to)))
     (POST
      (let ((username (elnode-http-param httpcon "username"))
            (password (elnode-http-param httpcon "password"))
-           (logged-in (elnode-http-param httpcon "to")))
+           (logged-in (elnode-http-param httpcon "redirect")))
        (condition-case err
            (elnode-auth-http-login
             httpcon
@@ -2729,7 +2726,7 @@ This function sends the contents of the custom variable
            httpcon
            (if (not logged-in)
                target
-               (format "%s?to=%s" target logged-in)))))))))
+               (format "%s?redirect=%s" target logged-in)))))))))
 
 (defun* elnode-auth-make-login-wrapper (wrap-target
                                          &key

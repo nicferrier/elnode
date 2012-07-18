@@ -1223,13 +1223,13 @@ the wrapping of a specified handler with the login sender."
       (with-elnode-mock-server 'auth-reqd-handler
           ;; Test a bad auth
           (let ((r (elnode-test-call
-                    "/my-login/?to=/somepage/test/"
+                    "/my-login/?redirect=/somepage/test/"
                     :method 'POST
                     :parameters
                     '(("username" . "nferrier")
                       ("password" . "secret")))))
             (should-equal 302 (plist-get r :status))
-            (should-equal "/my-login/?to=/somepage/test/"
+            (should-equal "/my-login/?redirect=/somepage/test/"
                           (assoc-default "Location" (plist-get r :header))))))))
 
 (provide 'elnode-tests)
