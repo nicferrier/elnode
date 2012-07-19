@@ -235,7 +235,9 @@ If PAGEINFO is specified it's the HTTP path to the Wiki page."
                      (string-match "/wiki/\\(.*\\)$" path)
                      (match-string 1 path))))
          (comment (elnode-http-param httpcon "comment"))
-         (file-name (concat wikiroot "/" page))
+         (file-name (if (equal page "")
+                        (concat wikiroot "index.creole")
+                      (concat (file-name-as-directory wikiroot) page)))
          (buffer (find-file-noselect file-name)))
     (with-current-buffer buffer
       (erase-buffer)
