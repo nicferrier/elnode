@@ -2,7 +2,7 @@
 
 # These are the variables that are specific to the package
 NAME=elnode
-VERSION=0.9.9
+VERSION=0.9.8.1
 DOC="A simple event handling HTTP server."
 REQUIREMENTS=requirements.txt
 package_parts = elnode.el \
