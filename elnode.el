@@ -2290,6 +2290,18 @@ date copy) then `elnode-cached' is called."
 
 ;; Webserver stuff
 
+;;;###autoload
+(defconst elnode-config-directory
+  (expand-file-name (concat user-emacs-directory "elnode/"))
+  "The config directory for elnode to store peripheral files.
+
+This is used as a base for other constant directory or file
+names (the elnode auth database is a file in this directory, the
+elnode webserver has a docroot directory in this directory).
+
+It is based on the `user-emacs-directory' which always seems to
+be set, even when emacs is started with -Q.")
+
 (defconst elnode-webserver-docroot-default
   (expand-file-name (concat elnode-config-directory "public_html/"))
   "The default location of the website.
@@ -2528,18 +2540,6 @@ the argument list."
 
 
 ;; Elnode authentication stuff
-
-;;;###autoload
-(defconst elnode-config-directory
-  (expand-file-name (concat user-emacs-directory "elnode/"))
-  "The config directory for elnode to store peripheral files.
-
-This is used as a base for other constant directory or file
-names (the elnode auth database is a file in this directory, the
-elnode webserver has a docroot directory in this directory).
-
-It is based on the `user-emacs-directory' which always seems to
-be set, even when emacs is started with -Q.")
 
 (defconst elnode-auth-db-spec-default
   `(elnode-db-hash
