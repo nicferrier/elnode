@@ -2710,7 +2710,7 @@ should indicate a path where a user can login, for example
                       :redirect ,redirect-specv)
                 elnode--defined-authentication-schemes))))
 
-(defmacro* elnode-with-auth (httpcon scheme &rest body)
+(defmacro elnode-with-auth (httpcon scheme &rest body)
   "Protect code with authentication using HTTPCON and SCHEME.
 
 This macro protects code in a handler with a check for an
@@ -2722,7 +2722,7 @@ SCHEME is the authentication scheme to use as defined by
 `elnode-auth-define-scheme'."
   (declare
    (debug (sexp sexp &rest form))
-   (indent defun))
+   (indent 2))
   (let ((httpconv (make-symbol "httpconv"))
         (schemev (make-symbol "schemev")))
     `(let ((,httpconv ,httpcon)
