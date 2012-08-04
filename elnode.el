@@ -2640,7 +2640,7 @@ record."
   (let ((record (gethash username elnode-loggedin-db)))
     (equal token (plist-get record :hash))))
 
-(defun* elnode-auth-cookie-check-p (httpcon &key (cookie-name "elnode-auth"))
+(defun* elnode-auth-cookie-check-p (httpcon &key (cookie-name "elnodeauth"))
   "Check that the user is loggedin according to the cookie.
 
 The name of the cookie can be supplied with :COOKIE-NAME - by
