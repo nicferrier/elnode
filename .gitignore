@@ -4,3 +4,4 @@
 *.elc
 /.elpa
 /elnode-[0-9.]*
+/README$

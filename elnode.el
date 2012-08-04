@@ -55,10 +55,15 @@
 (require 'url-util)
 (require 'json)
 (require 'elnode-db)
+(require 'dired) ; needed for the setup
 (eval-when-compile (require 'cl))
 
 (defconst ELNODE-FORM-DATA-TYPE "application/x-www-form-urlencoded"
   "The type of HTTP Form POSTs.")
+
+(defconst http-referrer 'referer
+  "Helper to bypass idiot spelling of the word `referrer'.")
+
 
 (defgroup elnode nil
   "An extensible asynchronous web server for Emacs."
@@ -86,6 +91,59 @@ This is an alist of proc->server-process:
   (setq str (replace-match "" nil nil str))
   (string-match "^[ \t\n\r]*" str)
   (replace-match "" nil nil str))
+
+(defun elnode-join (&rest parts)
+  "Path join the parts together.
+
+EmacsLisp should really provide this by default."
+  (let* (savedpart
+         (path
+          (loop for p in parts
+             concat
+               (when (> (length p) 0)
+                 (setq savedpart p)
+                 (file-name-as-directory p)))))
+    (if (equal (elt savedpart (- (length savedpart) 1)) ?\/)
+        path
+        (substring path 0 (- (length path) 1)))))
+
+(defun elnode--dir-setup (dir default default-file-name
+                          &optional target-file-name)
+  "Install a DIR and DEFAULT-FILE-NAME if it's not setup already.
+
+This is a packaging helper.  It helps an ELPA package install
+files from it's package base into the user's Emacs.  If the DIR
+is specified under `user-emacs-directory'.
+
+DIR is the directory to install, DEFAULT is the default for that
+directory, unless DIR equals DEFAULT nothing is done.
+
+DEFAULT-FILE-NAME is the name of the file that will be installed
+in DIR.  It is the expected name of the source file inside the
+package.  Unless TARGET-FILE-NAME is specified it is also the
+name the installed file will be given.  If the TARGET-FILE-NAME
+is specified then that is the the name the file is installed as."
+  (when  (and
+          (equal
+           dir
+           default)
+          (not (file-exists-p dir)))
+    ;; Do install
+    (let ((source-default-file
+           (concat
+            (file-name-directory
+             (or (buffer-file-name)
+                 (symbol-file 'elnode--dir-setup))) ; this not very portable
+            ;; This should probably tie in with the makefile somehow
+            default-file-name)))
+      (when (and source-default-file
+                 (file-exists-p source-default-file))
+        (let ((to (concat
+                   dir
+                   (or target-file-name default-file-name))))
+          (make-directory dir t)
+          (message "copying %s elnode wiki default page to %s" dir to)
+          (dired-copy-file source-default-file to nil))))))
 
 (defcustom elnode-log-files-directory "~/.elnodelogs"
   "The directory to store any Elnode log files.
@@ -339,24 +397,33 @@ The function `elnode-send-status' also uses these."
 (defun elnode--sentinel (process status)
   "Sentinel function for the main server and for the client sockets."
   (elnode-error
-   "elnode--sentinel %s for process  %s"
+   "elnode--sentinel '%s' for process  %s with buffer %s"
    (elnode-trunc status)
-   (process-name process))
+   (process-name process)
+   (process-buffer process))
   (cond
    ;; Server status
    ((and
      (assoc (process-contact process :service) elnode-server-socket)
      (equal status "deleted\n"))
-    (kill-buffer (process-buffer process))
+    (if (equal
+	 (process-buffer
+	  ;; Get the server process
+	  (cdr (assoc 
+		(process-contact process :service)
+		elnode-server-socket)))
+	 (process-buffer process))
+	(message "found the server process - NOT deleting")
+      (message "aha! deleting the connection process")
+      (kill-buffer (process-buffer process)))
     (elnode-error "Elnode server stopped"))
 
    ;; Client socket status
    ((equal status "connection broken by remote peer\n")
-    (if (process-buffer process)
-        (progn
-          (kill-buffer (process-buffer process))
-          (elnode-error "Elnode connection dropped %s" process))))
-
+    (when (process-buffer process)
+      (kill-buffer (process-buffer process))
+      (elnode-error "Elnode connection dropped %s" process)))
+   
    ((equal status "open\n") ;; this says "open from ..."
     (elnode-error "Elnode opened new connection"))
 
@@ -567,24 +634,35 @@ port number of the connection."
                   (elnode--get-server-prop process :elnode-http-handler)))
              ;; This is where we call the user handler
              ;; TODO: this needs error protection so we can return an error?
-             (condition-case signal-value
-                 (elnode--handler-call handler process)
-               ('elnode-defer
-                (elnode-error "filter: defer caught on %s" process)
-                (case (elnode--get-server-prop process :elnode-defer-mode)
-                  ((:managed 'managed)
-                   (elnode--deferred-add process
-                                         (cdr signal-value)))
-                  ((:immediate 'immediate)
-                   (elnode-error "filter: immediate defer on %s" process)
-                   (funcall (cdr signal-value) process))))
-               ('t
-                ;; FIXME: we need some sort of check to see if the
-                ;; header has been written
-                (elnode-error "elnode--filter: default handling")
-                (process-send-string
-                 process
-                 (elnode--format-response 500)))))))))))
+             (unwind-protect
+                  (condition-case signal-value
+                      (elnode--handler-call handler process)
+                    ('elnode-defer
+                     (elnode-error "filter: defer caught on %s" process)
+                     (case (elnode--get-server-prop process :elnode-defer-mode)
+                       ((:managed 'managed)
+                        (elnode--deferred-add process
+                                              (cdr signal-value)))
+                       ((:immediate 'immediate)
+                        (elnode-error "filter: immediate defer on %s" process)
+                        (funcall (cdr signal-value) process))))
+                    ('t
+                     ;; FIXME: we need some sort of check to see if the
+                     ;; header has been written
+                     (elnode-error "elnode--filter: default handling")
+                     (process-send-string
+                      process
+                      (elnode--format-response 500))))
+               ;; Handle unwind errors
+	       (when
+		   (and 
+		    (not (process-get process :elnode-http-started))
+		    (not (process-get process :elnode-child-process)))
+		 (elnode-error "filter: caught an error in the handling")
+		 (process-send-string
+		  process
+		  (elnode--format-response 500))
+		 (delete-process process))))))))))
 
 (defmacro with-elnode-mock-server (handler &rest body)
   "Execute BODY with a fake server which is bound to HANDLER.
@@ -633,7 +711,7 @@ or:
 
 For header and parameter names, strings MUST be used currently."
   (let ((fakir-mock-process-require-specified-buffer t))
-    (fakir-mock-process ()
+    (fakir-mock-process :httpcon ()
       (let ((hdrtext
              (apply
               'elnode--http-make-hdr
@@ -641,7 +719,7 @@ For header and parameter names, strings MUST be used currently."
                 ,path
                 ,@headers
                 (body ""))))
-            (http-connection t))
+            (http-connection :httpcon))
         ;; Capture the real eof-func and then override it to do fake ending.
         (let ((eof-func (elnode--make-send-eof))
               (main-send-string (symbol-function 'elnode-http-send-string))
@@ -802,21 +880,21 @@ elnode servers on the same port on different hosts."
   "Stop the elnode server attached to PORT."
   (interactive "nPort: ")
   (let ((server (assoc port elnode-server-socket)))
-    (if server
-        (progn
-          (delete-process (cdr server))
-          (setq elnode-server-socket
-                ;; remove-if
-                (let ((test (lambda (elem)
-                              (= (car elem) port)))
-                      (l elnode-server-socket)
-                      result)
-                  (while (car l)
-                    (let ((p (pop l))
-                          (r (cdr l)))
-                      (if (not (funcall test p))
-                          (setq result (cons p result)))))
-                  result))))))
+    (when server
+      (message "deleting server process")
+      (delete-process (cdr server))
+      (setq elnode-server-socket
+	    ;; remove-if
+	    (let ((test (lambda (elem)
+			  (= (car elem) port)))
+		  (l elnode-server-socket)
+		  result)
+	      (while (car l)
+		(let ((p (pop l))
+		      (r (cdr l)))
+		  (if (not (funcall test p))
+		      (setq result (cons p result)))))
+	      result)))))
 
 (defun elnode-find-free-service ()
   "Return a free (unused) TCP port.
@@ -1269,7 +1347,7 @@ data.  This is done mainly for testing infrastructure."
         "HTTP/1.1 %d %s\r\n%s\r\n"
         status-code
         ;; The status text
-        (aget elnode-http-codes-alist status-code)
+        (assoc-default status-code elnode-http-codes-alist)
         ;; The header
         (or
          (elnode--http-result-header header-alist)
@@ -1297,6 +1375,7 @@ HTTPCON is the http connection which must have had the headers
 sent with `elnode-http-start'
 
 DATA must be a string, it's just passed to `elnode-http-send'."
+  (declare (indent 1)) ; helpful indent hint
   (if (not (process-get httpcon :elnode-http-started))
       (elnode-error "Http not started")
     (progn
@@ -1307,6 +1386,11 @@ DATA must be a string, it's just passed to `elnode-http-send'."
             (funcall eof-func httpcon)
             ;; Need to close the chunked encoding here
             (elnode-http-send-string httpcon ""))))))
+
+(defun elnode-send-html (httpcon html)
+  "Simple send for HTML."
+  (elnode-http-start httpcon 200 '("Content-Type" . "text/html"))
+  (elnode-http-return httpcon html))
 
 (defun elnode-send-json (httpcon data &optional content-type)
   "Send a 200 OK to the HTTPCON along with DATA as JSON.
@@ -1447,27 +1531,29 @@ target path."
    (process-get httpcon :elnode-http-mapping)
    (if part part 0)))
 
+(defun elnode--strip-leading-slash (str)
+  "Strip any leading slash from STR.
+
+If there is no leading slash then just return STR."
+  (if (string-match "^/\\(.*\\)" str)
+      (match-string 1 str)
+      str))
+
 (defun elnode-get-targetfile (httpcon docroot)
   "Get the targetted file from the HTTPCON.
 
 Attempts to resolve the matched path of the HTTPCON against the
-DOCROOT.
+DOCROOT.  If that doesn't work then it attempts to use just the
+pathinfo of the request.
 
 The resulting file is NOT checked for existance or safety."
   (let* ((pathinfo (elnode-http-pathinfo httpcon))
          (path (elnode-http-mapping httpcon 1))
          (targetfile
-          (format
-           "%s%s"
+          (elnode-join
            (expand-file-name docroot)
-           (format (or (and path
-                            (save-match-data
-                              (string-match "^/" path))
-                            "%s")
-                       "/%s")
-                   (if (or (not path) (equal path "/"))
-                       ""
-                     path)))))
+           (elnode--strip-leading-slash
+            (or path pathinfo)))))
     targetfile))
 
 (defvar elnode--do-access-logging-on-dispatch t
@@ -1603,7 +1689,9 @@ table.  It calls `elnode-hostpath-dispatcher' with
 
 (defmacro with-stdout-to-elnode (httpcon &rest body)
   "Execute BODY so that any output gets sent to HTTPCON."
-  (declare (indent defun))
+  (declare
+   (debug (sexp &rest form))
+   (indent defun))
   (let ((hv (make-symbol "httpconvar"))
         (val (make-symbol "value")))
     `(with-temp-buffer
@@ -1615,24 +1703,6 @@ table.  It calls `elnode-hostpath-dispatcher' with
             ,hv
             (buffer-substring (point-min) (point-max)))
            (elnode-http-return ,hv))))))
-
-(ert-deftest elnode-client-with-stdout ()
-  "Test the stdout macro.
-
-Test that we get the right chunked encoding stuff going on."
-  (with-temp-buffer
-    (let ((process :fake)
-          (test-buffer (current-buffer)))
-      (fakir-mock-process ((:elnode-http-started t))
-          (progn
-            (set-process-buffer process test-buffer)
-            (with-stdout-to-elnode process
-                (princ "hello!")))
-          (should
-           (equal
-            (let ((str "hello!"))
-              (format "%d\r\n%s\r\n0\r\n\r\n" (length str) str))
-            (buffer-substring (point-min) (point-max))))))))
 
 
 ;; Elnode child process functions
@@ -2003,7 +2073,7 @@ being returned."
         (t
          ;; Presume it's an alist
          (or
-          (aget replacements (match-string 1 matched) t) ""))))
+          (assoc-default (match-string 1 matched) replacements nil t)))))
      (buffer-substring (point-min)(point-max)))))
 
 (defvar elnode-webserver-visit-file nil
@@ -2137,7 +2207,10 @@ details."
 ;; Docroot protection
 
 (defun elnode--under-docroot-p (target-file doc-root)
-  (let ((docroot (expand-file-name doc-root)))
+  "Is the TARGET-FILE under the DOC-ROOT?"
+  (let ((docroot
+         (directory-file-name
+          (expand-file-name doc-root))))
     (and
      (string-match
       (format "^%s\\($\\|/\\)" docroot)
@@ -2202,9 +2275,9 @@ date copy) then `elnode-cached' is called."
    (indent defun))
   (let ((dr (make-symbol "docroot"))
         (con (make-symbol "httpcon")))
-    (assert (eq with 'with))
-    (assert (eq on 'on))
-    (assert (eq do 'do))
+    (assert (or (eq with 'with) (eq with :with)))
+    (assert (or (eq on 'on)     (eq on :on)))
+    (assert (or (eq do 'do)     (eq do :do)))
     `(let ((,dr ,doc-root)
            (,con ,httpcon))
        (let ((,target-file-var (elnode-get-targetfile ,con ,dr)))
@@ -2217,7 +2290,27 @@ date copy) then `elnode-cached' is called."
 
 ;; Webserver stuff
 
-(defcustom elnode-webserver-docroot "~/public_html"
+;;;###autoload
+(defconst elnode-config-directory
+  (expand-file-name (concat user-emacs-directory "elnode/"))
+  "The config directory for elnode to store peripheral files.
+
+This is used as a base for other constant directory or file
+names (the elnode auth database is a file in this directory, the
+elnode webserver has a docroot directory in this directory).
+
+It is based on the `user-emacs-directory' which always seems to
+be set, even when emacs is started with -Q.")
+
+(defconst elnode-webserver-docroot-default
+  (expand-file-name (concat elnode-config-directory "public_html/"))
+  "The default location of the website.
+
+This is used to detect whether elnode needs to create this
+directory or not.")
+
+(defcustom elnode-webserver-docroot
+  elnode-webserver-docroot-default
   "The document root of the webserver.
 
 Webserver functions are free to use this or not.  The
@@ -2225,11 +2318,13 @@ Webserver functions are free to use this or not.  The
   :group 'elnode
   :type 'file)
 
-(defcustom elnode-webserver-extra-mimetypes '(("text/plain" . "creole")
-                                               ("text/plain" . "el"))
-  "this is just a way of hacking the mime type discovery so we
-can add more file mappings more easily than editing
-/etc/mime.types"
+(defcustom elnode-webserver-extra-mimetypes
+  '(("text/plain" . "creole")
+    ("text/plain" . "el"))
+  "Extra mime types to identify special file types.
+
+This is just a way of hacking the mime type discovery so we can
+add more file mappings more easily than editing `/etc/mime.types'."
   :group 'elnode
   :type '(alist :key-type string
                 :value-type string))
@@ -2241,6 +2336,16 @@ Anyone of the values of this list may be picked as the index page
 for a directory."
   :group 'elnode
   :type '(repeat string))
+
+(defun elnode--webserver-setup ()
+  "Setup the Elnode webserver by making a default public_html dir.
+
+The server has a single `test.html' file, this is so we can show
+off the standard webserver indexing in elnode's webserver."
+  (elnode--dir-setup elnode-webserver-docroot
+                     elnode-webserver-docroot-default
+                     "default-webserver-test.html"
+                     "test.html"))
 
 (defun elnode-url-encode-path (path)
   "Return a url encoded version of PATH.
@@ -2373,10 +2478,18 @@ See `elnode-webserver-handler-maker' for more possibilities for
 making webserver functions.
 
 HTTPCON is the HTTP connection to the user agent."
-  (elnode--webserver-handler-proc
-   httpcon
-   elnode-webserver-docroot
-   elnode-webserver-extra-mimetypes))
+  (elnode--webserver-setup)
+  (let (use-webserver-handler-maker )
+    (if use-webserver-handler-maker
+        (elnode--webserver-handler-proc
+         httpcon
+         elnode-webserver-docroot
+         elnode-webserver-extra-mimetypes)
+        ;; Otherwise DO use the handler maker...
+        (let ((webserver (elnode-webserver-handler-maker
+                          elnode-webserver-docroot
+                          elnode-webserver-extra-mimetypes)))
+          (funcall webserver httpcon)))))
 
 
 ;;; Elnode wrapper stuff
@@ -2428,11 +2541,14 @@ the argument list."
 
 ;; Elnode authentication stuff
 
-(defcustom elnode-auth-db-spec
+(defconst elnode-auth-db-spec-default
   `(elnode-db-hash
     :filename
-    ,(format "%s/elnode-auth.el"
-             (directory-file-name user-init-file)))
+    ,(expand-file-name (concat elnode-config-directory "elnode-auth")))
+  "The default elnode-auth-db specification.")
+
+(defcustom elnode-auth-db-spec
+  elnode-auth-db-spec-default
   "The elnode-db specification of where the auth db is."
   :group 'elnode
   :type '(list symbol symbol string))
@@ -2546,8 +2662,6 @@ default is is \"elnode-auth\"."
 If authentication succeeds set the relevant cookie and redirect
 the user to LOGGED-IN."
   (let ((hash
-         ;; FIXME: or this errors. What to do if it errors??
-         ;; We need to send the user the login page/form with errors
          (elnode-auth-login username password)))
     (elnode-http-header-set
      httpcon
@@ -2555,7 +2669,7 @@ the user to LOGGED-IN."
       "elnodeauth"
       (format "%s::%s" username hash)
       :path logged-in))
-    (elnode-send-redirect httpcon logged-in)))
+    (elnode-send-redirect httpcon (or logged-in "/"))))
 
 (defcustom elnode-auth-login-page "<html>
 <body>
@@ -2597,15 +2711,23 @@ This function sends the contents of the custom variable
   "The implementation of the login handler for wrapping."
   (elnode-method httpcon
       (GET
-       (let ((to (or (elnode-http-param httpcon "to") "/")))
+       (let ((to (or (elnode-http-param httpcon "redirect")
+                     "/")))
          (funcall sender httpcon target to)))
     (POST
      (let ((username (elnode-http-param httpcon "username"))
            (password (elnode-http-param httpcon "password"))
            (logged-in (elnode-http-param httpcon "redirect")))
-       (elnode-auth-http-login
-        httpcon
-        username password logged-in)))))
+       (condition-case err
+           (elnode-auth-http-login
+            httpcon
+            username password logged-in)
+         (elnode-auth-credentials
+          (elnode-send-redirect
+           httpcon
+           (if (not logged-in)
+               target
+               (format "%s?redirect=%s" target logged-in)))))))))
 
 (defun* elnode-auth-make-login-wrapper (wrap-target
                                          &key
@@ -2659,7 +2781,6 @@ being the symbol `elnode-wrapper-spec'."
             wrapping-func)))
     (apply 'wrapper wrapper-spec)))
 
-;; Want to do this instead of the complex macro
 (defmacro* elnode-auth-define-scheme (scheme-name
                                       &key
                                       (test :cookie)
@@ -2793,6 +2914,7 @@ the handler and listening on `elnode-init-host'"
   ;;    (elnode--init-deferring))
   )
 
+;;;###autoload
 (defcustom elnode-do-init 't
   "Should elnode start a server on load?
 
@@ -2814,7 +2936,10 @@ This is autoloading mechanics, see the eval-after-load for doing init.")
 ;; Auto start elnode if we're ever loaded
 ;;;###autoload
 (eval-after-load 'elnode
-  (if (and elnode-do-init (not elnode--inited))
+  (if (and (boundp 'elnode-do-init)
+           elnode-do-init
+	   (or (not (boundp 'elnode--inited))
+	       (not elnode--inited)))
       (progn
         (elnode-init)
         (setq elnode--inited nil))))

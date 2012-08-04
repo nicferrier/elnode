@@ -1,11 +1,19 @@
-# package.el multi-file package install 
+# package.el multi-file package install
 
 # These are the variables that are specific to the package
 NAME=elnode
-VERSION=0.9.7
+VERSION=0.9.8.1
 DOC="A simple event handling HTTP server."
 REQUIREMENTS=requirements.txt
-package_parts = elnode.el elnode-tests.el elnode-client.el elnode-db.el elnode-wiki.el
+package_parts = elnode.el \
+	elnode-tests.el \
+	elnode-client.el \
+	elnode-db.el \
+	elnode-db-tests.el \
+	elnode-wiki.el \
+	default-wiki-index.creole \
+	default-webserver-test.html \
+	README COPYING
 
 # Everything beyond here should be generic
 PACKAGE=$(NAME)-$(VERSION)
@@ -27,6 +35,7 @@ clean:
 	rm -rf $(TARBALL)
 	rm -rf $(PACKAGE) 
 	rm -rf $(NAME)-pkg.el
+	rm -rf README
 
 tarball: $(TARBALL)
 
@@ -39,5 +48,8 @@ $(PACKAGE): $(package_parts)
 
 $(PACKAGE)/$(NAME)-pkg.el:
 	echo "(define-package \"$(NAME)\" \"$(VERSION)\" \"$(DOC)\" `cat $(REQUIREMENTS)`)" > $@
+
+README:
+	cat README.creole > README
 
 # End

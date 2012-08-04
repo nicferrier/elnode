@@ -88,7 +88,7 @@ REFERENCE comes from the call to `elnode-db-make' and should
 include a `:filename' key arg to point to a file.
 
 If the filename exists then it is loaded into the database."
-  (let* ((filename (plist-get reference :filename))
+  (let* ((filename (plist-get (cdr reference) :filename))
          (db (list
               :db (make-hash-table :test 'equal)
               :get 'elnode-db-hash-get
@@ -96,7 +96,7 @@ If the filename exists then it is loaded into the database."
               :map 'elnode-db-hash-map
               :filename filename)))
     (when (and filename
-               (file-exists-p filename))
+               (file-exists-p (concat filename ".elc")))
       (elnode-db-hash--read db))
     ;; Return the database
     db))
@@ -105,22 +105,28 @@ If the filename exists then it is loaded into the database."
   "Loads the DB."
   (let ((filename (plist-get db :filename)))
     (when filename
-      (load-file filename)
+      (load-file (concat filename ".elc"))
       (plist-put db :db (symbol-value (intern filename))))))
 
 (defun elnode-db-hash--save (db)
   "Saves the DB."
   (let ((filename (plist-get db :filename)))
     (when filename
-      (with-temp-file filename
+      ;; Make the parent directory for the db if it doesn't exist
+      (let ((dir (file-name-directory filename)))
+        (unless (file-exists-p dir)
+          (make-directory dir t)))
+      ;; Now store the data
+      (with-temp-file (concat filename ".el")
         (erase-buffer)
         (let ((fmt-obj (format
-                        "(setq %s (eval-when-compile %s))"
+                        "(setq %s (eval-when-compile %S))"
                         (intern filename)
                         (plist-get db :db))))
           (insert fmt-obj)))
-      (byte-compile-file filename)
-      (delete-file filename))))
+      ;; And compile it and delete the original
+      (byte-compile-file (concat filename ".el"))
+      (delete-file (concat filename ".el")))))
 
 (defun elnode-db-hash-get (key db)
   (let ((v (gethash key (plist-get db :db))))

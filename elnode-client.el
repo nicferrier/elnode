@@ -173,7 +173,7 @@ CON is used to store state with the process property
     (flet ((consumer (con data)
              (unless (eq data :done)
                (setq res (concat res data)))))
-      (fakir-mock-process ()
+      (fakir-mock-process :fake ()
           (progn
             (should-not
              (equal
@@ -194,7 +194,7 @@ CON is used to store state with the process property
     (flet ((consumer (con data)
              (unless (eq data :done)
                (setq res (concat res data)))))
-      (fakir-mock-process ()
+      (fakir-mock-process :fake ()
           (progn
             (should-not
              (equal
@@ -210,7 +210,7 @@ CON is used to store state with the process property
     (flet ((consumer (con data)
              (unless (eq data :done)
                (setq res (concat res data)))))
-      (fakir-mock-process ()
+      (fakir-mock-process :fake ()
           (progn
             (should
              (equal :done
@@ -226,7 +226,7 @@ CON is used to store state with the process property
     (flet ((consumer (con data)
              (unless (eq data :done)
                (setq res (concat res data)))))
-      (fakir-mock-process ()
+      (fakir-mock-process :fake ()
           (progn
             (should
              (equal :done
@@ -310,113 +310,101 @@ by collecting it and then batching it to the CALLBACK."
   "Test the filter in streaming mode."
   (let* (cb-hdr
          cd-data
-         deleted
          (con :fake)
          (callback (lambda (con hdr data)
                      (unless cb-hdr
                        (setq cb-hdr hdr))
                      (unless (eq data :done)
                        (setq cb-data data)))))
-    (flet ((delete-process (proc)
-             (setq deleted t)))
-      (fakir-mock-process ((:buffer "HTTP/1.1 200\r
+    (fakir-mock-process :fake ((:buffer "HTTP/1.1 200\r
 Host: hostname\r
 Transfer-encoding: chunked\r\n"))
-          (progn
-            (should-not cb-hdr)
-            (elnode-client--http-post-filter con "\r\n" callback 'stream)
-            ;; Because there is no data yet the header is not set
-            (should-not cb-hdr)
-            ;; Now send a valid chunk through the stream api
-            (elnode-client--http-post-filter
-             con "b\r\nhello world\r\n" callback 'stream)
-            (should cb-hdr)
-            (should-not deleted)
-            (should (equal cb-data "hello world"))
-            ;; Some header tests
-            (should
-             (equal "hostname"
-                    (gethash 'host cb-hdr)))
-            (should
-             (equal "200"
-                    (gethash 'status-code cb-hdr)))
-            (should
-             (equal "1.1"
-                    (gethash 'status-version cb-hdr)))
-            ;; Now send the final one
-            (elnode-client--http-post-filter con "0\r\n\r\n" callback 'stream)
-            (should (equal cb-data "hello world"))
-            (should deleted))))))
+      (should-not cb-hdr)
+      (elnode-client--http-post-filter con "\r\n" callback 'stream)
+      ;; Because there is no data yet the header is not set
+      (should-not cb-hdr)
+      ;; Now send a valid chunk through the stream api
+      (elnode-client--http-post-filter
+       con "b\r\nhello world\r\n" callback 'stream)
+      (should cb-hdr)
+      (should (equal cb-data "hello world"))
+      ;; Some header tests
+      (should
+       (equal "hostname" (gethash 'host cb-hdr)))
+      (should
+       (equal "200" (gethash 'status-code cb-hdr)))
+      (should
+       (equal "1.1" (gethash 'status-version cb-hdr)))
+      ;; Now send the final one and catch deleted
+      (should
+       (eq
+        :mock-process-finished
+        (catch :mock-process-finished
+          (elnode-client--http-post-filter con "0\r\n\r\n" callback 'stream)
+          (should (equal cb-data "hello world"))))))))
 
 (ert-deftest elnode-client-http-post-filter-batch-mode-content-length ()
   "Test the filter in batch mode with fixed content-length."
   (let* (cb-hdr
          cd-data
-         deleted
          (con :fake)
          (callback (lambda (con hdr data)
                      (setq cb-hdr hdr)
                      (setq cb-data data))))
-    ;; We need to flet delete-process to do nothing
-    (flet ((delete-process (proc)
-             (setq deleted t)))
-      (fakir-mock-process ((:buffer "HTTP/1.1 200\r
+      (fakir-mock-process :fake ((:buffer "HTTP/1.1 200\r
 Host: hostname\r
 Content-length: 11\r\n"))
-          (progn
-            (should-not cb-hdr)
-            (elnode-client--http-post-filter con "\r\n" callback 'batch)
-            (should-not cb-hdr)
+        (should-not cb-hdr)
+        (elnode-client--http-post-filter con "\r\n" callback 'batch)
+        (should-not cb-hdr)
+        (should
+         (eq
+          :mock-process-finished
+          (catch :mock-process-finished
             (elnode-client--http-post-filter con "hello world" callback 'batch)
-            (should cb-hdr)
-            (should deleted)
-            (should
-             (equal "hostname"
-                    (gethash 'host cb-hdr)))
-            (should
-             (equal "200"
-                    (gethash 'status-code cb-hdr)))
-            (should
-             (equal "1.1"
-                    (gethash 'status-version cb-hdr))))))))
+            (should cb-hdr))))
+        (should
+         (equal "hostname"
+                (gethash 'host cb-hdr)))
+        (should
+         (equal "200"
+                (gethash 'status-code cb-hdr)))
+        (should
+         (equal "1.1"
+                (gethash 'status-version cb-hdr))))))
 
 (ert-deftest elnode-client-http-post-filter-batch-mode-chunked ()
   "Test the filter in batch mode with chunked encoding."
   (let* (cb-hdr
          cb-data
-         deleted
          (con :fake)
          (callback (lambda (con hdr data)
                      (setq cb-hdr hdr)
                      (setq cb-data data))))
-    ;; We need to flet delete-process to do nothing
-    (flet ((delete-process (proc)
-             (setq deleted t)))
-      (fakir-mock-process ((:buffer "HTTP/1.1 200\r
+    (fakir-mock-process :fake ((:buffer "HTTP/1.1 200\r
 Transfer-encoding: chunked\r
 Host: hostname\r\n"))
-          (progn
-            (should-not cb-hdr)
-            (elnode-client--http-post-filter con "\r\n" callback 'batch)
-            (should-not cb-hdr)
-            (elnode-client--http-post-filter
-             con "b\r\nhello world" callback 'batch)
-            (should-not cb-hdr)
-            (should-not cb-data)
-            (elnode-client--http-post-filter
-             con "\r\n0\r\n\r\n" callback 'batch)
-            (should cb-hdr)
-            (should (equal "hello world" cb-data))
-            (should deleted)
-            (should
-             (equal "hostname"
-                    (gethash 'host cb-hdr)))
-            (should
-             (equal "200"
-                    (gethash 'status-code cb-hdr)))
-            (should
-             (equal "1.1"
-                    (gethash 'status-version cb-hdr))))))))
+      (should-not cb-hdr)
+      (elnode-client--http-post-filter con "\r\n" callback 'batch)
+      (should-not cb-hdr)
+      (elnode-client--http-post-filter
+       con "b\r\nhello world" callback 'batch)
+      (should-not cb-hdr)
+      (should-not cb-data)
+      (should
+       (eq
+        :mock-process-finished
+        (catch :mock-process-finished
+          (elnode-client--http-post-filter
+           con "\r\n0\r\n\r\n" callback 'batch)
+          (should cb-hdr)
+          (should (equal "hello world" cb-data)))))
+      (should
+       (equal "hostname" (gethash 'host cb-hdr)))
+      (should
+       (equal "200" (gethash 'status-code cb-hdr)))
+      (should
+       (equal "1.1" (gethash 'status-version cb-hdr))))))
 
 (defun elnode-client--key-value-encode (key value)
   "Encode a KEY and VALUE for url encoding."
@@ -468,10 +456,13 @@ described) are encoded just as \"key\"."
   "Sentinel for the HTTP POST."
   ;; FIXME I'm sure this needs to be different - but how? it needs to
   ;; communicate to the filter function?
-  (case evt
-    ("closed\n"
+  (cond
+    ((equal evt "closed\n")
      (message "http client post closed"))
-    ("connection broken by peer\n"
+    ((equal evt "deleted\n")
+     (delete-process con)
+     (message "http client post closed"))
+    ((equal evt "connection broken by peer\n")
      (message "http client went away"))
     (t
      (message "some message %s" evt))))
@@ -540,7 +531,7 @@ Content-length:%d\r
       (process-send-string con submission))
     con))
 
-(ert-deftest elnode-client-http-post ()
+(ert-deftest elnode-client-http-post-full ()
   "Do a full test of the client using an elnode server.
 
 This tests the parameter passing by having an elnode handler "
@@ -552,8 +543,9 @@ This tests the parameter passing by having an elnode handler "
          (port (elnode-find-free-service)))
     ;; Start a server on the port
     (unwind-protect
-         (let ((init-data (make-hash-table :test 'equal
-                                           :size 5)))
+         (let ((init-data (make-hash-table
+                           :test 'equal
+                           :size 5)))
            (puthash "a" 10 init-data)
            (puthash "b" 20 init-data)
            ;; Start the server
@@ -562,6 +554,7 @@ This tests the parameter passing by having an elnode handler "
               (setq method (elnode-http-method httpcon))
               (setq path (elnode-http-pathinfo httpcon))
               (setq params (elnode-http-params httpcon))
+              (message "the proc buffer is: %s" (process-buffer httpcon))
               (elnode-http-start httpcon 200 '(Content-type . "text/plain"))
               (elnode-http-return httpcon "hello world!"))
             :port port)
@@ -569,6 +562,7 @@ This tests the parameter passing by having an elnode handler "
            (elnode-client-http-post
             (lambda (con header data)
               (setq data-received data)
+              (message "data received is: %s" data-received)
               (setq the-end t))
             "/"
             :port port
