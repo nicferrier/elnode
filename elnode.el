@@ -76,6 +76,18 @@ This is an alist of proc->server-process:
 
   (port . process)")
 
+;;;###autoload
+(defconst elnode-config-directory
+  (expand-file-name (concat user-emacs-directory "elnode/"))
+  "The config directory for elnode to store peripheral files.
+
+This is used as a base for other constant directory or file
+names (the elnode auth database is a file in this directory, the
+elnode webserver has a docroot directory in this directory).
+
+It is based on the `user-emacs-directory' which always seems to
+be set, even when emacs is started with -Q.")
+
 
 ;; Error log handling
 
@@ -2333,7 +2345,11 @@ off the standard webserver indexing in elnode's webserver."
   (elnode--dir-setup elnode-webserver-docroot
                      elnode-webserver-docroot-default
                      "default-webserver-test.html"
-                     "test.html"))
+                     "test.html")
+  (elnode--dir-setup elnode-webserver-docroot
+                     elnode-webserver-docroot-default
+                     "default-webserver-image.png"
+                     "emacs.png"))
 
 (defun elnode-url-encode-path (path)
   "Return a url encoded version of PATH.
