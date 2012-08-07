@@ -2,35 +2,35 @@
 
 # These are the variables that are specific to the package
 NAME=elnode
-VERSION=0.9.8.1
+VERSION=0.9.9
 DOC="A simple event handling HTTP server."
-REQUIREMENTS=requirements.txt
-package_parts = elnode.el \
-	elnode-tests.el \
-	elnode-client.el \
-	elnode-db.el \
-	elnode-db-tests.el \
-	elnode-wiki.el \
-	default-wiki-index.creole \
-	default-webserver-test.html \
-	README COPYING
 
 # Everything beyond here should be generic
+REQUIREMENTS=requirements.txt
+package_parts = $(shell cat build-parts.txt)
 PACKAGE=$(NAME)-$(VERSION)
 TARBALL=$(PACKAGE).tar 
+EMACS=/usr/bin/emacs-snapshot
 
 all: tarball
 
+buildtest:
+	echo $(package_parts)
 
 # Install the tarball in a test package store
 test: tarball
-	emacs -Q --batch -l ./packagedir.el -- $(TARBALL)
+	$(EMACS) -Q --batch -l ./packagedir.el -- $(TARBALL)
 
 # Install the tarball in the user's emacs
 install: tarball
-	emacs --batch -l ~/.emacs.d/init.el -l ./build.el -- $(TARBALL)
+	$(EMACS) --batch -l ~/.emacs.d/init.el -l ./build.el -- $(TARBALL)
 
-clean:
+
+# Really would like this to clean the elc files of the package_parts
+clean-elc:
+	rm -f *.elc
+
+clean: clean-elc
 	rm -rf .elpa
 	rm -rf $(TARBALL)
 	rm -rf $(PACKAGE) 
