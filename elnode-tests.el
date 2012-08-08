@@ -768,29 +768,30 @@ That sounds more fun than it is."
         (elnode-get-targetfile :httpcon "/home/elnode/wiki")
         "/home/elnode/wiki/index.creole")))))
 
-(ert-deftest elnode-worker-elisp ()
-  "Test the `elnode-worker-elisp' macro.
-
-Runs some lisp in a child Emacs and tests that it outputs the
-right thing."
-  (let* ((bufname (generate-new-buffer-name "elnode-worker-elisp-test"))
-         (buf (get-buffer-create bufname)))
-    (elnode-wait-for-exit
-     ;; Nice simple bit of elisp to run in the child
-     (elnode-worker-elisp
-         buf
-         ((a 10)
-          (b 20))
-       (setq x a)
-       (princ x)))
-    (should
-     (equal
-      "10"
-      (let ((output
-             (with-current-buffer buf
-               (buffer-substring (point-min) (point-max)))))
-        (kill-buffer buf)
-        output)))))
+;; This stuff is replaced by the new rle stuff
+;; (ert-deftest elnode-worker-elisp ()
+;;   "Test the `elnode-worker-elisp' macro.
+;;
+;; Runs some lisp in a child Emacs and tests that it outputs the
+;; right thing."
+;;   (let* ((bufname (generate-new-buffer-name "elnode-worker-elisp-test"))
+;;          (buf (get-buffer-create bufname)))
+;;     (elnode-wait-for-exit
+;;      ;; Nice simple bit of elisp to run in the child
+;;      (elnode-worker-elisp
+;;          buf
+;;          ((a 10)
+;;           (b 20))
+;;        (setq x a)
+;;        (princ x)))
+;;     (should
+;;      (equal
+;;       "10"
+;;       (let ((output
+;;              (with-current-buffer buf
+;;                (buffer-substring (point-min) (point-max)))))
+;;         (kill-buffer buf)
+;;         output)))))
 
 (ert-deftest elnode-method ()
   "A quick test for `elnode-method'."
