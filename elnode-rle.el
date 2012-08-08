@@ -19,43 +19,72 @@
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-
 ;;
+;; This is an elnode handler and tools for doing asynchrous
+;; programming.
+;;
+;; The idea is that you can setup associated child processes and pass
+;; them work to do and receive their output over HTTP.
 
 ;;; Code:
 
 (require 'elnode)
 (require 'web)
 (require 'loadhist)
+(require 'server)
 
 (defun elnode-rle--handler (httpcon)
   "Remote Lisp Evaluator handler.
 
 This can be spawned in a client to allow any lisp code to be
 passed over the client-server link."
-  (let ((lisp (elnode-http-param httpcon "lisp")))
+  (let* ((lisp-to-run (elnode-http-param httpcon "lisp"))
+         (lisp
+          (if lisp-to-run
+              (car (read-from-string lisp-to-run))))
+         (bindings-to-use (elnode-http-param httpcon "bindings"))
+         (bindings
+          (if bindings-to-use
+              (car (read-from-string bindings-to-use))))
+         (to-eval (list 'let bindings lisp)))
     (elnode-http-start httpcon 200 '("Content-type" . "text/plain"))
-    (with-stdout-to-elnode httpcon
-        (eval (car (read-from-string lisp))))))
+    (let ((nomessage t))
+      (with-stdout-to-elnode httpcon
+          (eval to-eval)))))
 
 (ert-deftest elnode-rle--handler ()
   "Test the Remote Lisp Evaluator handler."
-  (let
-      ((lisp
-        `("lisp" .
-                 ,(format
-                   "%S"
-                   '(let ((a "hello world!"))
-                     (princ a))))))
-    (should
-     (equal
-      "c\r\nhello world!\r\n" ; is this right??
-      (fakir-mock-process
-          :httpcon
-          ((:elnode-http-params (list lisp)))
-        (elnode-rle--handler :httpcon)
-        (with-current-buffer (process-buffer :httpcon)
-          (buffer-substring (point-min) (point-max))))))))
+  (flet ((lisp-encode (param lisp)
+           (cons param (format "%S" lisp)))
+         (do-test (lisp bindings)
+           (fakir-mock-process
+               :httpcon
+               ((:elnode-http-params (list lisp bindings)))
+             (elnode-rle--handler :httpcon)
+             (with-current-buffer (process-buffer :httpcon)
+               (goto-char (point-min))
+               ;; Find the header end.
+               (re-search-forward "\r\n\r\n" nil 't)
+               (buffer-substring (point) (point-max))))))
+      (should
+       (equal
+        ;; Match the content transfer encoded
+        "c\r\nhello world!\r\n0\r\n\r\n"
+        (let*
+            ((lisp (lisp-encode
+                    "lisp" '(let ((a "hello world!")) (princ a))))
+             (bindings (lisp-encode
+                        "bindings" '((a 10)(b 20)))))
+          (do-test lisp bindings))))
+      (should
+       (equal
+        "2\r\n30\r\n0\r\n\r\n"
+        (let*
+            ((lisp (lisp-encode
+                    "lisp" '(let ((a (+ b 10))) (princ a))))
+             (bindings (lisp-encode
+                        "bindings" '((a 10)(b 20)))))
+          (do-test lisp bindings))))))
 
 (defvar elnode-rle--servers (make-hash-table :test 'equal)
   "The hash of RLE servers available.")
@@ -92,77 +121,67 @@ allowed."
  (setq elnode-do-init nil)
  (setq elnode--do-error-logging nil)
  (require (quote %s))
+ (require (quote elnode-rle))
  (toggle-debug-on-error)
- (load-library \"elnode-rle\")
- (let ((port (elnode-find-free-service)))
-   (elnode-start 'elnode-rle--handler :port port)
-   (print (format \"\\nelnode-port=%%d\\n\" port))))
- (while t (sit-for 60)))"
+ (setq elnode-rle-port (elnode-find-free-service))
+ (elnode-start 'elnode-rle--handler :port elnode-rle-port)
+ (print (format \"\\nelnode-port=%%d\\n\" port)))"
                 to-require))))
     temp-file))
 
-(defun elnode-rle--client-data-mapper (con hdr data stream)
-  "Recevies data from the RLE server and sends it to the STREAM."
-  ;; See comment in elnode-rle--call-mapper - this is gonna get MUCH
-  ;; more complicated; we need to handle different types of STREAM
-  ;;
-  ;; STREAM may be an HTTP connection and we could support that
-  ;; natively but it may also be a buffer or a marker or REAL stdout
-  ;; or a non-http connection process
+(defun elnode-rle--httpcon-mapper (client-header
+                                   client-data
+                                   elnode-httpcon
+                                   &optional end-callback)
+  "Elnode specific client connection to HTTP connection mapper.
 
-  ;; If we're called we must have a header so work out if we need to
-  ;; send it
-  ;;
-  ;; What does this mean for something that's not an HTTP connection?
+Maps client async data responses to an elnode server response."
+  (unless (process-get elnode-httpcon :elnode-rle-header-sent)
+    (elnode-http-start
+     elnode-httpcon
+     (gethash 'status-code client-header))
+    (process-put elnode-httpcon :elnode-rle-header-sent t))
+  (if (eq client-data :done)
+      (elnode-http-return elnode-httpcon) ; return if we're done
+      ;; Else just send the data
+      (elnode-http-send-string elnode-httpcon client-data)))
+
+(defun elnode-rle--client-data-mapper (con header data stream end-callback)
+  "Recevies data from the RLE server and sends it to the STREAM.
+
+END-CALLBACK is to be called when the client sees EOF."
   (cond
-    ((processp stream)
-     (unless (process-get stream :header-sent)
-       (elnode-http-start stream
-                          (gethash 'status-code hdr))
-       (process-put stream :header-sent t))
-     (if (not (eq data :done))
-         (elnode-http-send-string stream data)
-         ;; Else we return and delete the con coz we finished
-         (elnode-http-return stream)
-         (delete-process con)))
+    ((processp stream) ; this should really elnode-http-p
+     (elnode-rle--httpcon-mapper header data stream end-callback))
     ((bufferp stream)
      (if (not (eq data :done))
          (with-current-buffer stream
            (save-excursion
              (goto-char (point-max))
              (insert data)))
-         (delete-process con)))))
+         ;; Process is done.
+         (and (functionp end-callback)
+              (funcall end-callback header))))))
 
-(defun elnode-rle--call-mapper (data stream port)
-  "Make a client call to PORT mapping response to STREAM."
+(defun elnode-rle--call-mapper (data-to-send stream port
+                                &optional end-callback)
+  "Make a client call to PORT mapping response to STREAM.
+
+When it finishes, call END-CALLBACK, if present, with the header."
   (web-http-post
-   (lambda (con hdr data)
-     ;; FIXME - don't wanna do this - ALL this logic in that function
-     ;; should be on functions on the stream
-     ;;
-     ;; we can attach those functions to the httpcon from something
-     ;; that is aware of the context of the httpcon/stream.
-     ;;
-     ;; MAYBE that attachment point has to be filter.  What did we do
-     ;; for the old system?
-     ;;
-     ;; See the comment in elnode-rle--client-data-mapper
-     (elnode-rle--client-data-mapper con hdr data stream))
+   (lambda (con header data)
+     (elnode-rle--client-data-mapper
+      con
+      header
+      data
+      stream
+      end-callback))
    "/"
    :host "localhost"
    :port port
-   :data data
+   :data data-to-send
    :mime-type "application/x-elnode"
    :mode 'stream))
-
-;; Setup some errors for the rle handler proc
-(progn
-  (put 'elnode-rle-child-port
-       'error-conditions
-       '(error elnode elnode-rle elnode-rle-child-port))
-  (put 'elnode-rle-child-port
-       'error-message
-       "Elnode child process did not start a port"))
 
 (defun elnode-rle--make-server (to-require)
   "Make an RLE server, a child Emacs running the RLE handler.
@@ -180,15 +199,24 @@ server does not start properly."  ; yes. I know it's bloody complicated.
           (get-buffer-create
            (format "* %s *" "thingy")))
          (emacsrun
-          (format
-           "emacs -Q  -batch -l %s"
-           (elnode-rle--handler-lisp
-            to-require)))
+          "/usr/bin/emacs -Q --daemon=elnode-debugit")
          (proc
           (start-process-shell-command
            "elnode-rle-server"
            proc-buffer
-           emacsrun)))
+           emacsrun))
+         (file-of-lisp
+          (elnode-rle--handler-lisp
+           to-require)))
+    ;; Start elnode in it
+    (server-eval-at "elnode-debugit" `(load-file ,file-of-lisp))
+    (process-put proc :daemonhandle "elnode-debugit")
+    (process-put
+     proc
+     :port
+     (server-eval-at
+      (process-get proc :daemonhandle)
+      'elnode-rle-port))
     ;; Collect the port from the remote Emacs
     ;; - FIXME this should also collect the secure token
     (set-process-filter
@@ -196,106 +224,161 @@ server does not start properly."  ; yes. I know it's bloody complicated.
      (lambda (proc data)
        ;; Optional delay for test reasons
        (with-current-buffer (process-buffer proc)
-         (mapc
-          (lambda (line)
-            (message "> %s" line)) (split-string data "\n"))
          (save-excursion
            (goto-char (point-max))
-           (insert data)
-           (unless (process-get proc :port)
-             (when (re-search-backward "^elnode-port=\\([0-9]+\\)$" nil t)
-               (process-put proc :port (match-string 1))))))))
+           (insert data)))))
     ;; Make a handler to call the server
     (process-put
      proc :exec
-     (lambda (data stream)
-       ;; FIXME - needs to check for the secure key
-       ;;
-       ;; check for the port from the child... if it doesn't arrive
-       ;; signal failure
-       (unless (catch 'break
-                 (dotimes (i 3)
-                   (let ((collected-port (process-get proc :port)))
-                     (when collected-port
-                       (throw 'break collected-port)))
-                   (sit-for 1)))
-         ;; It failed to collect the port after 10 seconds
-         (signal elnode-rle-child-port process))
+     (lambda (data stream &optional end-callback)
        (let ((ephemeral-port (process-get proc :port)))
-         (elnode-rle--call-mapper data stream ephemeral-port))))
+         (elnode-rle--call-mapper data stream ephemeral-port end-callback))))
     proc))
 
-(ert-deftest elnode-rle--make-server ()
-  "Test making the server."
-  (should
-   (with-temp-buffer
-     (let* ((elnode-rle--make-server-read-port-delay 20)
-            (child-proc (elnode-rle--make-server 'elnode)))
-       (unwind-protect
-            (condition-case var
-                (progn
-                  (funcall
-                   (process-get child-proc :exec)
-                   (let ((h (make-hash-table :test 'equal)))
-                     (puthash "bindings" "((a \"hello\"))" h)
-                     (puthash "lisp" "(message \"hello\")" h)
-                     h)
-                   (current-buffer))
-                  (sit-for 4))
-              (elnode-rle-child-port
-               (message "server did not start with a port")))
-         ;; Kill the process - we don't need it
-         (delete-process child-proc))))))
-
-(defun elnode-rle--sender (stream to-require bindings body)
+(defun elnode-rle--sender (stream to-require bindings body
+                           &optional end-callback)
   "Make a call using a client to the RLE server elsewhere.
 
 The RLE server is reused over TO-REQUIRE, if it's not already
 existing, it is created."
   (let ((server (gethash to-require elnode-rle--servers)))
-    ;; Make it if it's not there
+    ;; Make the server if we don't have it
     (unless server
       (setq server
             (puthash to-require
-                     (elnode-rle--make-server to-require)
+                     (elnode-rle--make-server (car to-require))
                      elnode-rle--servers)))
     ;; Now make the call to the server
     (let ((data (make-hash-table :test 'equal)))
-      (puthash "bindings" bindings data)
-      (puthash "lisp" body data)
-      (funcall
-       (process-get :exec server)
-       data
-       stream))))
+      (puthash "bindings" (format "%S" bindings) data)
+      (puthash "lisp" (format "%S" body) data)
+      (let ((client-connection
+             (funcall
+              (process-get server :exec)
+              data
+              stream
+              end-callback)))
+        ;; If we're streaming to elnode then we need to mark the connection
+        (when (processp stream)
+          (process-put
+           stream
+           :elnode-child-process
+           client-connection))))))
 
-(defmacro elnode-async-do (remote
-                           stream
+(defvar elnode-rle--async-do-end-callback nil
+  "Used by `elnode-async-do' as the source of an end-callback.
+
+This is just used by tests for end signalling.")
+
+(defmacro elnode-async-do (stream
+                           requires requirements
                            with-environment bindings
                            do &rest body)
-  "Execute the BODY in the REMOTE Emacs.
+  "Execute the BODY in a remote Emacs.
 
-The STREAM is used to handle any output from the REMOTE.
+The STREAM is used to handle any output.
+
+The REQUIREMENTS is a list of provide symbol names that will be
+used to establish the right environment in the remote.
 
 The BINDINGS are also sent to the remote.
 
 TODO
 
 security for the remote using the stored key."
+  (assert (eq with-environment 'with-environment))
+  (assert (eq requires 'requires))
+  (assert (eq do 'do))
   (let ((bodyv (make-symbol "body"))
         (bindsv (make-symbol "binds"))
         (streamv (make-symbol "streamv"))
-        (providev (make-symbol "provide")))
+        (requirev (make-symbol "providing")))
     `(let* ((,streamv ,stream)
-            (,bodyv (list ,body))
+            (,bodyv (quote (progn ,@body)))
             (,bindsv (list
                       ,@(loop for p in bindings
                            collect
                              (if (and p (listp p))
                                  (list 'list `(quote ,(car p)) (cadr p))
                                  (list 'cons `,p nil)))))
-            (,providev (file-provides (or (buffer-file-name)
-                                          load-file-name))))
-       (elnode-rle--sender ,streamv ,providev ,bindsv ,bodyv))))
+            (,requirev (quote ,requirements)))
+       (elnode-rle--sender
+        ,streamv ,requirev ,bindsv ,bodyv
+        elnode-rle--async-do-end-callback))))
+
+(defmacro with-elnode-rle-wait (&rest body)
+  "Simplify the wait for RLE; for testers."
+  `(unwind-protect
+        (let (ended)
+          (progn
+            ,@body)
+          (while (not ended) (sit-for 1)))
+     ;; FIXME - can we get to the name of this?
+     (server-eval-at "elnode-debugit" '(kill-emacs))))
+
+(ert-deftest elnode-rle--make-server ()
+  "Test making an RLE server.
+
+Do it all 3 ways: directly with the `elnode-rle-make-server',
+with the `elnode-rle--sender' function and finally with the user
+facing macro `elnode-async-do'.
+
+The output from the RLE call is collected in a buffer
+and tested."
+  (flet ((make-hash (bindings)
+           (let ((h (make-hash-table :test 'equal)))
+             (loop for b in bindings
+                  do (puthash (car b) (cadr b) h))
+             h)))
+    ;; Do it RAW
+    (should
+     (equal
+      "hello"
+      (with-temp-buffer
+        (let* ((child-proc (elnode-rle--make-server 'elnode))
+               (daemon-handler (process-get child-proc :daemonhandle))
+               (collect-buf (current-buffer)))
+          (with-elnode-rle-wait
+              (funcall
+               (process-get child-proc :exec)
+               (make-hash '(("bindings" "((a \"hello\"))")
+                            ("lisp" "(princ \"hello\")")))
+               (current-buffer)
+               (lambda (hdr) ; the end proc
+                 (setq ended t))))
+          (buffer-substring (point-min) (point-max))))))
+    ;; Do it via the sender func
+    (should
+     (equal
+      "40"
+      (with-temp-buffer
+        (with-elnode-rle-wait
+            (let ((elnode-rle--servers (make-hash-table :test 'equal)))
+              (elnode-rle--sender
+               (current-buffer)
+               '(elnode)
+               '((a 10) (b 20))
+               '(let ((c 30))(princ (+ c a)))
+               (lambda (header)
+                 (message "elnode-rle: all done!")(setq ended t)))))
+        (buffer-substring (point-min) (point-max)))))
+    ;; Do it with the macro
+    (should
+     (equal
+      "hello"
+      (with-temp-buffer
+        (with-elnode-rle-wait
+            (let ((elnode-rle--servers (make-hash-table :test 'equal))
+                  (elnode-rle--async-do-end-callback
+                   (lambda (header)
+                     (message "elnode-rle: in the dyn bound callback!")
+                     (setq ended t))))
+              (elnode-async-do
+               (current-buffer)
+               requires (elnode enode-rle)
+               with-environment ((a 10)(b 20))
+               do (princ "hello"))))
+        (buffer-substring (point-min) (point-max)))))))
 
 (provide 'elnode-rle)
 
