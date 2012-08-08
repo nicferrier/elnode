@@ -1,4 +1,147 @@
 
+* planned FAQ
+** FAQ for installation
+*** why does it not start?
+**** have you got something running on port 8000?
+**** how to change the port and restart
+
+** Other questions
+*** What if my friends laugh at me for running a web browser in my editor?
+**** Get better friends? #emacs is a good source of fun people
+**** Alternately start a new business that uses elnode and pisses on the competition
+***** because it is faster and more reliable.
+***** then buy new friends.
+**** Or go back to using Ruby because Ruby is, ya know, really cool. Like your friends say.
+
+
+* auth stuff
+** things auth requires
+*** test
+**** are you currently authenticated?
+**** most often this is testing a cookie
+**** on success do whatever you were going to do
+*** failure action
+**** redirect to a login page
+**** serve a login page
+
+** login pages
+*** test
+**** are the credentials correct?
+*** success
+**** set a token to remember the request somehow
+***** store something in the server?
+****** so you can validatethe auth
+******* login makes token
+******* store token against username
+******* put token:username:server-secretkey on cookie
+******* 
+**** redirect to some page
+***** maybe identified by a parameter or the referrer
+*** failure
+**** redirect to a login failed page
+**** return the same page with errors
+*** links
+**** registration page
+
+
+(with-elnode-auth 
+   (:test cookie
+    :cookie-name my-auth
+    :failure-type redirect
+    :redirect "/mylogin")
+   ...)
+
+:redirect could be:
+
+ a string - which would point to a relative or absolute url which must
+   be mapped indepentently
+
+ a (dispatcher . handler) pair - a cons of a dispatcher and a handler,
+   the dispatcher is automatically wrapped with a detector for a url
+   that serves the handler
+ 
+ a (dispatcher handler string) list - as for the 
+   dispatcher/handler cons but with the addition of the string to name 
+   the url to login
+
+** idea about data/handlers
+*** for login, the processing of the authentication request (the username and password check) is the bit we can specify as part of the auth system
+**** it goes
+***** get a username/password
+****** and possibly other things like "cookie approval"
+***** check against database
+****** plus any other rules, like "cookie approval is yes"
+***** make cookie
+***** redirect to wherever we were supposed to be redirecting
+****** this could have been specified
+******* as a parameter
+******* or it could be fixed
+******* or looked up in the server side environment
+*** the bit we can't specify
+**** the look of the login page
+**** or even the url of the login page
+**** or how the login page works
+***** we need to be able to support AJAX login
+***** so you can login from the main page and from non-contextual flows
+*** it's frustrating because the only thing we care about on the login page is
+**** the login form, which is very specifiable
+**** particularly the url which the form POSTs to
+***** which must have our auth handler on the end of it
+*** so we need a high level abstraction for dealing with this
+*** if we could specify interactive elements, like FORMs as
+**** a description of the data
+**** possibly a template
+***** it should be possible to have a default template
+***** client side template?
+**** the handler code to handle the call
+*** and then have those wrap in the same way as the (dispatcher . handler) form above
+*** reasons this would be good
+**** the separate description of the data means it could be used for ajax and context pages
+**** the template is optional
+***** maybe we could have contextual templates as well
+****** a template for ajax
+****** a template for page
+**** the authentication processor is probably fixed
+**** this could be the tip of a larger abstraction to do better website building
+
+how about we make a function to return a wrap spec?
+
+like this:
+
+(with-elnode-auth 
+   (:test cookie
+    :cookie-name my-auth
+    :failure-type redirect
+    :redirect (elnode-make-auth-wrap 'my-app form-template))
+   ...)
+
+where (elnode-make-auth-wrap to-wrap template &optional path) 
+  => '(my-app (lambda (httpcon) (do-something-with template)) path)
+
+** templates for auth - capturing some thoughts
+*** the current vogue is for mustache like templates
+*** these are dumb text replacers
+*** I prefer sed/xslt like templates
+**** not dumb, but more introspectively transformative
+*** can we make a simpler, less generic, transform language than xslt?
+*** it needs to transform data, such as json into HTML or XML
+*** things it might be
+**** a sequence of rules
+***** for this bit of data, do this
+****** { "password": "" } -> <label for="login_password">Password:</label><input id="login_password" type="password" name="password"/>
+***** questions about this
+****** what's the pattern matching language???
+****** how do we link the "things" together?
+******* eg: BR tags?
+******* wrapping individually in DIVs?
+**** a bunch of associated rules
+***** wrap everything we produce in some tag
+****** eg: FORM tags
+
+
+* v0.9.9 todo
+** new async stuff with RLE
+** default wiki page and webserver root
 
 * v1.00 todo
 ** stuff
@@ -14,3 +157,4 @@
 *** logging to processes
 *** client server stuff
 *** htmlize bugs?
+**** these seem to be fixed by new creole
