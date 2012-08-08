@@ -674,7 +674,7 @@ port number of the connection."
                       (elnode--format-response 500))))
                ;; Handle unwind errors
 	       (when
-		   (and 
+		   (and
 		    (not (process-get process :elnode-http-started))
 		    (not (process-get process :elnode-child-process)))
 		 (elnode-error "filter: caught an error in the handling")
