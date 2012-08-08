@@ -144,6 +144,11 @@ is just a test helper."
                if (not (equal i ""))
                collect i)))))))
 
+(ert-deftest elnode-test-logs-dont-log ()
+  "Test the logs don't log when we turn stuff off."
+  (let ((elnode-log-files-directory nil))
+    (elnode-error "test message!")))
+
 (ert-deftest elnode-test-error-log ()
   (let ((err-message "whoops!! something went wrong! %s" )
         (err-include "some included value"))
