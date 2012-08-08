@@ -181,13 +181,13 @@ The page is faked with PAGE-TEXT."
         :body-header header
         :body-footer footer)))))
 
-
+;; Deprecated
 (defun elnode-wiki-send (httpcon wikipage &optional pageinfo)
-  "A very low level Wiki handler.
+  "Sends the WIKIPAGE to the HTTPCON.
 
-Sends the WIKIPAGE to the HTTPCON.
+If PAGEINFO is specified it's the HTTP path to the Wiki page.
 
-If PAGEINFO is specified it's the HTTP path to the Wiki page."
+Uses Elnode's worker elisp stuff which is now deprecated."
   (elnode-http-start httpcon 200 `("Content-type" . "text/html"))
   (let ((page (or pageinfo (elnode-http-pathinfo httpcon))))
     (elnode-worker-elisp
@@ -204,23 +204,66 @@ If PAGEINFO is specified it's the HTTP path to the Wiki page."
        :body-header header
        :body-footer footer))))
 
-;; New version of elnode-wiki-send, basically
+(define-obsolete-function-alias
+    'elnode-wiki-send
+    'elnode-wiki-page
+  "24.1"
+  "The worker elisp code that this depends on is deprecated in
+  favour of Enode RLE.")
+
+(defvar elnode-wiki-page-use-rle nil
+  "Whether to use RLE for this wiki or not.
+
+The RLE stuff is not really stable yet so this is a switch that
+let's developers play with but does not affect use.")
+
+(defun elnode-wiki-page-rle (httpcon wikipage &optional pageinfo)
+  "Creole render the  WIKIPAGE to the HTTPCON.
+
+If PAGEINFO is specified it's the HTTP path to the Wiki page.
+
+This version uses RLE which renders the Wiki page in a child
+Emacs."
+  (let ((authenticated (elnode-http-cookie httpcon "elnodeauth")))
+    (let ((page-info (or pageinfo (elnode-http-pathinfo httpcon)))
+          (header elnode-wikiserver-body-header)
+          (footer (if authenticated
+                      elnode-wikiserver-body-footer
+                      elnode-wikiserver-body-footer-not-loggedin)))
+      (elnode-async-do
+       httpcon
+       requires (creole elnode)
+       with-environment ((target wikipage)
+                         (page-info page-info)
+                         (header header)
+                         (footer footer))
+       do
+       (creole-wiki
+        target
+        :destination t
+        :variables `((page . ,page-info))
+        :body-header header
+        :body-footer footer)))))
+
 (defun elnode-wiki-page (httpcon wikipage &optional pageinfo)
   "Creole render a WIKIPAGE back to the HTTPCON."
-  (let ((authenticated (elnode-http-cookie httpcon "elnodeauth")))
-    (elnode-http-start httpcon 200 `("Content-type" . "text/html"))
-    (with-stdout-to-elnode httpcon
-        (let ((page-info (or pageinfo (elnode-http-pathinfo httpcon)))
-              (header elnode-wikiserver-body-header)
-              (footer (if authenticated
-                          elnode-wikiserver-body-footer
-                          elnode-wikiserver-body-footer-not-loggedin)))
-          (creole-wiki
-           wikipage
-           :destination t
-           :variables `((page . ,page-info))
-           :body-header header
-           :body-footer footer)))))
+  (if elnode-wiki-page-use-rle
+      (elnode-wiki-page-rle httpcon wikipage pageinfo)
+      ;; Otherwise just do it
+      (let ((authenticated (elnode-http-cookie httpcon "elnodeauth")))
+        (elnode-http-start httpcon 200 `("Content-type" . "text/html"))
+        (with-stdout-to-elnode httpcon
+            (let ((page-info (or pageinfo (elnode-http-pathinfo httpcon)))
+                  (header elnode-wikiserver-body-header)
+                  (footer (if authenticated
+                              elnode-wikiserver-body-footer
+                              elnode-wikiserver-body-footer-not-loggedin)))
+              (creole-wiki
+               wikipage
+               :destination t
+               :variables `((page . ,page-info))
+               :body-header header
+               :body-footer footer))))))
 
 (defun elnode-wiki--text-param (httpcon)
   "Get the text param from HTTPCON and convert it."
