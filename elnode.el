@@ -2319,9 +2319,9 @@ date copy) then `elnode-cached' is called."
    (indent defun))
   (let ((dr (make-symbol "docroot"))
         (con (make-symbol "httpcon")))
-    (assert (eq with 'with))
-    (assert (eq on 'on))
-    (assert (eq do 'do))
+    (assert (or (eq with 'with) (eq with :with)))
+    (assert (or (eq on 'on)     (eq on :on)))
+    (assert (or (eq do 'do)     (eq do :do)))
     `(let ((,dr ,doc-root)
            (,con ,httpcon))
        (let ((,target-file-var (elnode-get-targetfile ,con ,dr)))
@@ -2333,6 +2333,18 @@ date copy) then `elnode-cached' is called."
 
 
 ;; Webserver stuff
+
+;;;###autoload
+(defconst elnode-config-directory
+  (expand-file-name (concat user-emacs-directory "elnode/"))
+  "The config directory for elnode to store peripheral files.
+
+This is used as a base for other constant directory or file
+names (the elnode auth database is a file in this directory, the
+elnode webserver has a docroot directory in this directory).
+
+It is based on the `user-emacs-directory' which always seems to
+be set, even when emacs is started with -Q.")
 
 (defconst elnode-webserver-docroot-default
   (expand-file-name (concat elnode-config-directory "public_html/"))
