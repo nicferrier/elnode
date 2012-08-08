@@ -192,8 +192,6 @@ error is generated.
 The TEXT is logged with the current date and time formatted with
 `elnode-log-buffer-datetime-format'."
   (let ((name (or filename (buffer-file-name (current-buffer)))))
-    (if (not name)
-        (error "Filename is required, or use a buffer with a filename"))
     (with-current-buffer (get-buffer-create buffer-or-name)
       (unless (assq
                'elnode-log-buffer-position-written
@@ -208,10 +206,12 @@ The TEXT is logged with the current date and time formatted with
           "%s: %s\n"
           (format-time-string elnode-log-buffer-datetime-format)
           text))
-        (if (not (file-exists-p (file-name-directory name)))
-            (make-directory (file-name-directory name) t))
-        (append-to-file elnode-log-buffer-position-written (point-max) name)
-        (set-marker elnode-log-buffer-position-written (point-max))
+        ;; Save the file if we have a filename
+        (when name
+          (if (not (file-exists-p (file-name-directory name)))
+              (make-directory (file-name-directory name) t))
+          (append-to-file elnode-log-buffer-position-written (point-max) name)
+          (set-marker elnode-log-buffer-position-written (point-max)))
         ;; Truncate the file if it's grown too large
         (goto-char (point-max))
         (forward-line (- elnode-log-buffer-max-size))
