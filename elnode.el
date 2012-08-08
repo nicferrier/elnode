@@ -229,6 +229,12 @@ The TEXT is logged with the current date and time formatted with
 (defvar elnode--do-error-logging t
   "Allows tests to turn off error logging.")
 
+(defvar elnode--http-send-string-debug nil
+  "Whether to do error logging in `elnode-http-send-string'.
+
+That is very high logging, probably a bad idea for anyone but an
+elnode developer.")
+
 (defun elnode--get-error-log-buffer ()
   "Returns the buffer for the error-log."
   (get-buffer-create elnode-server-error-log))
@@ -1211,7 +1217,10 @@ would result in:
 
 (defun elnode-http-send-string (httpcon str)
   "Send STR to HTTPCON, doing chunked encoding."
-  (elnode-error "elnode-http-send-string %s [[%s]]" httpcon (elnode-trunc str))
+  (if elnode--http-send-string-debug
+      (elnode-error
+       "elnode-http-send-string %s [[%s]]"
+       httpcon (elnode-trunc str)))
   (let ((len (string-bytes str)))
     (process-put httpcon :elnode-bytes-written
                  (+ len (or (process-get httpcon :elnode-bytes-written) 0)))
