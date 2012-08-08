@@ -50,6 +50,7 @@
 
 ;;; Code:
 
+(eval-when-compile (require 'cl))
 (require 'ert)
 (require 'elnode-db)
 
