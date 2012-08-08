@@ -941,8 +941,11 @@ That sounds more fun than it is."
          ;; Ensure the webserver uses Emacs to open files so fakir can
          ;; override it.
          (let* ((elnode-webserver-visit-file t)
+                ;; Turn off logging
                 (elnode--do-error-logging nil)
                 (elnode--do-access-logging-on-dispatch nil)
+                ;; Make the served root the default
+                (elnode-webserver-docroot elnode-webserver-docroot-default)
                 (r (elnode-test-call "/blah.html")))
            (elnode-error "result -> %s" r)
            (should
