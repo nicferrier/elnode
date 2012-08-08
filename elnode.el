@@ -120,7 +120,8 @@ EmacsLisp should really provide this by default."
         (substring path 0 (- (length path) 1)))))
 
 (defun elnode--dir-setup (dir default default-file-name
-                          &optional target-file-name)
+                          &optional target-file-name
+                          &rest other-files)
   "Install a DIR and DEFAULT-FILE-NAME if it's not setup already.
 
 This is a packaging helper.  It helps an ELPA package install
@@ -134,7 +135,10 @@ DEFAULT-FILE-NAME is the name of the file that will be installed
 in DIR.  It is the expected name of the source file inside the
 package.  Unless TARGET-FILE-NAME is specified it is also the
 name the installed file will be given.  If the TARGET-FILE-NAME
-is specified then that is the the name the file is installed as."
+is specified then that is the the name the file is installed as.
+
+If OTHER-FILES is present it is treated as a list of other
+filenames to copy to the DIR."
   (when  (and
           (equal
            dir
@@ -155,7 +159,25 @@ is specified then that is the the name the file is installed as."
                    (or target-file-name default-file-name))))
           (make-directory dir t)
           (message "copying %s elnode wiki default page to %s" dir to)
-          (dired-copy-file source-default-file to nil))))))
+          (dired-copy-file source-default-file to nil)
+          (when other-files
+            (flet ((resolve-filename (file)
+                     (if (file-name-absolute-p file)
+                         file
+                         (concat
+                          (file-name-directory
+                           source-default-file)
+                          file))))
+              (loop for file in other-files
+                 ;; does the file exist?
+                 if (and file (file-exists-p (resolve-filename file)))
+                 do
+                   (dired-copy-file
+                    ;; from...
+                    (resolve-filename file)
+                    ;; to...
+                    (concat dir (file-name-nondirectory file))
+                    nil)))))))))
 
 (defcustom elnode-log-files-directory "~/.elnodelogs"
   "The directory to store any Elnode log files.
@@ -2355,11 +2377,8 @@ off the standard webserver indexing in elnode's webserver."
   (elnode--dir-setup elnode-webserver-docroot
                      elnode-webserver-docroot-default
                      "default-webserver-test.html"
-                     "test.html")
-  (elnode--dir-setup elnode-webserver-docroot
-                     elnode-webserver-docroot-default
-                     "default-webserver-image.png"
-                     "emacs.png"))
+                     "test.html"
+                     "default-webserver-image.png"))
 
 (defun elnode-url-encode-path (path)
   "Return a url encoded version of PATH.
