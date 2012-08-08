@@ -143,6 +143,20 @@ where (elnode-make-auth-wrap to-wrap template &optional path)
 ** new async stuff with RLE
 ** default wiki page and webserver root
 
+* screencasts
+** introducing elnode
+*** start with plain emacs24
+*** install marmalade
+*** install elnode
+*** what does elnode do out of the box?
+**** webserver
+**** wiki
+**** auth database
+**** logging
+** programming with elnode
+*** a simple handler
+*** org-mode
+
 * v1.00 todo
 ** stuff
 *** vagrant image
