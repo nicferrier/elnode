@@ -5,6 +5,40 @@
 **** have you got something running on port 8000?
 **** how to change the port and restart
 
+** programming
+*** what's a hello world handler look like?
+**** the simplest elnode handler is
+(defun hello-world (httpcon)
+  (elnode-send-html httpcon "Hello World"))
+
+*** how do I start a handler?
+**** using M-x elnode-start [RET] handler-name
+***** the handler-name is any function
+***** it will complete in the normal minibuffer way
+*** how can I make a handler serve some static files?
+**** so easy, like this:
+(setq my-webserver-handler (elnode-webserver-handler-maker "~/directory"))
+*** what if I want to do something a bit unusual to the file before it's served? like tempalting
+**** you need to write a proper handler for that
+**** let's say you want to replace {{{name}}} with a single word
+(defun my-files-handler (httpcon)
+  (elnode-docroot-for DIRECTORY
+     with target-filename
+     on httpcon
+     do
+     (with-current-buffer (find-file-noselect target-filename)
+       (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
+       (elnode-http-return 
+          httpcon 
+          (replace-regexp-in-string "{{{\\(.*\\)}}}" "bleh"
+              (buffer-substring (point-min) (point-max)))))))
+*** the logging is crazy, can I turn if off?
+**** yep. 
+M-x customize-variable [RET] elnode-log-files-directory
+**** and
+M-x customize-variable [RET] elnode-error-log-to-messages
+**** are 2 interesting ones
+
 ** Other questions
 *** What if my friends laugh at me for running a web browser in my editor?
 **** Get better friends? #emacs is a good source of fun people
