@@ -2250,8 +2250,9 @@ details."
 
 ;; Docroot protection
 
-(defun elnode--under-docroot-p (target-file doc-root)
-  "Is the TARGET-FILE under the DOC-ROOT?"
+(defun elnode--under-docroot-p (target-file doc-root &optional ignore-missing)
+  "Is the TARGET-FILE under the DOC-ROOT?
+Optional argument IGNORE-MISSING will inhibit checks for missing files."
   (let ((docroot
          (directory-file-name
           (expand-file-name doc-root))))
@@ -2259,7 +2260,7 @@ details."
      (string-match
       (format "^%s\\($\\|/\\)" docroot)
       target-file)
-     (file-exists-p target-file))))
+     (or ignore-missing (file-exists-p target-file)))))
 
 
 (defun elnode-not-found (httpcon target-file)
@@ -2285,6 +2286,12 @@ default it just calls `elnode-send-404'."
 
 By default it just calls `elnode-send-status' with 304."
   (elnode-send-status httpcon 304))
+
+(defvar elnode-docroot-for-no-404 nil
+  "When set to true `elnode-docroot-for' doesn't check for missing files.")
+
+(defvar elnode-docroot-for-no-cache nil
+  "When set to true `elnode-docroot-for' doesn't check for cached files.")
 
 (defmacro elnode-docroot-for (doc-root with target-file-var
                                        on httpcon
@@ -2325,9 +2332,11 @@ date copy) then `elnode-cached' is called."
     `(let ((,dr ,doc-root)
            (,con ,httpcon))
        (let ((,target-file-var (elnode-get-targetfile ,con ,dr)))
-         (if (not (elnode--under-docroot-p ,target-file-var ,dr))
+         (if (not (elnode--under-docroot-p ,target-file-var ,dr
+                                           (not elnode-docroot-for-no-404)))
              (elnode-not-found ,con ,target-file-var)
-           (if (elnode-cached-p ,con ,target-file-var)
+           (if (and (not elnode-docroot-for-no-cache)
+                    (elnode-cached-p ,con ,target-file-var))
                (elnode-cached ,con)
              ,@handling))))))
 
