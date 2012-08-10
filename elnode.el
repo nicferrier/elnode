@@ -2332,8 +2332,8 @@ date copy) then `elnode-cached' is called."
     `(let ((,dr ,doc-root)
            (,con ,httpcon))
        (let ((,target-file-var (elnode-get-targetfile ,con ,dr)))
-         (if (not (elnode--under-docroot-p ,target-file-var ,dr
-                                           (not elnode-docroot-for-no-404)))
+         (if (not (elnode--under-docroot-p ,target-file-var ,dr 
+                                           elnode-docroot-for-no-404))
              (elnode-not-found ,con ,target-file-var)
            (if (and (not elnode-docroot-for-no-cache)
                     (elnode-cached-p ,con ,target-file-var))
