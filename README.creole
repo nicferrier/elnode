@@ -199,6 +199,67 @@ so, everything AFTER the {{{admintool/}}}.
 Some tools in Elnode do this for you, so you don't have to. Again,
 look at {{{elnode-docroot-for}}}.
 
+=== Serving files ===
+
+There are several helpers for serving files with Elnode. You can serve
+directories of files directly by making a webserver handler. A
+function {{{elnode-webserver-handler-maker}}} can make webservers:
+
+{{{
+##! emacs-lisp
+
+(setq my-webserver
+      (elnode-webserver-handler-maker "~/my-webroot"))
+
+(elnode-start my-webserver :port 8010)
+}}}
+
+The Elnode webserver also produces index pages and can be configured
+with a number of variables:
+
+* {{{elnode-webserver-index-page-template}}} defines the page template used for the index
+* {{{elnode-webserver-index-file-template}}} defines the template for each file in the index, normally it's just an A tag ponting to the file.
+
+
+=== More controlled serving ===
+
+If you need more control over serving files you can write handlers
+with {{{elnode-docroot-for}}}. This does a lot of complex work for you
+to map a directory tree to a webserver namespace.
+
+This example shows how to use {{{elnode-docroot-for}}}
+
+{{{
+##! emacs-lisp
+
+(defun elnode-org-handler (httpcon)
+  (elnode-docroot-for "~/work/org"
+      with org-file
+      on httpcon
+      do (with-current-buffer (find-file-noselect org-file)
+           (let ((org-html
+                  ;; This might throw errors so you could condition-case it
+                  (org-export-as-html 3 nil nil 'string)))
+             (elnode-send-html httpcon org-html)))))
+}}}
+
+The first argument is the directory of files which you want to serve,
+then {{{with variable}}} specifies the name of a variable to use in
+the body of the code which will be bound to the filename of the file
+the user wants. Then {{{on httpcon}}} specifies the HTTP connection to
+use and then {{{do ....}}} specifies the code to use.
+
+{{{elnode-docroot-for}}} processes incomming requests on the
+{{{httpcon}}} you specify by checking the request matches a file in
+the directory you specify (it sends a 404 if it does not find one). 
+
+It also does last modified caching on the file and sends an HTTP 304
+response if the file has not been updated since the last request.
+
+If a matching file exists and the it is not cached then
+{{{elnode-docroot-for}}} runs the {{{do}}} code to send the response
+correctly.
+
 === Accessing data in the HTTP request ===
 
 There are a bunch of functions that do what you would expect about
