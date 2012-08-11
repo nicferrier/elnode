@@ -2440,7 +2440,10 @@ The order of the variables is:
 (defcustom elnode-webserver-index-file-template "<a href='%s'>%s</a><br/>\r\n"
   "The template for each file in the webserver index.
 
-This is used to display each file in an automated directory index."
+This is used to display each file in an automated directory index.
+
+It is expected the template has 2 %s variables in it, the first
+is the url to link to and the second is the content of the link."
   :group 'elnode
   :type '(string))
 
