@@ -147,6 +147,7 @@ is just a test helper."
 (ert-deftest elnode-test-logs-dont-log ()
   "Test the logs don't log when we turn stuff off."
   (let ((elnode-log-files-directory nil))
+    ;; FIXME this is not a test. duh.
     (elnode-error "test message!")))
 
 (ert-deftest elnode-test-error-log ()
