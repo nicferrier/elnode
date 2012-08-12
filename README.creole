@@ -268,8 +268,17 @@ data in the HTTP request:
 {{{
 ##! emacs-lisp
 
+(elnode-http-method httpcon)
+=> "POST"
+
 (elnode-http-pathinfo httpcon)
 => "/wiki/blah.creole"
+
+(elnode-http-query httpcon)
+=> "a=10&b=20&c=the+quick+brown+fox"
+
+(elnode-http-params httpcon)
+=> (("a" . "10")("b" . "20")("c" . "the quick brown fox"))
 
 (elnode-http-param httpcon "username")
 => "nicferrier"
