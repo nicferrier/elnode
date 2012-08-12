@@ -260,6 +260,52 @@ If a matching file exists and the it is not cached then
 {{{elnode-docroot-for}}} runs the {{{do}}} code to send the response
 correctly.
 
+=== Sending files ===
+
+Elnode also has {{{elnode-send-file}}} for sending files to the response,
+along with {{{elnode-docroot-for}}} this makes a powerful simple
+webserver tool.  {{{elnode-send-file}}} can be used to send any
+arbitary file:
+
+{{{
+##! emacs-lisp
+(defun my-status-page (httpcon)
+  (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
+  (elnode-send-file httpcon "~/static-status-file.html"))
+}}}
+
+A handler that will only ever respond with one static file.  Of
+course, this isn't very interesting, combined with
+{{{elnode-docroot-for}}} it can be used to serve directories and the
+like, or you could work out the filename to be sent with some other
+method.
+
+There is another use for {{{elnode-send-file}}} which is simple
+templating.  You can pass parameters to {{{elnode-send-file}}} and it
+will template them into the file:
+
+{{{
+(defun my-templater(httpcon)
+  (let ((hash (make-hash-table 
+                 :test 'equal 
+                 :data "username" "nicferrier")))
+     (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
+     (elnode-send-file 
+         httpcon "~/my-template.html" 
+         :replacements hash)))
+}}}
+
+The template file must have sections marked up like:
+
+<<html
+&lt;!##E username E##!&gt;
+html>>
+
+for each of the variables.
+
+This makes for simple but quite powerful templating.
+
+
 === Accessing data in the HTTP request ===
 
 There are a bunch of functions that do what you would expect about
