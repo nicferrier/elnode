@@ -97,7 +97,7 @@ own servers.
 You can define a handler function:
 
 {{{
-(defun nicferrier-handler (httpcon)
+(defun my-test-handler (httpcon)
   "Demonstration function"
   (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
   (elnode-http-return httpcon "<html><b>HELLO!</b></html>"))
@@ -106,7 +106,7 @@ You can define a handler function:
 And then start the server:
 
 {{{
-(elnode-start 'nicferrier-handler :port 8010 :host "localhost")
+(elnode-start 'my-test-handler :port 8010 :host "localhost")
 }}}
 
 You can also start the server interactively... with:
