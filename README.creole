@@ -295,6 +295,28 @@ Also, Elnode can handle some conversions sometimes. I would like to
 respond to user demand about when and where to do that and what to
 do. Please give me feedback.
 
+=== Elnode's raw data ===
+
+Elnode stores most of it's internal state on the connection object and
+it's all accessible, interesting properties and how to access them:
+
+{{{
+##! emacs-lisp
+
+(process-get httpcon :elnode-http-status)
+=> "GET / HTTP/1.1"
+
+(process-get httpcon :elnode-http-resource)
+=> "/"
+
+(process-get httpcon :elnode-http-version)
+=> "1.1"
+}}}
+
+These are not supported by Elnode at all, there is no guarantee that
+the names of these properties won't change. If you feel that you want
+official support (ie: a function) then make an issue on the Elnode
+github.
 
 
 == To Do? ==
