@@ -7,5 +7,5 @@ elnode-wiki.el
 default-wiki-index.creole
 default-webserver-test.html
 default-webserver-image.png
-README 
+README.creole
 COPYING

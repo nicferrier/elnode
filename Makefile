@@ -49,7 +49,4 @@ $(PACKAGE): $(package_parts)
 $(PACKAGE)/$(NAME)-pkg.el:
 	echo "(define-package \"$(NAME)\" \"$(VERSION)\" \"$(DOC)\" `cat $(REQUIREMENTS)`)" > $@
 
-README:
-	cat README.creole > README
-
 # End
