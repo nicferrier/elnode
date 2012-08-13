@@ -188,7 +188,8 @@ where (elnode-make-auth-wrap to-wrap template &optional path)
 **** auth database
 **** logging
 ** programming with elnode
-*** a simple handler
+*** start with some files
+*** make a webserver with elnode-webserver-handler-maker
 *** org-mode
 
 * v1.00 todo
