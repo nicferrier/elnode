@@ -67,8 +67,12 @@
             (car reference)))
       ;; this should be part of what we find when we look it up?
       (elnode-db-hash reference)
-      ;; there should be a specific db error
-      (error "no such database implementation")))
+      ;; Otherwise look it up...
+      (let ((db-func (gethash (car reference) elnode-db--types)))
+        (if (functionp db-func)
+            (funcall db-func reference)
+            ;; there should be a specific db error
+            (error "no such database implementation")))))
 
 (defun elnode-db-get (key db)
   (funcall (plist-get db :get) key db))
