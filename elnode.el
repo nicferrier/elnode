@@ -1220,11 +1220,13 @@ would result in:
 (defun elnode-http-param (httpcon name)
   "Get the named parameter from the request."
   (let* ((params (elnode-http-params httpcon))
-         (param-pair (assoc name params)))
+         (param-pair
+          (assoc
+           (if (symbolp name) (symbol-name name) name)
+           params)))
     ;; Should we signal when we don't have a param?
     (when param-pair
       (cdr param-pair))))
-
 
 (defun elnode-http-method (httpcon)
   "Get the PATHINFO of the request."

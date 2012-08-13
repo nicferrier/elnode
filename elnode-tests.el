@@ -519,6 +519,7 @@ parsing. That checks the ':elnode-http-method':
      (:elnode-http-method "GET")
      (:elnode-http-query "a=10&b=lah+dee+dah&c+a=blah+blah"))
     (should (equal "lah dee dah" (elnode-http-param :httpcon "b")))
+    (should (equal "lah dee dah" (elnode-http-param :httpcon 'b)))
     (should (equal "blah blah" (elnode-http-param :httpcon "c a")))))
 
 (ert-deftest elnode-test-http-post-params ()
