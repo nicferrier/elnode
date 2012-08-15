@@ -840,6 +840,10 @@ Serves only to connect the server process to the client processes"
 (defvar elnode-host-history '()
   "The history of hosts that servers are started on.")
 
+(defun elnode-ports ()
+  "List of all ports currently in use by elnode."
+  (mapcar 'car elnode-server-socket))
+
 ;;;###autoload
 (defun* elnode-start (request-handler
                       &key
@@ -919,7 +923,9 @@ elnode servers on the same port on different hosts."
 ;; TODO: make this take an argument for the
 (defun elnode-stop (port)
   "Stop the elnode server attached to PORT."
-  (interactive "nPort: ")
+  (interactive `(,(string-to-int (completing-read "Port: "
+                                                  (mapcar 'string-to-int
+                                                          (elnode-ports))))))
   (let ((server (assoc port elnode-server-socket)))
     (when server
       (message "deleting server process")
