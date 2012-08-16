@@ -374,6 +374,8 @@ the value of the GUARD."
     ;; Set the correct queue
     (setq elnode--deferred new-deferred)))
 
+(defvar elnode-defer-on nil
+  "Whether to do deferring or not.")
 
 (defvar elnode--defer-timer nil
   "The timer used by the elnode defer processing.
@@ -397,6 +399,14 @@ Necessary for running comet apps."
        elnode--defer-timer)
     (setq elnode--deferred (list))
     (message "elnode deferred queue reset!")))
+
+(defun elnode-deferred-queue-start ()
+  "Start the deferred queue, unless it's running."
+  (interactive)
+  (unless elnode-defer-on
+    (setq elnode-defer-on t))
+  (unless elnode--defer-timer
+    (elnode--init-deferring)))
 
 (defun elnode-deferred-queue-stop ()
   "Stop any running deferred queue processor."
@@ -2979,9 +2989,10 @@ the handler and listening on `elnode-init-host'"
          (elnode-error
           "elnode-init: can't start - port %d has something attached already"
           elnode-init-port))))
-  ;;(if (not elnode--defer-timer)
-  ;;    (elnode--init-deferring))
-  )
+  ;; Turn on the defer queue processor if we need to
+  (if elnode-defer-on
+      (if (not elnode--defer-timer)
+          (elnode--init-deferring))))
 
 ;;;###autoload
 (defcustom elnode-do-init 't
