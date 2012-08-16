@@ -336,11 +336,15 @@ control back when the deferred is re-processed."
   "Test GUARD and defer if it succeeds and BODY if it doesn't.
 
 `httpcon' is captured in this macro which means the macro can
-only be expanded where there is an inscope `httpcon'."
+only be expanded where there is an inscope `httpcon'.
+
+Inside the macro the symbol `elnode-defer-guard-it' is bound to
+the value of the GUARD."
   (declare (indent defun))
   (let ((bv (make-symbol "bv")))
-    `(let ((,bv (lambda (httpcon) ,@body)))
-       (if ,guard
+    `(let ((,bv (lambda (httpcon) ,@body))
+           (elnode-defer-guard-it ,guard))
+       (if elnode-defer-guard-it
            (elnode-defer-now ,bv)
          (progn
            (funcall ,bv httpcon))))))
