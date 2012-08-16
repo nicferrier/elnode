@@ -191,7 +191,14 @@ where (elnode-make-auth-wrap to-wrap template &optional path)
 *** start with some files
 *** make a webserver with elnode-webserver-handler-maker
 *** org-mode
-
+** chat
+*** what do you need?
+**** a list to store chat
+***** a list of triples? (username date text)
+**** a handler to receive the chats
+***** a POST or something
+**** a handler for people to call to wait and receive chats
+***** should use elnode-defer-or-do to check for new chats
 * v1.00 todo
 ** stuff
 *** vagrant image
