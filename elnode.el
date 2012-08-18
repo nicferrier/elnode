@@ -342,16 +342,47 @@ Inside the macro the symbol `elnode-defer-guard-it' is bound to
 the value of the GUARD."
   (declare (indent defun))
   (let ((bv (make-symbol "bv")))
-    `(let ((,bv (lambda (httpcon) ,@body))
-           (elnode-defer-guard-it ,guard))
+    `(let ((elnode-defer-guard-it (progn ,guard)))
+       (message "the guard value was: %s" elnode-defer-guard-it)
+       (let ((,bv (lambda (httpcon) ,@body)))
+         (if elnode-defer-guard-it
+             (elnode-defer-now ,bv)
+             (progn
+               (funcall ,bv httpcon)))))))
+
+(defmacro elnode-defer-until (guard &rest body)
+  "Test GUARD and defer if it fails and BODY if it doesn't.
+
+`httpcon' is captured in this macro which means the macro can
+only be expanded where there is an inscope `httpcon'.
+
+Inside the macro the symbol `elnode-defer-guard-it' is bound to
+the value of the GUARD."
+  (declare (indent defun))
+  (let ((bv (make-symbol "bv"))
+        (gv (make-symbol "gv"))
+        (dummyval (make-symbol "dummyv"))
+        (fv (make-symbol "fv")))
+    `(let* ((,gv (lambda () ,guard))
+            (elnode-defer-guard-it (funcall ,gv))
+            (,bv (lambda (httpcon) ,@body))
+            (,fv
+             (lambda (httpcon proc)
+               (setq elnode-defer-guard-it (funcall ,gv))
+               (if elnode-defer-guard-it
+                   (funcall ,bv httpcon)
+                   ;; the test failed we should defer again
+                   (elnode-defer-now proc)))))
        (if elnode-defer-guard-it
-           (elnode-defer-now ,bv)
-         (progn
-           (funcall ,bv httpcon))))))
+           (funcall ,bv httpcon)
+           ;; The test failed, we should defer again
+           (elnode-defer-now
+            (lambda (httpcon)
+              (funcall ,fv httpcon ,fv)))))))
 
 (defun elnode--deferred-add (httpcon handler)
   "Add the specified HTTPCON/HANDLER pair to the deferred list."
-  (elnode-error "deferred-add: adding a defer for %s" httpcon)
+  (elnode-error "deferred-add: adding a defer %s for %s" handler httpcon)
   (push (cons httpcon handler) elnode--deferred))
 
 (defun elnode--deferred-processor ()
@@ -370,7 +401,9 @@ the value of the GUARD."
                 new-deferred))
               (error
                (elnode-error
-                "elnode-deferred found an error processing %s" httpcon)))))
+                "elnode-deferred error processing %s - %s"
+                httpcon
+                signal-value)))))
     ;; Set the correct queue
     (setq elnode--deferred new-deferred)))
 
@@ -692,12 +725,15 @@ port number of the connection."
              (unwind-protect
                   (condition-case signal-value
                       (elnode--handler-call handler process)
-                    ('elnode-defer
+                    ('elnode-defer ; see elnode-defer-now
                      (elnode-error "filter: defer caught on %s" process)
                      (case (elnode--get-server-prop process :elnode-defer-mode)
                        ((:managed 'managed)
-                        (elnode--deferred-add process
-                                              (cdr signal-value)))
+                        (process-put process :elnode-deferred t)
+                        (elnode--deferred-add
+                         process
+                         ;; the cdr of the sig value is the func
+                         (cdr signal-value)))
                        ((:immediate 'immediate)
                         (elnode-error "filter: immediate defer on %s" process)
                         (funcall (cdr signal-value) process))))
@@ -711,6 +747,7 @@ port number of the connection."
                ;; Handle unwind errors
 	       (when
 		   (and
+                    (not (process-get process :elnode-deferred))
 		    (not (process-get process :elnode-http-started))
 		    (not (process-get process :elnode-child-process)))
 		 (elnode-error "filter: caught an error in the handling")
