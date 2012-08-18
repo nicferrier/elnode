@@ -407,6 +407,10 @@ the value of the GUARD."
     ;; Set the correct queue
     (setq elnode--deferred new-deferred)))
 
+(defun elnode-deferred-queue-process ()
+  (interactive)
+  (elnode--deferred-processor))
+
 (defvar elnode-defer-on nil
   "Whether to do deferring or not.")
 
