@@ -213,7 +213,7 @@ error is generated.
 
 The TEXT is logged with the current date and time formatted with
 `elnode-log-buffer-datetime-format'."
-  (let ((name (or filename (buffer-file-name (current-buffer)))))
+  (let ((name (or filename (buffer-file-name (get-buffer buffer-or-name)))))
     (with-current-buffer (get-buffer-create buffer-or-name)
       (unless (assq
                'elnode-log-buffer-position-written
