@@ -1499,16 +1499,48 @@ DATA must be a string, it's just passed to `elnode-http-send'."
   (elnode-http-start httpcon 200 '("Content-Type" . "text/html"))
   (elnode-http-return httpcon html))
 
-(defun elnode-send-json (httpcon data &optional content-type)
+(defun* elnode-send-json (httpcon data &key content-type jsonp)
   "Send a 200 OK to the HTTPCON along with DATA as JSON.
 
 If CONTENT-TYPE is specified then it is used as the HTTP Content
-Type of the response."
-  (let ((json-to-send (json-encode data)))
+Type of the response.
+
+If JSONP is specified the content is sent as a JSON-P response.
+If the variable specifies a name for the JSON-P callback function
+that that is used.  Alternately, if the JSONP parameter does not
+specify a name, the parameter `callback' is looked up on the
+HTTPCON and the value of that used.  If neither the JSONP
+parameter, not the HTTP parameter `callback' is present that the
+name \"callback\" is used."
+  (let ((json-to-send
+         (flet
+             ((json-alist-p
+                  (list)
+                "Proper check for ALIST."
+                (while (consp list)
+                  (setq list
+                        (if (and
+                             (consp (car list))
+                             (not (consp (caar list)))
+                             (not (vectorp (caar list))))
+                            (cdr list)
+                            'not-alist)))
+                (null list)))
+           (json-encode data))))
     (elnode-http-start
      httpcon 200
      `("Content-type" . ,(or content-type "application/json")))
-    (elnode-http-return httpcon json-to-send)))
+    (elnode-http-return
+     httpcon
+     (if jsonp
+         (format
+          "%s(%s);"
+          (or (when (stringp jsonp)
+                jsonp)
+              (elnode-http-param httpcon "callback")
+              "callback")
+          json-to-send)
+         json-to-send))))
 
 (defun elnode-send-status (httpcon status &optional msg)
   "A generic handler to send STATUS to HTTPCON.
