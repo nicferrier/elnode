@@ -2326,7 +2326,7 @@ Optionally, use the specified TYPE as the status code, eg:
   (lambda (httpcon)
     (elnode-send-redirect httpcon location type)))
 
-(defun* elnode-make-send-file  (filename &key preamble mime-types )
+(defun* elnode-make-send-file  (filename &key preamble mime-types)
   "Make a handler that will serve a single FILENAME.
 
 If the FILENAME is relative then it is resolved against the
@@ -2339,7 +2339,7 @@ details."
     (elnode-send-file
      httpcon
      filename
-     :mime-tpes mime-types
+     :mime-types mime-types
      :preamble preamble)))
 
 
