@@ -2455,13 +2455,13 @@ is the url to link to and the second is the content of the link."
   :group 'elnode
   :type '(string))
 
-(defun elnode--webserver-index (docroot targetfile pathinfo)
+(defun elnode--webserver-index (docroot targetfile pathinfo &optional match)
   "Constructs index documents.
 
 The index is made for the DOCROOT and TARGETFILE. The web path is
 PATHINFO."
   ;; TODO make this usable by people generally
-  (let ((dirlist (directory-files-and-attributes targetfile)))
+  (let ((dirlist (directory-files-and-attributes targetfile nil match)))
     ;; TODO make some templating here so people can change this
     (format
      elnode-webserver-index-page-template
