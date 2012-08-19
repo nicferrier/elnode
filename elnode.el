@@ -343,7 +343,6 @@ the value of the GUARD."
   (declare (indent defun))
   (let ((bv (make-symbol "bv"))
         (gv (make-symbol "gv"))
-        (dummyval (make-symbol "dummyv"))
         (fv (make-symbol "fv")))
     `(let* ((,gv (lambda () ,guard))
             (elnode-defer-guard-it (funcall ,gv))
