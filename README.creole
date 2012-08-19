@@ -318,6 +318,37 @@ for each of the variables.
 
 This makes for simple but quite powerful templating.
 
+=== Really Really simple file sending ===
+
+It's also possible to make send file functions automatically so if you
+want to map a handler that serves just one file in a dispatcher that's
+possible:
+
+{{{
+##! emacs-lisp
+`(("^my-host.example.com//wiki/\\(.*\\)" . elnode-wikiserver)
+  ("^.*//styles.css" . ,(elnode-make-send-file "~/mainstyles.css"))
+  ("^.*//\\(.*\\)" . elnode-webserver))
+}}}
+
+It's also possible to use templating with this style of programming by
+passing a function returning the alist variable map as
+{{{:replacements}}}:
+
+{{{
+##! emacs-lisp
+(defun my-templater ()
+  '(("username" . "william occam")))
+
+`(("^my-host.example.com//wiki/\\(.*\\)" . elnode-wikiserver)
+  ("^.*//styles.css" . ,(elnode-make-send-file 
+                           "~/mainstyles.css"
+                           :replacements 'my-templater))
+  ("^.*//\\(.*\\)" . elnode-webserver))
+}}}
+
+This makes templating and setting up very simple websites very easy
+indeed.
 
 === Accessing data in the HTTP request ===
 
