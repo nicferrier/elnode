@@ -51,6 +51,20 @@
         (concat chat-dir "chat.creole"))
        :destination t)))
 
+(defun chat-main-templater ()
+  "Return the `chat-list' as rows for initial chat display."
+  (list
+   (cons
+    "messages"
+    (loop for entry in chat-list
+       if (equal 3 (length entry))
+       concat
+         (concat "<tr><td class=\"username\">"
+                 (elt entry 1)
+                 "</td><td class=\"message\">"
+                 (elt entry 2)
+                 "</td></tr>")))))
+
 (defun chat-main-handler (httpcon)
   "The main handler."
   (let ((chat-js (concat chat-dir "chat.js"))
@@ -62,6 +76,8 @@
        ("^.*//chat/send/" . chat-send-handler)
        ("^.*//chat.js" . ,(elnode-make-send-file chat-js))
        ("^.*//styles.css" . ,(elnode-make-send-file chat-css))
-       ("^.*//" . ,(elnode-make-send-file chat-html))))))
+       ("^.*//" . ,(elnode-make-send-file
+                    chat-html
+                    :replacements 'chat-main-templater))))))
 
 ;;; chat.el ends here
