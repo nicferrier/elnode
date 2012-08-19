@@ -978,9 +978,13 @@ elnode servers on the same port on different hosts."
 ;; TODO: make this take an argument for the
 (defun elnode-stop (port)
   "Stop the elnode server attached to PORT."
-  (interactive `(,(string-to-int (completing-read "Port: "
-                                                  (mapcar 'string-to-int
-                                                          (elnode-ports))))))
+  (interactive (let ((prt
+                      (string-to-number
+                       (completing-read
+                        "Port: "
+                        (mapcar (lambda (n) (format "%d" n))
+                                (elnode-ports))))))
+                 (list prt)))
   (let ((server (assoc port elnode-server-socket)))
     (when server
       (message "deleting server process")
