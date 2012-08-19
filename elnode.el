@@ -712,6 +712,13 @@ port number of the connection."
                       (elnode--handler-call handler process)
                     ('elnode-defer ; see elnode-defer-now
                      (elnode-error "filter: defer caught on %s" process)
+                     ;; Check the timer, this is probably spurious but
+                     ;; useful "for now"
+                     (unless elnode-defer-on
+                       (elnode-error
+                        (concat "filter: defer signalled on %s - "
+                                "but no defer timer running")
+                        process))
                      (case (elnode--get-server-prop process :elnode-defer-mode)
                        ((:managed 'managed)
                         (process-put process :elnode-deferred t)
