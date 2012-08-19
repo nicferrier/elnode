@@ -5,12 +5,9 @@
 (defvar chat-list '())
 
 (defun chat-add (user text)
-  (setq
-   chat-list
-   (append
-    (list (list (current-time) user text))
-    chat-list))
-  chat-list)
+  (add-to-list
+   'chat-list
+    (list (current-time) user text)))
 
 (defun chat-list-since (since)
   (loop for rec in chat-list
