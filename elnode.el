@@ -2225,6 +2225,16 @@ being returned."
 When set to `t' files to be sent with the `elnode-send-file' are
 read into Emacs using `find-file'.")
 
+(defvar elnode-replacements-httpcon nil
+  "This is bound by `elnode-send-file' when doing replacements.
+
+It should not be used otherwise.")
+
+(defvar elnode-replacements-targetfile nil
+  "This is bound by `elnode-send-file' when doing replacements.
+
+It should not be used otherwise.")
+
 (defun* elnode-send-file (httpcon targetfile
                                   &key
                                   preamble
@@ -2239,7 +2249,7 @@ WARNING: this resolution order is likely to change because,
 especially when developing `default-directory' can be quite
 random (change buffer, change `default-directory').
 
-Optionally you may specify extra keyword arguments:
+Optionally you may specify extra keyword arguments:t
 
 :PREAMBLE a string of data to send before the file.
 
@@ -2255,7 +2265,15 @@ association list used to supply values for templating.  When
 templating is specified the targetfile is not sent directly but
 opened in Emacs as a buffer and transformed through the
 templating system before being sent.  See
-`elnode--buffer-template' for details of templating."
+`elnode--buffer-template' for details of templating.
+
+REPLACEMENTS can optionally be a function in which case the
+return value is expected to be the hash-table or alist for the
+variables.  The function should have no arguments but two
+variables are bound during the function's execution
+`elnode-replacements-httpcon' is the `httpcon' and
+`elnode-replacements-targetfile' is the targetfile to be
+delivered."
   (let ((filename
          (if (not (file-name-absolute-p targetfile))
              (file-relative-name
@@ -2282,7 +2300,14 @@ templating system before being sent.  See
             (let ((file-buf (find-file-noselect filename)))
               (elnode-http-return
                httpcon
-               (elnode--buffer-template file-buf replacements)))
+               (elnode--buffer-template
+                file-buf
+                ;; Replacements handling
+                (if (functionp replacements)
+                    (let ((elnode-replacements-httpcon httpcon)
+                          (elnode-replacements-targetfile targetfile))
+                      (funcall replacements))
+                    replacements))))
           (elnode-child-process
            httpcon
            elnode-send-file-program
@@ -2330,21 +2355,31 @@ Optionally, use the specified TYPE as the status code, eg:
   (lambda (httpcon)
     (elnode-send-redirect httpcon location type)))
 
-(defun* elnode-make-send-file  (filename &key preamble mime-types)
+(defun* elnode-make-send-file  (filename
+                                &key
+                                preamble
+                                mime-types
+                                replacements)
   "Make a handler that will serve a single FILENAME.
 
 If the FILENAME is relative then it is resolved against the
 package's `load-file-name'.
 
-Optionally mime-types and other additional keyword arguments may be
+Optionally MIME-TYPES and other additional keyword arguments may be
 specified and are passed through, see `elnode-send-file' for
-details."
+details.
+
+The REPLACEMENTS parameter can be a function that returns a
+hash-table or alist, this is very useful for this function
+because it allows dynamic variables to be defined.  Again, see
+`elnode-send-file' for full documentation of this feature."
   (lambda (httpcon)
     (elnode-send-file
      httpcon
      filename
      :mime-types mime-types
-     :preamble preamble)))
+     :preamble preamble
+     :replacements replacements)))
 
 
 ;; Docroot protection
