@@ -56,7 +56,12 @@
   (list
    (cons
     "messages"
-    (loop for entry in chat-list
+    (loop for entry in (subseq
+                        chat-list
+                        0
+                        (if (> (length chat-list) 10)
+                            12
+                            (length chat-list)))
        if (equal 3 (length entry))
        concat
          (concat "<tr><td class=\"username\">"
