@@ -332,24 +332,6 @@ point is that whatever signals elnode-defer should be getting
 control back when the deferred is re-processed."
   (signal 'elnode-defer handler))
 
-(defmacro elnode-defer-or-do (guard &rest body)
-  "Test GUARD and defer if it succeeds and BODY if it doesn't.
-
-`httpcon' is captured in this macro which means the macro can
-only be expanded where there is an inscope `httpcon'.
-
-Inside the macro the symbol `elnode-defer-guard-it' is bound to
-the value of the GUARD."
-  (declare (indent defun))
-  (let ((bv (make-symbol "bv")))
-    `(let ((elnode-defer-guard-it (progn ,guard)))
-       (message "the guard value was: %s" elnode-defer-guard-it)
-       (let ((,bv (lambda (httpcon) ,@body)))
-         (if elnode-defer-guard-it
-             (elnode-defer-now ,bv)
-             (progn
-               (funcall ,bv httpcon)))))))
-
 (defmacro elnode-defer-until (guard &rest body)
   "Test GUARD and defer if it fails and BODY if it doesn't.
 
