@@ -17,14 +17,6 @@
 ;; And now the elnode
 
 (require 'elnode)
-(require 'creole)
-(require 'fakir)
-
-(defconst js-type "application/javascript")
-(defconst chat-dir (file-name-directory
-                    (or (buffer-file-name)
-                        load-file-name
-                        default-directory)))
 
 (defun chat-comet-handler (httpcon)
   "Defer until there is new chat."
@@ -40,6 +32,16 @@
     (chat-add username msg)
     (elnode-send-json httpcon (json-encode '("thanks")))))
 
+
+;; Main page setup stuff
+
+(require 'creole)
+
+(defconst chat-dir (file-name-directory
+                    (or (buffer-file-name)
+                        load-file-name
+                        default-directory)))
+
 (defun chat-page-handler (httpcon)
   "Send the chat page."
   (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
@@ -51,12 +53,15 @@
 
 (defun chat-main-handler (httpcon)
   "The main handler."
-  (let ((chat-js (concat chat-dir "chat.js")))
+  (let ((chat-js (concat chat-dir "chat.js"))
+        (chat-html (concat chat-dir "chat.html"))
+        (chat-css (concat chat-dir "styles.css")))
     (elnode-hostpath-dispatcher
      httpcon
      `(("^.*//chat/poll/" . chat-comet-handler)
        ("^.*//chat/send/" . chat-send-handler)
        ("^.*//chat.js" . ,(elnode-make-send-file chat-js))
-       ("^.*//" . chat-page-handler)))))
+       ("^.*//styles.css" . ,(elnode-make-send-file chat-css))
+       ("^.*//" . ,(elnode-make-send-file chat-html))))))
 
 ;;; chat.el ends here

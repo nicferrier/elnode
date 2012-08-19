@@ -1,0 +1,26 @@
+<html>
+<head>
+<title>Chat!</title>
+<link rel="stylesheet" href="/styles.css" type="text/css"/>
+</head>
+<body>
+<iframe style="float:right;" width="0" height="0" id="_sendtarget" src="">
+</iframe>
+<div id="page">
+    <h1>Chat!</h1>
+    <form method="POST" action="/chat/send/" target="_sendtarget">
+        <input type="text" name="username" value="" size="10"/>
+        <input type="text" name="msg" value="" size="50"/>
+        <input type="submit" name="send" value="send"/>
+    </form>
+    <table>
+        <tr>
+            <td class="username">nic</td>
+            <td class="message">this is a test message</td>
+        </tr>
+    </table>
+</div>
+</body>
+<script src="/chat.js" language="Javascript">
+</script>
+</html>
