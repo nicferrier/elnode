@@ -2626,6 +2626,24 @@ request does not go above the DOCROOT."
     (lambda (httpcon)
       (elnode--webserver-handler-proc httpcon my-docroot my-mime-types))))
 
+
+(defvar elnode--make-webserver-store nil
+  "Alist of webservers made by `elnode-make-webserver'.
+
+Stored as `docroot' . `webserver'.")
+
+;;;###autoload
+(defun elnode-make-webserver (docroot port)
+  "Make a webserver interactively, for DOCROOT on PORT.
+
+An easy way for a user to make a webserver for a particular directory."
+  (interactive "DServe files from: \nnTCP Port (try something over 8000):")
+  (let ((webserver-proc (elnode-webserver-handler-maker docroot)))
+    (add-to-list
+     'elnode--make-webserver-store
+     (cons docroot webserver-proc))
+    (elnode-start webserver-proc :port port)))
+
 ;;;###autoload
 (defun elnode-webserver (httpcon)
   "A simple webserver that serves documents out of `elnode-webserver-docroot'.
