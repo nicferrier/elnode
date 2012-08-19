@@ -2546,7 +2546,10 @@ is the url to link to and the second is the content of the link."
   "Constructs index documents.
 
 The index is made for the DOCROOT and TARGETFILE. The web path is
-PATHINFO."
+PATHINFO.
+
+Optional MATCH is passed directly through to
+`directory-files-and-attributes'."
   ;; TODO make this usable by people generally
   (let ((dirlist (directory-files-and-attributes targetfile nil match)))
     ;; TODO make some templating here so people can change this
