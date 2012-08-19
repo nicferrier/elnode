@@ -94,6 +94,19 @@ own servers.
 
 == How does it work? ==
 
+The simplest thing that Elnode does is let you start a webserver on a directory:
+
+{{{
+M-x elnode-make-webserver [RET] 
+Serve files from: [enter directory] [RET]
+TCP Port (try something over 8000): 8009 [RET]
+}}}
+
+and there will be a webserver started on port 8009 serving files from
+whatever directory you specified.
+
+Elnode's power is most visible to programmers though.
+
 You can define a handler function:
 
 {{{
