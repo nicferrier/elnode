@@ -347,16 +347,19 @@ the value of the GUARD."
     `(let* ((,gv (lambda () ,guard))
             (elnode-defer-guard-it (funcall ,gv))
             (,bv (lambda (httpcon) ,@body))
-            (,fv
+            (,fv ; a y-combinator!
              (lambda (httpcon proc)
+               (elnode-error "inside fv macro")
                (setq elnode-defer-guard-it (funcall ,gv))
                (if elnode-defer-guard-it
                    (funcall ,bv httpcon)
                    ;; the test failed we should defer again
-                   (elnode-defer-now proc)))))
+                   (elnode-defer-now
+                    (lambda (httpcon)
+                      (funcall proc httpcon)))))))
        (if elnode-defer-guard-it
            (funcall ,bv httpcon)
-           ;; The test failed, we should defer again
+           ;; The test failed, we should defer.
            (elnode-defer-now
             (lambda (httpcon)
               (funcall ,fv httpcon ,fv)))))))
