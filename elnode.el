@@ -405,7 +405,7 @@ This is initialized by `elnode--init-deferring'.")
 
 Necessary for running comet apps."
   (setq elnode--defer-timer
-        (run-with-idle-timer 0.1 't 'elnode--deferred-processor)))
+        (run-at-time "2 sec" 2 'elnode--deferred-processor)))
 
 (defun elnode-deferred-queue (arg)
   "Message the length of the deferred queue."
