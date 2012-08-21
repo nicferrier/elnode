@@ -369,25 +369,44 @@ the value of the GUARD."
   (elnode-error "deferred-add: adding a defer %s for %s" handler httpcon)
   (push (cons httpcon handler) elnode--deferred))
 
+(defun elnode--deferred-process-open (httpcon handler)
+  "Process the HANDLER with the known open HTTPCON."
+  (elnode-error "defer - just before calling the handler %s" handler)
+  (funcall handler httpcon))
+
 (defun elnode--deferred-processor ()
   "Process the deferred queue."
-  (let ((new-deferred (list)))
-    (loop for pair in elnode--deferred
-          do
-          (let ((httpcon (car pair))
-                (handler (cdr pair)))
-            (elnode-error "elnode-deferred handling %s %s" httpcon handler)
-            (condition-case signal-value
-                (funcall handler httpcon)
-              ('elnode-defer
-               (push
-                (cons httpcon (cdr signal-value))
-                new-deferred))
-              (error
-               (elnode-error
-                "elnode-deferred error processing %s - %s"
-                httpcon
-                signal-value)))))
+  (let ((run (random 5000)) ; use this to disambiguate runs in the logs
+        (new-deferred (list)))
+    (flet
+        ((log (msg &rest args)
+           (apply 'elnode-error
+                  (format "elnode-deferred-processor [%s] %s" run msg) args)))
+      (log "start")
+      (loop for pair in elnode--deferred
+         do
+           (let ((httpcon (car pair))
+                 (handler (cdr pair)))
+             (case (process-status httpcon)
+               ('open
+                (log "open %s %s" httpcon handler)
+                (condition-case signal-value
+                    (elnode--deferred-process-open httpcon handler)
+                  ('elnode-defer
+                   (push
+                    (cons httpcon (cdr signal-value))
+                    new-deferred))
+                  ;;(error (log "error %s - %s" httpcon signal-value))
+                  ))
+               ('closed
+                (log "closed %s %s" httpcon handler))
+               ('failed
+                (log "failed %s %s" httpcon handler))
+               ('connect
+                (push
+                 (cons httpcon (cdr signal-value))
+                 new-deferred)))))
+      (log "complete"))
     ;; Set the correct queue
     (setq elnode--deferred new-deferred)))
 
@@ -718,10 +737,7 @@ port number of the connection."
                      ;; Check the timer, this is probably spurious but
                      ;; useful "for now"
                      (unless elnode-defer-on
-                       (elnode-error
-                        (concat "filter: defer signalled on %s - "
-                                "but no defer timer running")
-                        process))
+                       (elnode-error "filter: no defer timer for %s" process))
                      (case (elnode--get-server-prop process :elnode-defer-mode)
                        ((:managed 'managed)
                         (process-put process :elnode-deferred t)
