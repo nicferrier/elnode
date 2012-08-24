@@ -14,6 +14,10 @@ div#page {
     display: none;
 }
 
+label {
+    width: 20%;
+}
+
 table {
     width: 80%;
 }

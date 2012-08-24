@@ -6,9 +6,9 @@
 <body>
 <div id="page">
     <h1>Chat!</h1>
+    <label>you are: </label><input type="text" name="username" value="" size="10"/>
     <form method="POST" action="/chat/send/" target="_sendtarget">
-        <input type="text" name="username" value="" size="10"/>
-        <input type="text" name="msg" value="" size="50"/>
+        <label>message: </label><input type="text" name="msg" value="" size="50"/>
         <input type="submit" name="send" value="send"/>
     </form>
     <table>

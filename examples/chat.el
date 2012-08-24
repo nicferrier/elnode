@@ -27,7 +27,7 @@
          httpcon elnode-defer-guard-it :jsonp t))))
 
 (defun chat-send-handler (httpcon)
-  (let ((username (elnode-http-param httpcon "username"))
+  (let ((username (elnode-http-cookie httpcon "chatusername" t))
         (msg (elnode-http-param httpcon "msg")))
     (chat-add username msg)
     (elnode-send-json httpcon (json-encode '("thanks")))))
@@ -41,15 +41,6 @@
                     (or (buffer-file-name)
                         load-file-name
                         default-directory)))
-
-(defun chat-page-handler (httpcon)
-  "Send the chat page."
-  (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
-  (with-stdout-to-elnode httpcon
-      (creole-wiki
-       (expand-file-name
-        (concat chat-dir "chat.creole"))
-       :destination t)))
 
 (defun chat-main-templater ()
   "Return the `chat-list' as rows for initial chat display."
