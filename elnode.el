@@ -1634,7 +1634,7 @@ Otherwise it calls HANDLER."
 (defun elnode--mapper-find-mapping (match-path mapping-table)
   "Return the mapping that matches MATCH-PATH in MAPPING-TABLE."
   (loop for mapping in mapping-table
-        if (string-match (car mapping) match-path)
+        if (>= (string-match (car mapping) match-path) 0)
         return mapping))
 
 (defun elnode--mapper-find (httpcon path mapping-table)
