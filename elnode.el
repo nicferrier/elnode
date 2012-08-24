@@ -354,13 +354,13 @@ the value of the GUARD."
                    (funcall ,bv httpcon)
                    ;; the test failed we should defer again
                    (elnode-defer-now
-                    (lambda (httpcon)
-                      (funcall proc httpcon)))))))
+                    (lambda (http-con)
+                      (funcall proc http-con proc)))))))
        (if elnode-defer-guard-it
            (funcall ,bv httpcon)
            ;; The test failed, we should defer.
            (elnode-defer-now
-            (lambda (httpcon)
+            (lambda (httpcon) ; apply the y-combinator
               (funcall ,fv httpcon ,fv)))))))
 
 (defun elnode--deferred-add (httpcon handler)
