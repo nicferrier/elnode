@@ -1106,7 +1106,7 @@ currently supported conversions are:
        val))))
 
 
-(defun elnode-http-cookie (httpcon name)
+(defun elnode-http-cookie (httpcon name &optional cookie-key)
   "Return the cookie value for HTTPCON specified by NAME.
 
 The cookie is an association list where one of the elements is
@@ -1117,7 +1117,10 @@ the named property; for example:
        (\"expires\" . \"Tue 4 Feb 2012 09:15:00\"))
 
 The other pairs in the association list are the other properties
-of the cookie."
+of the cookie.
+
+Using COOKIE-KEY you can specify a key to `assoc' on the
+resulting cookie.  If COOKIE-KEY is `t' then the NAME is used."
   (let ((cookie-list
          (or
           (process-get httpcon :elnode-http-cookie-list)
@@ -1136,7 +1139,11 @@ of the cookie."
               lst)))))
     (loop for cookie in cookie-list
        do (if (assoc-string name cookie)
-              (return cookie)))))
+              (if cookie-key
+                  (if (eq cookie-key t)
+                      (return (cdr (assoc name cookie)))
+                      (return (cdr (assoc cookie-key cookie))))
+                  (return cookie))))))
 
 
 (defun elnode--http-parse-status (httpcon &optional property)
