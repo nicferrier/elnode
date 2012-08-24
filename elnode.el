@@ -349,7 +349,6 @@ the value of the GUARD."
             (,bv (lambda (httpcon) ,@body))
             (,fv ; a y-combinator!
              (lambda (httpcon proc)
-               (elnode-error "inside fv macro")
                (setq elnode-defer-guard-it (funcall ,gv))
                (if elnode-defer-guard-it
                    (funcall ,bv httpcon)
