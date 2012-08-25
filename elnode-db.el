@@ -81,8 +81,14 @@
   (funcall (plist-get db :put) key value db))
 
 (defun elnode-db-map (func db &optional query)
+  "Call FUNC for every record in DB optionally QUERY filter.
+
+QUERY, if specified, should be a list of query terms.
+
+FUNC should take whatever record the DB produces.  This
+specification makes no recommendations about that."
   ;; The query should be implemented here, around the func
-  (funcall (plist-get db :map) func db))
+  (funcall (plist-get db :map) func db query))
 
 
 (defun elnode-db-hash (reference)
@@ -136,7 +142,10 @@ If the filename exists then it is loaded into the database."
   (let ((v (gethash key (plist-get db :db))))
     v))
 
-(defun elnode-db-hash-map (func db)
+(defun elnode-db-hash-map (func db &optional query)
+  "Run FUNC for every value in DB.
+
+The QUERY is ignored.  We never filter."
   (maphash func (plist-get db :db)))
 
 (defun elnode-db-hash-put (key value db)
