@@ -261,7 +261,7 @@ Emacs."
               (creole-wiki
                wikipage
                :destination t
-               :variables `((page . ,page-info))
+               :variables (list (cons 'page page-info))
                :body-header header
                :body-footer footer))))))
 
