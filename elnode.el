@@ -2684,13 +2684,12 @@ The webserver handler also creates file indexes.
 
 The webserver uses `elnode-test-path' to make sure that the
 request does not go above the DOCROOT."
-  ;;; REQUIRES LEXICAL SCOPE
   (let ((my-docroot (or docroot elnode-webserver-docroot))
         (my-mime-types (or extra-mime-types
                            elnode-webserver-extra-mimetypes)))
-    ;; Return the proc
     (lambda (httpcon)
-      (elnode--webserver-handler-proc httpcon my-docroot my-mime-types))))
+      (elnode--webserver-handler-proc
+       httpcon my-docroot my-mime-types))))
 
 
 (defvar elnode--make-webserver-store nil
@@ -2722,7 +2721,7 @@ making webserver functions.
 
 HTTPCON is the HTTP connection to the user agent."
   (elnode--webserver-setup)
-  (let (use-webserver-handler-maker )
+  (let (use-webserver-handler-maker)
     (if use-webserver-handler-maker
         (elnode--webserver-handler-proc
          httpcon
