@@ -179,14 +179,16 @@ filenames to copy to the DIR."
                     (concat dir (file-name-nondirectory file))
                     nil)))))))))
 
-(defcustom elnode-log-files-directory "~/.elnodelogs"
+(defcustom elnode-log-files-directory nil
   "The directory to store any Elnode log files.
 
-Elnode can use files for storing logs and will write them to this
-directory.  If the directory does not exist it is created.  If
-this field is left blank no log saving is done."
+If this is not-nil (in which case logs are not saved at all) it
+must be the name of a directory Elnode can use for storing logs.
+If a directory is specified but it does not exist it is created."
   :group 'elnode
-  :type '(directory))
+  :type '(choice (const :tag "Off" nil)
+          directory))
+
 
 (defvar elnode-log-buffer-position-written 0
   "The position in the log buffer written.
