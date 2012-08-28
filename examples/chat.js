@@ -56,7 +56,13 @@ function $(selector) {
 /* user setup
  * 
  */
-bean.add($("form"), "submit", function (e) { $("form").clear(); });
+bean.add(
+    $("form")[0], 
+    "submit", 
+    function (e) { 
+        $("[name=msg]")[0].value=""; 
+    }
+);
 
 var username = monster.get("chatusername");
 if (username != null) {
