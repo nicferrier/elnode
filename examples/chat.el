@@ -1,6 +1,6 @@
 ;;; chat example - very simple webchat -*- lexical-binding: t -*-
 
-(require 'cl)
+(require 'cl) (require 'esxml)
 
 (defvar chat-list '())
 
@@ -47,19 +47,19 @@
   (list
    (cons
     "messages"
-    (loop for entry in (subseq
-                        chat-list
-                        0
-                        (if (> (length chat-list) 10)
-                            12
-                            (length chat-list)))
+    (loop for entry in
+         (subseq chat-list 0
+                 (if (> (length chat-list) 10)
+                     12
+                     (length chat-list)))
        if (equal 3 (length entry))
        concat
-         (concat "<tr><td class=\"username\">"
-                 (elt entry 1)
-                 "</td><td class=\"message\">"
-                 (elt entry 2)
-                 "</td></tr>")))))
+         (esxml-to-xml
+          `(tr
+            ()
+            (td
+             ((class . ,(concat "username," (elt entry 1)))) ,(elt entry 1))
+            (td ((class . "message")) ,(elt entry 2))))))))
 
 (defun chat-main-handler (httpcon)
   "The main handler."
