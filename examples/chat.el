@@ -1,6 +1,6 @@
 ;;; chat example - very simple webchat -*- lexical-binding: t -*-
-
-(require 'cl) (require 'esxml)
+(require 'esxml)
+(require 'cl)
 
 (defvar chat-list '())
 
@@ -20,8 +20,7 @@
 
 (defun chat-comet-handler (httpcon)
   "Defer until there is new chat."
-  (let ((callback (elnode-http-param httpcon "callback"))
-        (entered (current-time)))
+  (let ((entered (current-time)))
     (elnode-defer-until (chat-list-since entered)
         (elnode-send-json
          httpcon elnode-defer-guard-it :jsonp t))))
@@ -35,31 +34,34 @@
 
 ;; Main page setup stuff
 
-(require 'creole)
-
 (defconst chat-dir (file-name-directory
                     (or (buffer-file-name)
                         load-file-name
                         default-directory)))
+
+(defun chat-list-to-html ()
+  "Return the `chat-list' as rows for initial chat display."
+  (loop for entry in chat-list
+     if (equal 3 (length entry))
+     concat
+       (esxml-to-xml
+        `(tr
+          ()
+          (td
+           ((class . ,(concat "username," (elt entry 1)))) ,(elt entry 1))
+          (td ((class . "message")) ,(elt entry 2))))))
 
 (defun chat-main-templater ()
   "Return the `chat-list' as rows for initial chat display."
   (list
    (cons
     "messages"
-    (loop for entry in
-         (subseq chat-list 0
-                 (if (> (length chat-list) 10)
-                     12
-                     (length chat-list)))
-       if (equal 3 (length entry))
-       concat
-         (esxml-to-xml
-          `(tr
-            ()
-            (td
-             ((class . ,(concat "username," (elt entry 1)))) ,(elt entry 1))
-            (td ((class . "message")) ,(elt entry 2))))))))
+    (let ((chat-list
+           (subseq chat-list
+                   0 (if (> (length chat-list) 10)
+                         12
+                         (length chat-list)))))
+      (chat-list-to-html)))))
 
 (defun chat-main-handler (httpcon)
   "The main handler."

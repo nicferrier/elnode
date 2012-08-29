@@ -53,12 +53,15 @@ function $(selector) {
   return bonzo(qwery(selector));
 }
 
-/* user setup
- * 
+
+/*
+ * Chat stuff
  */
+
+// User setup
 bean.add(
-    $("form")[0], 
-    "submit", 
+    $("[name=_sendtarget]")[0], 
+    "load", 
     function (e) { 
         $("[name=msg]")[0].value=""; 
     }
@@ -87,9 +90,6 @@ else {
              });
 }
 
-/*
- * Chat stuff
- */
 function chatPoll() {
     snack.JSONP(
         { url: '/chat/poll/', key: 'callback', now: true },
