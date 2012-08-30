@@ -46,6 +46,8 @@ typeof Object.create!="function"&&(Object.create=function(a){function b(){}b.pro
   */
 var monster={set:function(a,b,c,d){var e=new Date,f="",g=typeof b,h="";d=d||"/",c&&(e.setTime(e.getTime()+c*24*60*60*1e3),f="; expires="+e.toGMTString());if(g==="object"&&g!=="undefined")if("JSON"in window)h=JSON.stringify({v:b});else throw"Bummer, your browser doesn't support JSON parsing.";else h=escape(b);document.cookie=a+"="+h+f+"; path="+d},get:function(a){var b=a+"=",c=document.cookie.split(";"),d="",e="",f={};for(var g=0;g<c.length;g++){var h=c[g];while(h.charAt(0)==" ")h=h.substring(1,h.length);if(h.indexOf(b)===0){d=h.substring(b.length,h.length),e=d.substring(0,1);if(e=="{"){f=JSON.parse(d);if("v"in f)return f.v}return d=="undefined"?undefined:unescape(d)}}return null},remove:function(a){this.set(a,"",-1)}};
 
+Array.prototype.unique = function() { var o = {}, i, l = this.length, r = []; for(i=0; i<l;i+=1) o[this[i]] = this[i]; for(i in o) r.push(o[i]); return r;};
+
 /*!
  * Wrap bonzo and qwery together.
  */
@@ -96,7 +98,7 @@ function chatPoll() {
         function (d) { 
             console.log(d[0]);
             $($("table tr")[0]).before(
-                "<tr><td class=\"username\">"
+                "<tr><td class=\"username " + username + "\">"
                     + d[0][1] 
                     + "</td><td class=\"message\">" + d[0][2] 
                     + "</td></tr>"
