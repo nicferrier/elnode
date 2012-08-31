@@ -1278,7 +1278,7 @@ A is considered the priority (it's elements go in first)."
             (point-max)))))
     (elnode--http-query-to-alist postdata)))
 
-(defun elnode-http-params (httpcon)
+(defun elnode-http-params (httpcon &rest names)
   "Get an alist of the parameters in the request.
 
 If the method is a GET then the parameters are from the url. If
@@ -1290,25 +1290,33 @@ url or the POST body or both:
 
 would result in:
 
- '(('a' 'b' 'c')('x' . 'y'))"
+ '(('a' 'b' 'c')('x' . 'y'))
+
+If NAMES are specified it is a filter list of symbols or strings
+which will be returned."
   (or
    (process-get httpcon :elnode-http-params)
    (let ((query (elnode-http-query httpcon)))
      (let ((alist (if query
                       (elnode--http-query-to-alist query)
                     '())))
-       ;; If we're a POST we have to merge the params
-       (if (equal "POST" (elnode-http-method httpcon))
-           (progn
-             (setq alist (elnode--alist-merge
-                          alist
-                          (elnode--http-post-to-alist httpcon)
-                          'assoc))
-             (process-put httpcon :elnode-http-params alist)
-             alist)
-         ;; Else just return the query params
-         (process-put httpcon :elnode-http-params alist)
-         alist)))))
+       (loop for pair in
+            (if (equal "POST" (elnode-http-method httpcon))
+                ;; If we're a POST we have to merge the params
+                (progn
+                  (setq alist
+                        (elnode--alist-merge
+                         alist
+                         (elnode--http-post-to-alist httpcon)
+                         'assoc))
+                  (process-put httpcon :elnode-http-params alist)
+                  alist)
+                ;; Else just return the query params
+                (process-put httpcon :elnode-http-params alist)
+                alist)
+          if (or (not names)
+                 (memq (intern (car pair)) names))
+          collect pair)))))
 
 (defun elnode-http-param (httpcon name)
   "Get the named parameter from the request."
