@@ -10,7 +10,7 @@ REQUIREMENTS=requirements.txt
 package_parts = $(shell cat build-parts.txt)
 PACKAGE=$(NAME)-$(VERSION)
 TARBALL=$(PACKAGE).tar 
-EMACS=/usr/bin/emacs-snapshot
+EMACS=emacs
 
 all: tarball
 
