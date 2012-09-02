@@ -56,6 +56,7 @@
 (require 'json)
 (require 'elnode-db)
 (require 'dired) ; needed for the setup
+(require 'ert) ; we provide some assertions and need 'should'
 (eval-when-compile (require 'cl))
 
 (defconst ELNODE-FORM-DATA-TYPE "application/x-www-form-urlencoded"
@@ -64,6 +65,22 @@
 (defconst http-referrer 'referer
   "Helper to bypass idiot spelling of the word `referrer'.")
 
+
+;; Extensions to ert
+
+(defmacro should-equal (a b)
+  "Simple shortcut for `(should (equal a b))'."
+  `(should
+    (equal ,a ,b)))
+
+(defmacro should-match (regex a)
+  "Simple shortcut for a `string-match' with `should'."
+  `(should
+   (string-match
+    ,regex
+    ,a)))
+
+;; Customization stuff
 
 (defgroup elnode nil
   "An extensible asynchronous web server for Emacs."
@@ -189,7 +206,6 @@ If a directory is specified but it does not exist it is created."
   :type '(choice (const :tag "Off" nil)
           directory))
 
-
 (defvar elnode-log-buffer-position-written 0
   "The position in the log buffer written.
 
@@ -223,6 +239,8 @@ The TEXT is logged with the current date and time formatted with
         (make-local-variable 'elnode-log-buffer-position-written)
         (setq elnode-log-buffer-position-written (make-marker))
         (set-marker elnode-log-buffer-position-written (point-min)))
+      ;; To test this stuff we could rip these functions out into
+      ;; separate pieces?
       (save-excursion
         (goto-char (point-max))
         (insert
@@ -392,9 +410,10 @@ the value of the GUARD."
     (flet
         ((log (level msg &rest args)
            (when (> level elnode-defer-processor-log-level)
-             (apply 'elnode-error
-                    (format "elnode-deferred-processor [%s] %s" run msg)
-                    args))))
+             (apply
+              'elnode-error
+              (format "elnode-deferred-processor [%s] %s" run msg)
+              args))))
       (log elnode-log-info "start")
       (loop for pair in elnode--deferred
          do
@@ -641,24 +660,24 @@ A header pair with the key `body' can be used to make a content body:
 No other transformations are done on the body, no content type
 added or content length computed."
   (let (body)
-    (format "%s %s HTTP/1.1\r\n%s\r\n%s"
-            (upcase (if (symbolp method) (symbol-name method) method))
-            resource
-            (mapconcat
-             (lambda (header)
-               (let ((name (if (symbolp (car header))
-                               (symbol-name (car header))
-                             (car header))))
-                 (if (not (equal name "body"))
-                     (format "%s: %s\r\n"
-                             (capitalize name)
-                             (cdr header))
-                   (setq body (cdr header))
-                   "")))
-             headers
-             "")
-            ;; If we have a body then add that as well
-            (or body ""))))
+    (flet ((header-name (hdr)
+             (if (symbolp (car hdr))
+                 (symbol-name (car hdr))
+                 (car hdr))))
+      (format
+       "%s %s HTTP/1.1\r\n%s\r\n%s"
+       (upcase (if (symbolp method) (symbol-name method) method))
+       resource
+       (loop for header in headers
+          if (equal (header-name header) "body")
+          do (setq body (cdr header))
+          else
+          concat (format
+                  "%s: %s\r\n"
+                  (capitalize (header-name header))
+                  (cdr header)))
+       ;; If we have a body then add that as well
+       (or body "")))))
 
 
 (defun elnode--get-server-prop (process key)
@@ -729,57 +748,59 @@ port number of the connection."
     (with-current-buffer buf
       (insert data)
       ;; Try and parse...
-      (case (catch 'elnode-parse-http
-              (elnode--http-parse process))
-        ;; If this fails with one of these specific codes it's
-        ;; ok... we'll finish it when the data arrives
-        ('(header content)
-         (elnode-error "elnode--filter: partial header data received"))
-        ;; We were successful so we can call the user handler.
-        ('done
-         (save-excursion
-           (goto-char (process-get process :elnode-header-end))
-           (let ((handler
-                  (elnode--get-server-prop process :elnode-http-handler)))
-             ;; This is where we call the user handler
-             ;; TODO: this needs error protection so we can return an error?
-             (unwind-protect
-                  (condition-case signal-value
-                      (elnode--handler-call handler process)
-                    ('elnode-defer ; see elnode-defer-now
-                     (elnode-error "filter: defer caught on %s" process)
-                     ;; Check the timer, this is probably spurious but
-                     ;; useful "for now"
-                     (unless elnode-defer-on
-                       (elnode-error "filter: no defer timer for %s" process))
-                     (case (elnode--get-server-prop process :elnode-defer-mode)
-                       ((:managed 'managed)
-                        (process-put process :elnode-deferred t)
-                        (elnode--deferred-add
-                         process
-                         ;; the cdr of the sig value is the func
-                         (cdr signal-value)))
-                       ((:immediate 'immediate)
-                        (elnode-error "filter: immediate defer on %s" process)
-                        (funcall (cdr signal-value) process))))
-                    ('t
-                     ;; FIXME: we need some sort of check to see if the
-                     ;; header has been written
-                     (elnode-error "elnode--filter: default handling")
-                     (process-send-string
-                      process
-                      (elnode--format-response 500))))
-               ;; Handle unwind errors
-	       (when
-		   (and
-                    (not (process-get process :elnode-deferred))
-		    (not (process-get process :elnode-http-started))
-		    (not (process-get process :elnode-child-process)))
-		 (elnode-error "filter: caught an error in the handling")
-		 (process-send-string
-		  process
-		  (elnode--format-response 500))
-		 (delete-process process))))))))))
+      (let ((parse-status (catch 'elnode-parse-http
+                            (elnode--http-parse process))))
+        (case parse-status
+          ;; If this fails with one of these specific codes it's
+          ;; ok... we'll finish it when the data arrives
+          ('(header content)
+           (elnode-error "elnode--filter: partial header data received"))
+          ;; We were successful so we can call the user handler.
+          ('done
+           (save-excursion
+             (goto-char (process-get process :elnode-header-end))
+             (let ((handler
+                    (elnode--get-server-prop process :elnode-http-handler)))
+               ;; This is where we call the user handler
+               ;; TODO: this needs error protection so we can return an error?
+               (unwind-protect
+                    (condition-case signal-value
+                        (elnode--handler-call handler process)
+                      ('elnode-defer ; see elnode-defer-now
+                       (elnode-error "filter: defer caught on %s" process)
+                       ;; Check the timer, this is probably spurious but
+                       ;; useful "for now"
+                       (unless elnode-defer-on
+                         (elnode-error "filter: no defer timer for %s" process))
+                       (case (elnode--get-server-prop
+                              process :elnode-defer-mode)
+                         ((:managed 'managed)
+                          (process-put process :elnode-deferred t)
+                          (elnode--deferred-add
+                           process
+                           ;; the cdr of the sig value is the func
+                           (cdr signal-value)))
+                         ((:immediate 'immediate)
+                          (elnode-error "filter: immediate defer on %s" process)
+                          (funcall (cdr signal-value) process))))
+                      ('t
+                       ;; FIXME: we need some sort of check to see if the
+                       ;; header has been written
+                       (elnode-error "elnode--filter: default handling")
+                       (process-send-string
+                        process
+                        (elnode--format-response 500))))
+                 ;; Handle unwind errors
+                 (when
+                     (and
+                      (not (process-get process :elnode-deferred))
+                      (not (process-get process :elnode-http-started))
+                      (not (process-get process :elnode-child-process)))
+                   (elnode-error "filter: caught an error in the handling")
+                   (process-send-string
+                    process
+                    (elnode--format-response 500))
+                   (delete-process process)))))))))))
 
 (defmacro with-elnode-mock-server (handler &rest body)
   "Execute BODY with a fake server which is bound to HANDLER.
@@ -801,6 +822,53 @@ routines."
               ((eq key :elnode-http-handler)
                ,handler))))
      ,@body))
+
+(defun elnode--alist-to-query (alist)
+  "Turn an alist into a formdata/query string."
+  (flet ((cons-alist-to-list-alist (alist)
+           ;; Fix the brain dead url function which can't deal with
+           ;; proper (cons cell) alists.
+           (loop for p in alist
+              if (listp (cdr p))
+              collect p
+              else
+              collect (list (car p)(cdr p)))))
+    (url-build-query-string (cons-alist-to-list-alist alist))))
+
+(defun elnode--make-test-call (path method parameters headers)
+  "Construct the HTTP request for a test call.
+
+This should probably be merged with the stuff in the `web'
+module."
+  (let* ((query
+          (if (and parameters (equal method "GET"))
+              (format
+               "?%s"
+               (elnode--alist-to-query parameters))
+              ""))
+         (http-path
+          (if (equal query "")
+              path
+              (format "%s%s" path query)))
+         (http-body
+          (if (equal method "GET")
+              nil
+              (let ((param-data (elnode--alist-to-query parameters)))
+                (setq headers
+                      (append
+                       (list
+                        (cons "Content-Type"
+                              "application/x-www-form-urlencoded")
+                        (cons "Content-Length"
+                              (format "%d" (length param-data))))
+                       headers))
+                param-data))))
+    (apply
+     'elnode--http-make-hdr
+     `(,method
+       ,http-path
+       ,@headers
+       (body . ,http-body)))))
 
 (defun* elnode-test-call (path
                           &key
@@ -827,79 +895,97 @@ or:
                    :parameters '((\"a\" . 10)))
 
 For header and parameter names, strings MUST be used currently."
-  (let ((fakir-mock-process-require-specified-buffer t))
+  (elnode--real-test-call path method parameters headers))
+
+(defun elnode--real-test-call (path method parameters headers)
+  (let (result
+        (fakir-mock-process-require-specified-buffer t))
     (fakir-mock-process :httpcon ()
-      (let ((hdrtext
-             (apply
-              'elnode--http-make-hdr
-              `(,method
-                ,path
-                ,@headers
-                (body ""))))
+      (let ((req (elnode--make-test-call path method parameters headers))
             (http-connection :httpcon))
         ;; Capture the real eof-func and then override it to do fake ending.
         (let ((eof-func (elnode--make-send-eof))
               (main-send-string (symbol-function 'elnode-http-send-string))
               (send-string-func (elnode--make-send-string))
-              (the-end 0)
-              (res-buffer (get-buffer-create "*elnode-test-call*"))
-              result-data)
+              (the-end 0))
           (flet
-              ((test-send-string (httpcon str)
-                 (with-current-buffer res-buffer
-                   (goto-char (point-max))
-                   (insert str)))
-               (elnode-http-send-string (httpcon str)
-                 (test-send-string httpcon str)
+              ((elnode-http-send-string (httpcon str)
                  (funcall main-send-string httpcon str))
                (elnode--make-send-string ()
                  (lambda (httpcon str)
-                   (test-send-string httpcon str)
                    (send-string-func httpcon str)))
                (elnode--make-send-eof ()
                  (lambda (httpcon)
                    ;; Flet everything in elnode--http-end
-                   (flet ((process-send-eof (proc)
-                            ;; Signal the end
+                   (flet ((process-send-eof (proc) ;; Signal the end
                             (setq the-end 't))
-                          (delete-process (proc)
-                            ;; Do nothing - we want the test proc
-                            )
+                          ;; Do nothing - we want the test proc
+                          (delete-process (proc))
+                          ;; Again, do nothing, we want this buffer
                           (kill-buffer (buffer)
-                            ;; Again, do nothing, we want this buffer
-                            (with-current-buffer buffer
-                              (setq
-                               result-data
-                               (buffer-substring (point-min) (point-max))))
                             ;; Return true, don't really kill the buffer
                             t))
                      ;; Now call the captured eof-func
                      (funcall eof-func httpcon)))))
             ;; FIXME - we should unwind protect this?
-            (elnode--filter http-connection hdrtext)
+            (elnode--filter http-connection req)
             ;; Now we sleep till the-end is true
-            (while (not the-end)
-              (sit-for 0.1))
+            (while (not the-end) (sit-for 0.1))
             (when the-end
-              (list
-               :result-data
-               result-data
-               :result-string
-               (let ((data (with-current-buffer res-buffer
-                             (buffer-substring (point-min) (point-max)))))
-                 (kill-buffer res-buffer)
-                 data)
-               :buffer
-               (process-buffer http-connection)
-               ;; These properties are set by elnode-http-start
-               :status
-               (process-get
-                http-connection
-                :elnode-httpresponse-status)
-               :header
-               (process-get
-                http-connection
-                :elnode-httpresponse-header)))))))))
+              (setq result
+                    (list
+                     :result-string
+                     (with-current-buffer (fakir-get-output-buffer)
+                       (buffer-substring (point-min) (point-max)))
+                     :buffer
+                     (process-buffer http-connection)
+                     ;; These properties are set by elnode-http-start
+                     :status
+                     (process-get
+                      http-connection
+                      :elnode-httpresponse-status)
+                     :header
+                     (process-get
+                      http-connection
+                      :elnode-httpresponse-header))))))))
+    ;; Finally return the result
+    result))
+
+(defun* should-elnode-response (response
+                                &key
+                                status-code
+                                header-name
+                                header-value
+                                body-match)
+  "Assert on the supplied RESPONSE.
+
+RESPONSE is an `elnode-test-call' response.  Assertions are done
+by checking the specified values of the other parameters to this
+function.
+
+If STATUS-CODE is not nil we assert that the RESPONSE status-code
+is equal to the STATUS-CODE.
+
+If HEADER-NAME is present then we assert that the RESPONSE has
+the header and that it's value is the same as the HEADER-VALUE.
+If HEADER-VALUE is `nil' then we assert that the HEADER-NAME is
+NOT present.
+
+If BODY-MATCH is present then it is a regex used to match the
+whole body of the RESPONSE."
+  (when status-code
+    (should (equal status-code (plist-get response :status))))
+  (when header-name
+    (let ((hdr (plist-get response :header)))
+      (if header-value
+          (should (equal
+                   header-value
+                   (assoc-default header-name hdr)))
+          ;; Else we want to ensure the header isn't there
+          (should (eq nil (assoc header-name hdr))))))
+  (when body-match
+    (should-match body-match (plist-get response :result-string))))
+
 
 (defun elnode--log-fn (server con msg)
   "Log function for elnode.
@@ -1272,6 +1358,7 @@ A is considered the priority (it's elements go in first)."
   ;; cope with transfer encodings.
   (let ((postdata
          (with-current-buffer (process-buffer httpcon)
+           (buffer-substring (point-min) (point-max)) ;debug
            (buffer-substring
             ;; we might have to add 2 to this because of trailing \r\n
             (process-get httpcon :elnode-header-end)
@@ -1612,7 +1699,6 @@ Optionally include MSG."
 Optionally include MSG."
   (elnode-send-status httpcon 500 msg))
 
-
 (defun elnode-send-redirect (httpcon location &optional type)
   "Sends a redirect to LOCATION.
 
@@ -1755,6 +1841,10 @@ The handler for PATH is matched in the URL-MAPPING-TABLE via
 If no handler is found then a 404 is attempted via FUNCTION-404,
 it it's found to be a function, or as a last resort
 `elnode-send-404'."
+  (elnode--dp httpcon path url-mapping-table function-404 log-name))
+
+(defun elnode--dp (httpcon path url-mapping-table function-404 log-name)
+  "More edebug/cl madness."
   (let ((handler-func
          (elnode--mapper-find
           httpcon
@@ -1806,6 +1896,18 @@ matched."
         url-mapping-table
         :function-404 function-404)))))
 
+(defun elnode--hostpath (host path)
+  "Turn the host and path into a hostpath."
+  (format
+   "%s/%s"
+   (let ((host-name (or host "")))
+     ;; Separate the hostname from any port in the host header
+     (save-match-data
+       (if (string-match "\\([^:]+\\)\\(:[0-9]+.*\\)*" host-name)
+           (match-string 1 host-name)
+           "")))
+   path))
+
 (defun* elnode-hostpath-dispatcher (httpcon
                                    hostpath-mapping-table
                                    &key
@@ -1822,17 +1924,13 @@ FUNCTION-404 should be a 404 handling function, by default it's
 `elnode-send-404'.
 
 LOG-NAME is an optional log-name."
-  (let ((hostpath
-         (format "%s/%s"
-                 (let ((host
-                        (or
-                         (elnode-http-header httpcon "Host")
-                         "")))
-                   ;; Separate the hostname from any port in the host header
-                   (save-match-data
-                     (string-match "\\([^:]+\\)\\(:[0-9]+.*\\)*" host)
-                     (match-string 1 host)))
-                 (elnode-http-pathinfo httpcon))))
+  (elnode--real-hpd httpcon hostpath-mapping-table function-404 log-name))
+
+(defun elnode--real-hpd (httpcon hostpath-mapping-table function-404 log-name)
+  "Another shim'd implementation because of 'cl problems."
+  (let ((hostpath (elnode--hostpath
+                   (elnode-http-header httpcon "Host")
+                   (elnode-http-pathinfo httpcon))))
     (elnode--dispatch-proc
      httpcon
      hostpath
@@ -1880,7 +1978,7 @@ table.  It calls `elnode-hostpath-dispatcher' with
        (let ((,hv ,httpcon)
              (standard-output (current-buffer)))
          (let ((,val (progn ,@body)))
-           ;; Need a loop here
+           ;; FIXME - Need a loop here
            (elnode-http-send-string
             ,hv
             (buffer-substring (point-min) (point-max)))
@@ -2505,7 +2603,7 @@ date copy) then `elnode-cached' is called."
     `(let ((,dr ,doc-root)
            (,con ,httpcon))
        (let ((,target-file-var (elnode-get-targetfile ,con ,dr)))
-         (if (not (elnode--under-docroot-p ,target-file-var ,dr 
+         (if (not (elnode--under-docroot-p ,target-file-var ,dr
                                            elnode-docroot-for-no-404))
              (elnode-not-found ,con ,target-file-var)
            (if (and (not elnode-docroot-for-no-cache)
@@ -2748,14 +2846,20 @@ HTTPCON is the HTTP connection to the user agent."
 (defun elnode--wrap-implementation (httpcon
                                     wrapping-path
                                     wrapping-handler
+                                    args
                                     current-handler)
-  "A handler used by the wrapping stuff."
+  "A handler to dispatch to wrappers."
   (elnode-dispatcher
    httpcon
-   (list (cons wrapping-path wrapping-handler))
+   (list (cons wrapping-path
+               (lambda (httpcon)
+                 (funcall wrapping-handler httpcon args))))
    current-handler))
 
-(defun elnode--wrap-handler (handler-symbol wrapping-path wrapping-handler)
+(defun elnode--wrap-handler (handler-symbol
+                             wrapping-path
+                             wrapping-handler
+                             &rest args)
   "Wrap the handler attached to HANDLER-SYMBOL with another handler.
 
 The WRAPPING-PATH is mapped to the WRAPPING-HANDLER before the
@@ -2786,8 +2890,9 @@ the argument list."
              httpcon
              wrapping-path
              wrapping-handler
+             args
              current-handler)))
-    (list handler-symbol wrapping-path wrapping-handler)))
+    (list handler-symbol wrapping-path wrapping-handler args)))
 
 
 ;; Elnode authentication stuff
@@ -2825,7 +2930,7 @@ implementations.")
                 password)))
 
 (defun elnode-auth-user-add (username password)
-  "Comand to add a user to the internal authentication database."
+  "Command to add a user to the internal authentication database."
   (interactive (list (read-from-minibuffer "username: ")
                      (read-passwd "password: ")))
   (elnode-db-put
@@ -2834,18 +2939,25 @@ implementations.")
    elnode-auth-db)
   (message "username is %s" username))
 
-(defun elnode-auth-user-p (username password)
-  "Is the user in the `elnode-auth-db'?
+(defun* elnode-auth-user-p (username
+                            password
+                            &key (auth-db elnode-auth-db))
+  "Is the user in the AUTH-DB?
 
 The password is stored in the db hashed keyed by the USERNAME,
-this looks up and tests the hash."
+this looks up and tests the hash.
+
+The AUTH-DB is an `elnode-db', by default it is
+`elnode-auth-db'"
   (let ((token (elnode--auth-make-hash username password)))
-    (equal token (elnode-db-get username elnode-auth-db))))
+    (equal token (elnode-db-get username auth-db))))
+
 
 (defvar elnode-loggedin-db (make-hash-table :test 'equal)
   "Stores logins - authentication sessions.
 
 See `elnode-auth-login' for how this is updated.")
+
 
 (progn
   ;; Sets up the elnode auth errors
@@ -2864,13 +2976,11 @@ See `elnode-auth-login' for how this is updated.")
        'error-message
        "Elnode authentication failed"))
 
-(defun elnode-auth-login (username password)
-  "Log a user in.
+(defun elnode--auth-login (username password auth-db loggedin-db)
+  "Private version of the below.
 
-Check the USERNAME and PASSWORD with `elnode-auth-user-p' and
-then update `elnode-loggedin-db' with the username and the login
-record."
-  (if (elnode-auth-user-p username password)
+Only needed because Emacs has broken Debug right now on defun*."
+  (if (elnode-auth-user-p username password :auth-db auth-db)
       (let* ((rndstr (format "%d" (random)))
              (hash (sha1 (format "%s:%s:%s"
                                  username
@@ -2881,21 +2991,50 @@ record."
                :user username
                :token rndstr
                :hash hash)))
-        (puthash username user-record elnode-loggedin-db)
+        (puthash username user-record loggedin-db)
         hash)
       ;; Else it was bad so throw an error.
       (signal 'elnode-auth-credentials (list username password))))
 
-(defun elnode-auth-check-p (username token)
-  "Check login status of the USERNAME against the hashed TOKEN."
-  (let ((record (gethash username elnode-loggedin-db)))
+(defun* elnode-auth-login (username
+                           password
+                           &key
+                           (auth-db elnode-auth-db)
+                           (loggedin-db elnode-loggedin-db))
+  "Log a user in.
+
+Check the USERNAME and PASSWORD with `elnode-auth-user-p' and
+then update `elnode-loggedin-db' with the username and the login
+record.
+
+Takes optional AUTH-DB which is the database variable to
+use (which is `elnode-auth-db' by default) and LOGGEDIN-DB which
+is the logged-in state database to use and which is
+`elnode-loggedin-db' by default."
+  (elnode--auth-login username password auth-db loggedin-db))
+
+(defun* elnode-auth-check-p (username
+                             token
+                             &key
+                             (loggedin-db elnode-loggedin-db))
+  "Check login status of the USERNAME against the hashed TOKEN.
+
+Optionally use the LOGGEDIN-DB supplied.  By default this is
+`elnode-loggedin-db'."
+  (let ((record (gethash username loggedin-db)))
     (equal token (plist-get record :hash))))
 
-(defun* elnode-auth-cookie-check-p (httpcon &key (cookie-name "elnode-auth"))
+(defun* elnode-auth-cookie-check-p (httpcon
+                                    &key
+                                    (cookie-name "elnode-auth")
+                                    (loggedin-db elnode-loggedin-db))
   "Check that the user is loggedin according to the cookie.
 
 The name of the cookie can be supplied with :COOKIE-NAME - by
-default is is \"elnode-auth\"."
+default is is \"elnode-auth\".
+
+LOGGEDIN-DB can be a loggedin state database which is expected to
+be an `elnode-db'.  By default it is `elnode-loggedin-db'."
   (let ((cookie-value
          (cdr-safe
           (assoc-string
@@ -2905,15 +3044,32 @@ default is is \"elnode-auth\"."
         (signal 'elnode-auth-token cookie-value)
         (let ((username (match-string 1 cookie-value))
               (token (match-string 2 cookie-value)))
-          (elnode-auth-check-p username token)))))
+          (elnode-auth-check-p username token :loggedin-db loggedin-db)))))
 
-(defun elnode-auth-http-login (httpcon username password logged-in)
+(defun* elnode-auth-http-login (httpcon
+                                username password logged-in
+                                &key
+                                (auth-db elnode-auth-db)
+                                (loggedin-db elnode-loggedin-db))
   "Log the USERNAME in on the HTTPCON if PASSWORD is correct.
 
 If authentication succeeds set the relevant cookie and redirect
-the user to LOGGED-IN."
+the user to LOGGED-IN.
+
+Actually uses `elnode-auth-login' to do the assertion.
+`elnode-auth-credentials' is signaled by that if the assertion fails.
+
+AUTH-DB is a database, by default `elnode-auth-db', it's passed
+to `elnode-auth-login'."
+  (elnode--real-ahl httpcon username password logged-in auth-db loggedin-db))
+
+(defun elnode--real-ahl (httpcon username password logged-in
+                         auth-db loggedin-db)
   (let ((hash
-         (elnode-auth-login username password)))
+         (elnode-auth-login
+          username password
+          :auth-db auth-db
+          :loggedin-db loggedin-db)))
     (elnode-http-header-set
      httpcon
      (elnode-http-cookie-make
@@ -2958,8 +3114,11 @@ This function sends the contents of the custom variable
       `(("target" . ,target)
         ("redirect" . ,redirect))))))
 
-(defun elnode-auth--wrapping-login-handler (httpcon sender target)
-  "The implementation of the login handler for wrapping."
+(defun elnode--awl-handler (httpcon
+                            sender target auth-db)
+  "Private version of the below.
+
+Only needed because Emacs Debug is broken on defun*."
   (elnode-method httpcon
       (GET
        (let ((to (or (elnode-http-param httpcon "redirect")
@@ -2972,13 +3131,33 @@ This function sends the contents of the custom variable
        (condition-case err
            (elnode-auth-http-login
             httpcon
-            username password logged-in)
+            username password logged-in
+            :auth-db auth-db)
          (elnode-auth-credentials
           (elnode-send-redirect
            httpcon
            (if (not logged-in)
                target
                (format "%s?redirect=%s" target logged-in)))))))))
+
+(defun* elnode-auth--wrapping-login-handler (httpcon
+                                             sender target
+                                             &key
+                                             (auth-db elnode-auth-db)
+                                             (loggedin-db elnode-loggedin-db))
+  "The implementation of the login handler for wrapping.
+
+This receives the SENDER and the TARGET from the wrapper spec."
+  (elnode--awl-handler httpcon sender target auth-db))
+
+(defun elnode--auth-wrapping-sender (httpcon sender target &optional args)
+  (if args
+      (elnode-auth--wrapping-login-handler
+       httpcon sender target
+       :auth-db (car args))
+      ;; Else normal call
+      (elnode-auth--wrapping-login-handler
+       httpcon sender target)))
 
 (defun* elnode-auth-make-login-wrapper (wrap-target
                                          &key
@@ -3008,33 +3187,46 @@ authentication handler produced by this function.
 SENDER is a function that sends the login page to the client.
 The SENDER is passed the TARGET as well as the `to' parameter
 from the HTTPCON.  `to' is / by default (if it cannot be found in
-the HTTP request).
+the HTTP request).  By default the SENDER is
+`elnode-auth-login-sender' which offers some customization, but
+you might want to specify your own SENDER to provide a custom
+login page.
 
 This function returns the wrapper spec as a list with the car
-being the symbol `elnode-wrapper-spec'."
+being the symbol `:elnode-wrapper-spec'."
   (list :elnode-wrapper-spec
         wrap-target
-        (lambda (httpcon)
-          (elnode-auth--wrapping-login-handler httpcon sender target))
+        (lambda (httpcon &optional args)
+          (elnode--auth-wrapping-sender httpcon sender target args))
         target))
-
 
 (defvar elnode--defined-authentication-schemes
   (make-hash-table :test 'equal)
   "The hash of defined authentication schemes.")
 
-(defun elnode--auth-define-scheme-do-wrap (wrapper-spec)
-  "Do the wrapping based on WRAPPER-SPEC."
-  (flet ((wrapper (wrapped-target wrapping-func &optional (path "/login/"))
+(defun elnode--auth-define-scheme-do-wrap (wrapper-spec auth-db)
+  "Setup the auth wrapping.
+
+WRAPPER-SPEC was specified by the author of the auth declaration
+when defining the wrapper.
+
+The WRAPPER-SPEC is used to setup the wrapping.
+
+The AUTH-DB is passed to the wrapper as `args'."
+  (flet ((wrapper (wrapped-target ; define a func over the wrapper-spec
+                   wrapping-func
+                   &optional (path "/login/"))
            (elnode--wrap-handler
             wrapped-target
             path
-            wrapping-func)))
+            wrapping-func
+            auth-db)))
     (apply 'wrapper wrapper-spec)))
 
 (defmacro* elnode-auth-define-scheme (scheme-name
                                       &key
                                       (test :cookie)
+                                      (auth-db 'elnode-auth-db)
                                       (cookie-name "elnodeauth")
                                       (failure-type :redirect)
                                       (redirect "/login/"))
@@ -3042,44 +3234,57 @@ being the symbol `elnode-wrapper-spec'."
 
 An authentication scheme consists of the following attributes:
 
-:TEST what sort of test is used to test the authentication, by
+TEST what sort of test is used to test the authentication, by
 default this is `:cookie'.  No other authentication tests are
 possible right now but in the future there might be many (there
 might also be a general `:function' test that allows calling of a
 function to implement the test).
 
-:COOKIE-NAME is used when the :TEST is `:cookie'.  It is the name
+COOKIE-NAME is used when the TEST is `:cookie'.  It is the name
 of the cookie to use for authentication.  By default this is
 `elnode-auth'.  It must be specified as a string.
 
-:FAILURE-TYPE is what to do if authentication fails.  Currently
+AUTH-DB is the `elnode-db' used for authentication information.
+It is used as the authority of information on users.  By default
+this is `elnode-auth-db'.
+
+FAILURE-TYPE is what to do if authentication fails.  Currently
 only `:redirect' is supported.  To redirect on failure means to
 send a 302 with a location to visit a login page.  :FAILURE-TYPE
 is `:redirect' by default.
 
-:REDIRECT is where to redirect to if :FAILURE-TYPE is
+REDIRECT is where to redirect to if FAILURE-TYPE is
 `:redirect'.  This can be either a String (in which case it
 should indicate a path where a user can login, for example
 \"/login/\") or it can be a wrapper.  See
 `elnode-auth-make-login-wrapper' for a description of wrappers."
   ;;      (let ((redirect-spec (elnode--with-auth-do-wrap redir)))
+  (declare
+   (debug (sexp sexp &rest form)))
   (let ((redirect-specv (make-symbol "redirectv"))
-        (scheme-namev (make-symbol "scheme-namev")))
-    `(let ((,scheme-namev ,scheme-name)
-           (,redirect-specv ,redirect))
+        (scheme-namev (make-symbol "scheme-namev"))
+        (auth-schemev (make-symbol "auth-schemev"))
+        (auth-dbv (make-symbol "auth-dbv")))
+    `(let* ((,scheme-namev ,scheme-name)
+            (,auth-dbv ,auth-db)
+            (,redirect-specv ,redirect)
+            (,auth-schemev
+             (list :test ,test
+                   :cookie-name ,cookie-name
+                   :failure-type ,failure-type
+                   :redirect ,redirect-specv)))
        ;; Do some type checking
        (cond
          ((and (listp ,redirect-specv)
                (eq :elnode-wrapper-spec (car ,redirect-specv)))
-          (elnode--auth-define-scheme-do-wrap (cdr ,redirect-specv)))
+          (elnode--auth-define-scheme-do-wrap
+           (cdr ,redirect-specv)
+           ,auth-dbv))
          ((not (stringp ,redirect-specv))
           (error ":REDIRECT must be a string or a wrapper specification")))
        ;; Now just add the scheme to the list of defined schemes
        (puthash ,scheme-namev
-                (list :test ,test
-                      :cookie-name ,cookie-name
-                      :failure-type ,failure-type
-                      :redirect ,redirect-specv)
+                ,auth-schemev
                 elnode--defined-authentication-schemes))))
 
 (defmacro* elnode-with-auth (httpcon scheme &rest body)

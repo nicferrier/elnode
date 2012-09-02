@@ -40,18 +40,6 @@
 (require 'fakir)
 (require 'elnode)
 
-(defmacro should-equal (a b)
-  "Simple shortcut for `(should (equal a b))'."
-  `(should
-    (equal ,a ,b)))
-
-(defmacro should-match (regex a)
-  "Simple shortcut for a `string-match' with `should'."
-  `(should
-   (string-match
-    ,regex
-    ,a)))
-
 (ert-deftest elnode-join ()
   "Test the path joining."
   (should
@@ -221,30 +209,33 @@ is just a test helper."
   "Testing the defer setup."
   (let* ((result :not-done)
          (httpcon :fake)
-         (handler (lambda (httpcon) (setq result :done)))
+         (handler (lambda (httpcon)
+                    (message "here!")
+                    (setq result :done)))
          (elnode--deferred (list)))
-    ;; The queue starts empty
-    (should (equal 0 (length elnode--deferred)))
-    ;; Then we add to it...
-    (elnode--deferred-add httpcon handler)
-    (should (equal 1 (length elnode--deferred)))
-    ;; Then we process it...
-    (elnode--deferred-processor)
-    ;; ... that should have emptied it out...
-    (should (eq result :done))
-    (should (equal 0 (length elnode--deferred)))
-    ;; Now we add a handler that defers...
-    (elnode--deferred-add httpcon
-                          (lambda (httpcon)
-                            (elnode-defer-now handler)))
-    (should (equal 1 (length elnode--deferred)))
-    ;; Now we process...
-    (elnode--deferred-processor)
-    ;; ... should still have the deferred handler in it...
-    (should (equal 1 (length elnode--deferred)))
-    ;; ... process again ...
-    (elnode--deferred-processor)
-    (should (equal 0 (length elnode--deferred)))))
+    (fakir-mock-process httpcon ()
+      ;; The queue starts empty
+      (should (equal 0 (length elnode--deferred)))
+      ;; Then we add to it...
+      (elnode--deferred-add httpcon handler)
+      (should (equal 1 (length elnode--deferred)))
+      ;; Then we process it...
+      (elnode--deferred-processor)
+      ;; ... that should have emptied it out...
+      (should (eq result :done))
+      (should (equal 0 (length elnode--deferred)))
+      ;; Now we add a handler that defers...
+      (elnode--deferred-add httpcon
+                            (lambda (httpcon)
+                              (elnode-defer-now handler)))
+      (should (equal 1 (length elnode--deferred)))
+      ;; Now we process...
+      (elnode--deferred-processor)
+      ;; ... should still have the deferred handler in it...
+      (should (equal 1 (length elnode--deferred)))
+      ;; ... process again ...
+      (elnode--deferred-processor)
+      (should (equal 0 (length elnode--deferred))))))
 
 
 (ert-deftest elnode--make-http-hdr ()
@@ -266,12 +257,12 @@ User-Agent: test-agent\r
      'get "/"
      '(host . "host2")
      '(user-agent . "test-agent")
-     '(body . "my data"))
+     '(body . "my test data"))
     "GET / HTTP/1.1\r
 Host: host2\r
 User-Agent: test-agent\r
 \r
-my data")))
+my test data")))
 
 (ert-deftest elnode--http-parse-header-complete ()
   "Test the HTTP parsing."
@@ -357,14 +348,12 @@ and then test again."
   "Test starting a response.
 
 Especially tests the mix of header setting techniques."
-  (fakir-mock-process
-    :httpcon
-    ()
+  (fakir-mock-process :httpcon ()
     (elnode-http-header-set :httpcon "Content-Type" "text/html")
     (elnode-http-header-set :httpcon "Accept" "application/javascript")
     (elnode-http-start :httpcon 200 '("Content-Type" . "text/plain"))
     ;; Test that we have the correct text in the fake process buffer
-    (with-current-buffer (process-buffer :httpcon)
+    (with-current-buffer (fakir-get-output-buffer)
       (goto-char (point-min))
       (should
        (re-search-forward "^Content-Type: text/html\r\n" nil t))
@@ -378,27 +367,79 @@ Especially tests the mix of header setting techniques."
 
 The text spat out is tested, so is the status."
   (elnode-http-start httpcon 200 '("Content-Type" . "text/html"))
-  (message "in special test handler")
-  (elnode-http-return
-   httpcon
-   "<html><body><h1>Hello World</h1></body></html>"))
+  (let ((params (elnode-http-params httpcon)))
+    (elnode-http-return
+        httpcon
+      (format
+       "<html><body><h1>Hello World</h1>%s</body></html>"
+       (if params
+           (format "<div>%S</div>" params)
+           "")))))
 
-(ert-deftest elnode-test-call-page ()
+(ert-deftest elnode--make-test-call ()
+  "Test the HTTP request construction."
+  (should
+   (equal
+    "GET / HTTP/1.1\r\n\r\n"
+    (elnode--make-test-call
+     "/" "GET"
+     '()
+     nil)))
+  (should
+   (equal
+    "GET /?a=1&b=hello HTTP/1.1\r\n\r\n"
+    (elnode--make-test-call
+     "/" "GET"
+     '((a . 1)(b . "hello"))
+     nil)))
+  (should
+   (equal
+    "POST / HTTP/1.1\r
+Content-Type: application/x-www-form-urlencoded\r
+Content-Length: 11\r
+\r
+a=1&b=hello"
+    (elnode--make-test-call
+     "/" "POST"
+     '((a . 1)(b . "hello"))
+     nil)))
+  ;; The content type always comes before any other headers
+  (should
+   (equal
+    "POST / HTTP/1.1\r
+Content-Type: application/x-www-form-urlencoded\r
+Content-Length: 11\r
+User-Agent: elnode-test\r
+\r
+a=1&b=hello"
+    (elnode--make-test-call
+     "/" "POST"
+     '((a . 1)(b . "hello"))
+     '(("User-agent" . "elnode-test"))))))
+
+(ert-deftest elnode-test-call-assert ()
+  "Test that we can assert things about elnode test responses."
   (with-elnode-mock-server
-    ;; Test dispatcher
-    (lambda (httpcon)
-      (elnode-hostpath-dispatcher
-       httpcon
-       '(("[^/]+//test/.*" . elnode-test-handler))))
-    (let ((r (elnode-test-call "/test/test.something")))
-      (should
-       (equal
-        200
-        (plist-get r :status)))
-      (should
-       (equal
-        "<html><body><h1>Hello World</h1></body></html>"
-        (plist-get r :result-string))))))
+      ;; Test dispatcher
+      (lambda (httpcon)
+        (elnode-hostpath-dispatcher
+         httpcon
+         '(("[^/]*//test/.*" . elnode-test-handler))))
+      (should-elnode-response
+       (elnode-test-call "/test/test.something")
+       :status-code 200
+       :header-name "Content-Type"
+       :header-value "text/html"
+         :body-match ".*<h1>Hello World</h1>")
+    ;; With params
+    (should-elnode-response
+     (elnode-test-call "/test/test.something"
+                       :method "POST"
+                       :parameters '(("a" . 1)))
+     :status-code 200
+     :header-name "Content-Type"
+     :header-value "text/html"
+     :body-match ".*<div>((\"a\" . \"1\"))</div>")))
 
 (ert-deftest elnode-http-header ()
   "Test that we have headers."
@@ -932,7 +973,7 @@ That sounds more fun than it is."
     (lambda (httpcon)
       (elnode-hostpath-dispatcher
        httpcon
-       '(("[^/]+/\\(.*\\)" . elnode-webserver))))
+       '(("[^/]*/\\(.*\\)" . elnode-webserver))))
     ;; Now the actual test
     (fakir-mock-file
      (fakir-file
@@ -947,63 +988,55 @@ That sounds more fun than it is."
                 (elnode--do-error-logging nil)
                 (elnode--do-access-logging-on-dispatch nil)
                 ;; Make the served root the default
-                (elnode-webserver-docroot elnode-webserver-docroot-default)
-                (r (elnode-test-call "/blah.html")))
-           (elnode-error "result -> %s" r)
-           (should
-            (equal
-             (plist-get r :status)
-             200))
-           (should
-            (equal
-             "<html>Fake HTML file</html>"
-             (plist-get r :result-string))))
+                (elnode-webserver-docroot elnode-webserver-docroot-default))
+           (should-elnode-response
+            (elnode-test-call "/blah.html")
+            :status-code 200
+            :body-match "<html>Fake HTML file</html>"))
        ;; Now kill the buffer that was opened to serve the file.
        (if (get-buffer "blah.html")
            (kill-buffer "blah.html"))))))
-
 
 (ert-deftest elnode-client-with-stdout ()
   "Test the stdout macro.
 
 Test that we get the right chunked encoding stuff going on."
-  (with-temp-buffer
-    (let ((process :fake)
-          (test-buffer (current-buffer)))
-      (fakir-mock-process :fake ((:elnode-http-started t))
-          (progn
-            (set-process-buffer process test-buffer)
-            (with-stdout-to-elnode process
-                (princ "hello!")))
-          (should
-           (equal
-            (let ((str "hello!"))
-              (format "%d\r\n%s\r\n0\r\n\r\n" (length str) str))
-            (buffer-substring (point-min) (point-max))))))))
+  (fakir-mock-process :fake ((:elnode-http-started t))
+    (with-stdout-to-elnode :fake
+        (princ "hello!"))
+    (should
+     (equal
+      (let ((str "hello!"))
+        (format "%d\r\n%s\r\n0\r\n\r\n" (length str) str))
+      (with-current-buffer (fakir-get-output-buffer)
+        (buffer-substring (point-min) (point-max)))))))
 
+(defvar elnode-test-wrapped-handler-counter 0)
+(defvar elnode-test-wrapping-handler-counter 0)
 
 (ert-deftest elnode--wrap-handler ()
   "Test wrapping a handler held in a symbol with another."
-  (let ((wrapped-handler-counter 0)
-        (wrapping-handler-counter 0))
+  (let ((elnode-test-wrapped-handler-counter 0)
+        (elnode-test-wrapping-handler-counter 0))
     ;; Define the handler we'll wrap
     (flet ((wrap-test-handler (httpcon)
-             (incf wrapped-handler-counter)))
+             (incf elnode-test-wrapped-handler-counter)))
       (unwind-protect
            (progn
              ;; Wrap that handler
              (elnode--wrap-handler
               'wrap-test-handler
               "testit/$"
-              (lambda (httpcon)
-                (incf wrapping-handler-counter)))
-             (with-elnode-mock-server 'wrap-test-handler
-                 (let ((r (elnode-test-call "/something/")))
-                   (should (equal wrapped-handler-counter 1))
-                   (should (equal wrapping-handler-counter 0)))
-               (let ((r (elnode-test-call "/testit/")))
-                 (should (equal wrapped-handler-counter 1))
-                 (should (equal wrapping-handler-counter 1)))))
+              (lambda (httpcon &rest args)
+                (incf elnode-test-wrapping-handler-counter)))
+             (with-elnode-mock-server 'wrap-test-handler t
+               ;; Call something to invoke the wrapper
+               (elnode-test-call "/something/")
+               (should (equal elnode-test-wrapped-handler-counter 1))
+               (should (equal elnode-test-wrapping-handler-counter 0))
+               (elnode-test-call "/testit/")
+               (should (equal elnode-test-wrapped-handler-counter 1))
+               (should (equal elnode-test-wrapping-handler-counter 1))))
         ;; We need to clear the symbol and it's plist whenever the
         ;; test runs, otherwise we keep state in the symbol.
         (setplist 'wrap-test-handler nil)
@@ -1012,10 +1045,13 @@ Test that we get the right chunked encoding stuff going on."
 
 ;; Elnode auth tests
 
-(defun elnode--auth-init-user-db (user-alist)
+(defun elnode--auth-init-user-db (user-alist &optional db)
   "Initialize the auth database.
 
-USER-ALIST is an assoc list of username and passwords."
+USER-ALIST is an assoc list of username and passwords.
+
+Optionally allow the database to be specified with DB (the
+default is `elnode-auth-db')."
   (loop for pair in user-alist
        do
        (elnode-db-put
@@ -1023,7 +1059,7 @@ USER-ALIST is an assoc list of username and passwords."
         (elnode--auth-make-hash
          (car pair)
          (cdr pair))
-        elnode-auth-db)))
+        (or db elnode-auth-db))))
 
 (ert-deftest elnode-auth-user-p ()
   "Check the authentication check.
@@ -1089,10 +1125,10 @@ authenticated."
 (ert-deftest elnode-auth-login-sender ()
   "Low levelish test of the login page sender."
   (fakir-mock-process
-    :httpcon
-    ()
+      :httpcon
+      ()
     (elnode-auth-login-sender :httpcon "/login/" "/myapp/loggedin")
-    (with-current-buffer (process-buffer :httpcon)
+    (with-current-buffer (fakir-get-output-buffer)
       (goto-char (point-min))
       (should (re-search-forward
                "<form method='POST' action='/login/'>" nil 't))
@@ -1105,37 +1141,48 @@ authenticated."
 
 The function under test uses some slightly exotic destructuring
 so we test it deliberately here."
-  ;; First test with a specified path
-  (flet ((elnode--wrap-handler (wrap-target path wrapping-func)
-           (should
-            (equal
-             wrap-target
-             'blah))
-           (should
-            (equal
-             path
-             "/doit/"))))
+  ;; First, test with a specified path
+  (flet ((elnode--wrap-handler (wrap-target path wrapping-func &rest args)
+           (should (equal wrap-target 'blah))
+           (should (equal path "/doit/"))))
     (elnode--auth-define-scheme-do-wrap
      (list
       'blah
       (lambda (httpcon)
         (elnode-send-500 httpcon))
-      "/doit/")))
+      "/doit/")
+     ;; Use an empty db
+     nil))
   ;; Now with the default path
-  (flet ((elnode--wrap-handler (wrap-target path wrapping-func)
-           (should
-            (equal
-             wrap-target
-             'blah))
-           (should
-            (equal
-             path
-             "/login/"))))
+  (flet ((elnode--wrap-handler (wrap-target path wrapping-func &rest args)
+           (should (equal wrap-target 'blah))
+           (should (equal path "/login/"))))
     (elnode--auth-define-scheme-do-wrap
      (list
       'blah
       (lambda (httpcon)
-        (elnode-send-500 httpcon))))))
+        (elnode-send-500 httpcon)))
+     ;; Use an empty db
+     nil)))
+
+(defmacro elnode-auth-flets (&rest body)
+  "Wrap the BODY with some standard handler flets."
+  `(flet
+       ((auth-reqd-handler (httpcon)
+          (elnode-with-auth httpcon 'test-auth
+            (elnode-dispatcher
+             httpcon
+             '(("^/someplace/.*" .
+                (lambda (httpcon)
+                  (elnode-send-html
+                   httpcon
+                   "<html><body>You are logged in!</body></html>")))
+               ("^/$" .
+                (lambda (httpcon)
+                  (elnode-send-html
+                   httpcon
+                   "<html><body>You are logged in too!</body></html>"))))))))
+     ,@body))
 
 (ert-deftest elnode-with-auth ()
   "Test protection of code with authentication.
@@ -1149,55 +1196,41 @@ the wrapping of a specified handler with the login sender."
     (elnode--auth-init-user-db '(("nferrier" . "password")
                                  ("someuser" . "secret")))
     ;; Setup handlers to wrap
-    (flet
-        ((auth-reqd-handler (httpcon)
-           (elnode-with-auth httpcon 'test-auth
-             (elnode-dispatcher
-              httpcon
-              '(("^/someplace/.*" .
-                 (lambda (httpcon)
-                   (elnode-send-html
-                    httpcon
-                    "<html><body>You are logged in!</body></html>")))
-                ("^/$" .
-                 (lambda (httpcon)
-                   (elnode-send-html
-                    httpcon
-                    "<html><body>You are logged in too!</body></html>"))))))))
-      ;; Make the auth scheme - since we use fset in
-      ;; elnode--wrap-handler this should work ok.
-      (elnode-auth-define-scheme
-       'test-auth
-       :test :cookie
-       :cookie-name "secret"
-       :redirect (elnode-auth-make-login-wrapper
-                  'auth-reqd-handler
-                  :target "/my-login/"))
-      ;; Test that we are redirected to login when we don't have cookie
-      (with-elnode-mock-server 'auth-reqd-handler
-          (let ((r (elnode-test-call "/")))
-            (should-equal 302 (plist-get r :status))
-            (should-equal "/my-login/?to=/"
-                          (assoc-default "Location" (plist-get r :header))))
-        ;; Test that we get the login page - this tests that the main
-        ;; handler was wrapped
-        (let ((r (elnode-test-call "/my-login/")))
-          (should-equal 200 (plist-get r :status))
-          (should-match
-           "<input type='hidden' name='redirect' value='/'/>"
-           (plist-get r :result-string)))
+    (elnode-auth-flets
+     ;; Make the auth scheme - since we use fset in
+     ;; elnode--wrap-handler this should work ok.
+     (elnode-auth-define-scheme
+      'test-auth
+      :test :cookie
+      :cookie-name "secret"
+      :redirect (elnode-auth-make-login-wrapper
+                 'auth-reqd-handler
+                 :target "/my-login/"))
+     ;; Test that we are redirected to login when we don't have cookie
+     (with-elnode-mock-server 'auth-reqd-handler t
+       (should-elnode-response
+        (elnode-test-call "/")
+        :status-code 302
+        :header-name "Location"
+        :header-value "/my-login/?to=/")
+       ;; Test that we get the login page - this tests that the main
+       ;; handler was wrapped
+        (should-elnode-response
+         (elnode-test-call "/my-login/")
+         :status-code 200
+         :body-match "<input type='hidden' name='redirect' value='/'/>")
         ;; Do it all again with a different 'to'
-        (let ((r (elnode-test-call "/somepage/test/")))
-          (should-equal 302 (plist-get r :status))
-          (should-equal "/my-login/?to=/somepage/test/"
-                        (assoc-default "Location" (plist-get r :header))))
+        (should-elnode-response
+         (elnode-test-call "/somepage/test/")
+         :status-code 302
+         :header-name "Location"
+         :header-value "/my-login/?to=/somepage/test/")
         ;; Test that we get the login page - this tests that the main
         ;; handler was wrapped
-        (let ((r (elnode-test-call "/my-login/")))
-          (should-equal 200 (plist-get r :status))
-          (should-match
-           "<input type='hidden' name='redirect' value='/'/>"
-           (plist-get r :result-string)))))))
+        (should-elnode-response
+         (elnode-test-call "/my-login/")
+         :status-code 200
+         :body-match "<input type='hidden' name='redirect' value='/'/>")))))
 
 (ert-deftest elnode-with-auth-bad-auth ()
   "Test bad auth causes login page again."
@@ -1208,40 +1241,76 @@ the wrapping of a specified handler with the login sender."
     (elnode--auth-init-user-db '(("nferrier" . "password")
                                  ("someuser" . "secret")))
     ;; Setup handlers to wrap
-    (flet
-        ((auth-reqd-handler (httpcon)
-           (elnode-with-auth httpcon 'test-auth
-             (elnode-dispatcher
-              httpcon
-              '(("^/someplace/.*" .
-                 (lambda (httpcon)
-                   (elnode-send-html
-                    httpcon
-                    "<html><body>You are logged in!</body></html>")))
-                ("^/$" .
-                 (lambda (httpcon)
-                   (elnode-send-html
-                    httpcon
-                    "<html><body>You are logged in too!</body></html>"))))))))
-      (elnode-auth-define-scheme
-       'test-auth
-       :test :cookie
-       :cookie-name "secret"
-       :redirect (elnode-auth-make-login-wrapper
-                  'auth-reqd-handler
-                  :target "/my-login/"))
-      ;; Test that we are redirected to login when we don't have cookie
-      (with-elnode-mock-server 'auth-reqd-handler
-          ;; Test a bad auth
-          (let ((r (elnode-test-call
-                    "/my-login/?redirect=/somepage/test/"
-                    :method 'POST
-                    :parameters
-                    '(("username" . "nferrier")
-                      ("password" . "secret")))))
-            (should-equal 302 (plist-get r :status))
-            (should-equal "/my-login/?redirect=/somepage/test/"
-                          (assoc-default "Location" (plist-get r :header))))))))
+    (elnode-auth-flets
+     (elnode-auth-define-scheme
+      'test-auth
+      :test :cookie
+      :cookie-name "secret"
+      :redirect (elnode-auth-make-login-wrapper
+                 'auth-reqd-handler
+                 :target "/my-login/"))
+     ;; Test that we are redirected to login when we don't have cookie
+     (with-elnode-mock-server 'auth-reqd-handler
+         ;; Test a bad auth
+         (should-elnode-response
+          (elnode-test-call
+           "/my-login/?redirect=/somepage/test/"
+           :method "POST"
+           :parameters
+           '(("username" . "nferrier")
+             ("password" . "secret")))
+          ;; The auth will fail - here's what we should get back
+          :status-code 302
+          :header-name "Location"
+          :header-value "/my-login/?redirect=/somepage/test/")))))
+
+(ert-deftest elnode-with-auth-specific-db ()
+  "Test using a specific database."
+  ;; Setup the user db
+  (let ((elnode-auth-db (elnode-db-make '(elnode-db-hash)))
+        (my-db (elnode-db-make '(elnode-db-hash))))
+    (elnode--auth-init-user-db
+     '(("nferrier" . "password")
+       ("someuser" . "secret"))
+     elnode-auth-db)
+    (elnode--auth-init-user-db
+     '(("nic" . "test")
+       ("other" . "simple"))
+     my-db)
+    ;; Setup handlers to wrap
+    (elnode-auth-flets
+     (elnode-auth-define-scheme
+      'test-auth
+      :test :cookie
+      :auth-db my-db
+      :cookie-name "secret"
+      :redirect (elnode-auth-make-login-wrapper
+                 'auth-reqd-handler
+                 :target "/my-login/"))
+     ;; Test that we are redirected to login when we don't have cookie
+     (with-elnode-mock-server 'auth-reqd-handler t
+       (should-elnode-response
+        (elnode-test-call
+         "/my-login/?redirect=/somepage/test/"
+         :method 'POST
+         :parameters
+         '(("username" . "nic")
+           ("password" . "testxx")))
+        ;; The auth fails
+        :status-code 302
+        :header-name "Location"
+        :header-value "/my-login/?redirect=/somepage/test/")
+       (should-elnode-response
+        (elnode-test-call
+         "/my-login/?redirect=/somepage/test/"
+         :method 'POST
+         :parameters
+         '(("username" . "nic")
+           ("password" . "test")))
+        ;; The auth succeeds
+        :status-code 302
+        :header-name "Location"
+        :header-value "/somepage/test/")))))
 
 (provide 'elnode-tests)
 
