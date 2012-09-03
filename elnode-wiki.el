@@ -150,7 +150,6 @@ This is where elnode-wikiserver serves wiki files from."
         ;; and the copy-file spec
         (list make-dir copy-file))))))
 
-
 (defun elnode--wiki-call (out-buf page-text page)
   "Call a wiki page sending output OUT-BUF.
 
@@ -343,76 +342,43 @@ provided. Otherwise it will just error."
       (elnode-wiki--setup)
       (elnode-wiki-handler httpcon elnode-wikiserver-wikiroot)))
 
+;; (defvar elnode-wiki-db
+;;   (elnode-db-make
+;;    `(elnode-db-hash
+;;      :filename
+;;      ,(expand-file-name
+;;        (concat elnode-config-directory "elnode-wiki-auth")))))
 
-;; Define the authentication scheme for the wiki
-(elnode-auth-define-scheme
- 'elnode-wiki-auth
- :redirect (elnode-auth-make-login-wrapper
-            'elnode-wikiserver
-            :target "/wiki/login/"))
+;; ;; Define the authentication scheme for the wiki
+;; (elnode-auth-define-scheme
+;;  'elnode-wiki-auth
+;;  :auth-db elnode-wiki-db
+;;  :redirect (elnode-auth-make-login-wrapper
+;;             'elnode-wikiserver
+;;             :target "/wiki/login/"))
 
-;; Tests
 
-(ert-deftest elnode-wiki-worker ()
-  "Test the worker elisp.
-
-Basically this is the same test as in the creole library but done
-via a child process."
-  (let* ((page "~/creole/index.creole")
-         (elnode--do-error-logging nil)
-         (outbuf (get-buffer-create
-                  (generate-new-buffer-name
-                   "elnode-worker-wiki-test"))))
-    (elnode--wiki-call
-     outbuf
-     "= A Creole file ="
-     page)
-    ;; What are our assertions??
-    (should
-     (let ((res
-            (with-current-buffer outbuf
-              (goto-char (point-min))
-              (re-search-forward
-               "<div id='top'></div><h1>A Creole file</h1>"
-               nil
-               t))))
-       (kill-buffer outbuf)
-       res))))
+;;; Tests
 
 (ert-deftest elnode-wiki-page ()
   "Full stack Wiki test."
   (with-elnode-mock-server
-    ;; The dispatcher function
-    (lambda (httpcon)
-      (let ((elnode-wikiserver-wikiroot "/home/elnode/wiki"))
-        (elnode-hostpath-dispatcher
-         httpcon
-         '(("[^/]+//wiki/\\(.*\\)" . elnode-wikiserver)))))
-    ;; Setup the the Creole file handler mocking.
-    (flet
-        ((elnode--worker-lisp-helper (child-lisp)
-           `((progn
-               (require 'creole)
-               (require 'cl)
-               (flet ((creole--get-file (filename)
-                        (let ((buf (get-buffer-create "wikibuf")))
-                          (with-current-buffer buf
-                            (insert "= A Creole file ="))
-                          buf)))
-                 ,@child-lisp)))))
-      ;; Now the actual test
-      (fakir-mock-file (fakir-file
-                        :filename "test.creole"
-                        :directory "/home/elnode/wiki")
+      ;; The dispatcher function
+      (lambda (httpcon)
+        (let ((elnode-wikiserver-wikiroot "/home/elnode/wiki"))
+          (elnode-hostpath-dispatcher
+           httpcon
+           '(("[^/]*//wiki/\\(.*\\)" . elnode-wikiserver))))) t
+    (fakir-mock-file (fakir-file
+                      :filename "test.creole"
+                      :directory "/home/elnode/wiki"
+                      :content "= Hello World =\nthis is a creole wiki file!\n")
         (let* ((elnode--do-error-logging nil)
-               (elnode--do-access-logging-on-dispatch nil)
-               (r (elnode-test-call "/wiki/test.creole")))
-          (elnode-error "result -> %s" r)
-          (message "elnode result data: %s" (plist-get r :result-string))
-          (should
-           (equal
-            (plist-get r :status)
-            200)))))))
+               (elnode--do-access-logging-on-dispatch nil))
+          (should-elnode-response
+           (elnode-test-call "/wiki/test.creole")
+           :status-code 200
+           :body-match ".*<h1>Hello World</h1>.*")))))
 
 (provide 'elnode-wiki)
 
