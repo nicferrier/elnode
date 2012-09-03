@@ -26,8 +26,8 @@
          httpcon elnode-defer-guard-it :jsonp t))))
 
 (defun chat-send-handler (httpcon)
-  (let ((username (elnode-http-cookie httpcon "chatusername" t))
-        (msg (elnode-http-param httpcon "msg")))
+  (let* ((username (elnode-http-cookie httpcon "chatusername" t))
+         (msg (elnode-http-param httpcon "msg")))
     (chat-add username msg)
     (elnode-send-json httpcon (json-encode '("thanks")))))
 
@@ -48,7 +48,7 @@
         `(tr
           ()
           (td
-           ((class . ,(concat "username," (elt entry 1)))) ,(elt entry 1))
+           ((class . ,(concat "username " (elt entry 1)))) ,(elt entry 1))
           (td ((class . "message")) ,(elt entry 2))))))
 
 (defun chat-main-templater ()
