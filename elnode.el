@@ -53,6 +53,7 @@
 (require 'mm-encode)
 (require 'mailcap)
 (require 'url-util)
+(require 'web)
 (require 'json)
 (require 'elnode-db)
 (require 'dired) ; needed for the setup
@@ -825,15 +826,7 @@ routines."
 
 (defun elnode--alist-to-query (alist)
   "Turn an alist into a formdata/query string."
-  (flet ((cons-alist-to-list-alist (alist)
-           ;; Fix the brain dead url function which can't deal with
-           ;; proper (cons cell) alists.
-           (loop for p in alist
-              if (listp (cdr p))
-              collect p
-              else
-              collect (list (car p)(cdr p)))))
-    (url-build-query-string (cons-alist-to-list-alist alist))))
+  (web--to-query-string alist))
 
 (defun elnode--make-test-call (path method parameters headers)
   "Construct the HTTP request for a test call.
