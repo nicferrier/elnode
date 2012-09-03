@@ -220,7 +220,9 @@ is just a test helper."
       (elnode--deferred-add httpcon handler)
       (should (equal 1 (length elnode--deferred)))
       ;; Then we process it...
-      (elnode--deferred-processor)
+      (flet-overrides (lambda (obj) (eq obj :fake))
+          ((process-status proc (proc) 'open))
+        (elnode--deferred-processor))
       ;; ... that should have emptied it out...
       (should (eq result :done))
       (should (equal 0 (length elnode--deferred)))
@@ -230,11 +232,15 @@ is just a test helper."
                               (elnode-defer-now handler)))
       (should (equal 1 (length elnode--deferred)))
       ;; Now we process...
-      (elnode--deferred-processor)
+      (flet-overrides (lambda (obj) (eq obj :fake))
+          ((process-status proc (proc) 'open))
+        (elnode--deferred-processor))
       ;; ... should still have the deferred handler in it...
       (should (equal 1 (length elnode--deferred)))
       ;; ... process again ...
-      (elnode--deferred-processor)
+      (flet-overrides (lambda (obj) (eq obj :fake))
+          ((process-status proc (proc) 'open))
+        (elnode--deferred-processor))
       (should (equal 0 (length elnode--deferred))))))
 
 
