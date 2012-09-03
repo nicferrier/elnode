@@ -889,9 +889,6 @@ or:
                    :parameters '((\"a\" . 10)))
 
 For header and parameter names, strings MUST be used currently."
-  (elnode--real-test-call path method parameters headers))
-
-(defun elnode--real-test-call (path method parameters headers)
   (let (result
         (fakir-mock-process-require-specified-buffer t))
     (fakir-mock-process :httpcon ()
@@ -1835,10 +1832,6 @@ The handler for PATH is matched in the URL-MAPPING-TABLE via
 If no handler is found then a 404 is attempted via FUNCTION-404,
 it it's found to be a function, or as a last resort
 `elnode-send-404'."
-  (elnode--dp httpcon path url-mapping-table function-404 log-name))
-
-(defun elnode--dp (httpcon path url-mapping-table function-404 log-name)
-  "More edebug/cl madness."
   (let ((handler-func
          (elnode--mapper-find
           httpcon
@@ -1918,10 +1911,6 @@ FUNCTION-404 should be a 404 handling function, by default it's
 `elnode-send-404'.
 
 LOG-NAME is an optional log-name."
-  (elnode--real-hpd httpcon hostpath-mapping-table function-404 log-name))
-
-(defun elnode--real-hpd (httpcon hostpath-mapping-table function-404 log-name)
-  "Another shim'd implementation because of 'cl problems."
   (let ((hostpath (elnode--hostpath
                    (elnode-http-header httpcon "Host")
                    (elnode-http-pathinfo httpcon))))
@@ -2970,26 +2959,6 @@ See `elnode-auth-login' for how this is updated.")
        'error-message
        "Elnode authentication failed"))
 
-(defun elnode--auth-login (username password auth-db loggedin-db)
-  "Private version of the below.
-
-Only needed because Emacs has broken Debug right now on defun*."
-  (if (elnode-auth-user-p username password :auth-db auth-db)
-      (let* ((rndstr (format "%d" (random)))
-             (hash (sha1 (format "%s:%s:%s"
-                                 username
-                                 rndstr
-                                 elnode-secret-key)))
-             (user-record
-              (list
-               :user username
-               :token rndstr
-               :hash hash)))
-        (puthash username user-record loggedin-db)
-        hash)
-      ;; Else it was bad so throw an error.
-      (signal 'elnode-auth-credentials (list username password))))
-
 (defun* elnode-auth-login (username
                            password
                            &key
@@ -3005,7 +2974,21 @@ Takes optional AUTH-DB which is the database variable to
 use (which is `elnode-auth-db' by default) and LOGGEDIN-DB which
 is the logged-in state database to use and which is
 `elnode-loggedin-db' by default."
-  (elnode--auth-login username password auth-db loggedin-db))
+  (if (elnode-auth-user-p username password :auth-db auth-db)
+      (let* ((rndstr (format "%d" (random)))
+             (hash (sha1 (format "%s:%s:%s"
+                                 username
+                                 rndstr
+                                 elnode-secret-key)))
+             (user-record
+              (list
+               :user username
+               :token rndstr
+               :hash hash)))
+        (puthash username user-record loggedin-db)
+        hash)
+      ;; Else it was bad so throw an error.
+      (signal 'elnode-auth-credentials (list username password))))
 
 (defun* elnode-auth-check-p (username
                              token
@@ -3055,10 +3038,6 @@ Actually uses `elnode-auth-login' to do the assertion.
 
 AUTH-DB is a database, by default `elnode-auth-db', it's passed
 to `elnode-auth-login'."
-  (elnode--real-ahl httpcon username password logged-in auth-db loggedin-db))
-
-(defun elnode--real-ahl (httpcon username password logged-in
-                         auth-db loggedin-db)
   (let ((hash
          (elnode-auth-login
           username password
@@ -3108,11 +3087,14 @@ This function sends the contents of the custom variable
       `(("target" . ,target)
         ("redirect" . ,redirect))))))
 
-(defun elnode--awl-handler (httpcon
-                            sender target auth-db)
-  "Private version of the below.
+(defun* elnode-auth--wrapping-login-handler (httpcon
+                                             sender target
+                                             &key
+                                             (auth-db elnode-auth-db)
+                                             (loggedin-db elnode-loggedin-db))
+  "The implementation of the login handler for wrapping.
 
-Only needed because Emacs Debug is broken on defun*."
+This receives the SENDER and the TARGET from the wrapper spec."
   (elnode-method httpcon
       (GET
        (let ((to (or (elnode-http-param httpcon "redirect")
@@ -3133,16 +3115,6 @@ Only needed because Emacs Debug is broken on defun*."
            (if (not logged-in)
                target
                (format "%s?redirect=%s" target logged-in)))))))))
-
-(defun* elnode-auth--wrapping-login-handler (httpcon
-                                             sender target
-                                             &key
-                                             (auth-db elnode-auth-db)
-                                             (loggedin-db elnode-loggedin-db))
-  "The implementation of the login handler for wrapping.
-
-This receives the SENDER and the TARGET from the wrapper spec."
-  (elnode--awl-handler httpcon sender target auth-db))
 
 (defun elnode--auth-wrapping-sender (httpcon sender target &optional args)
   (if args
