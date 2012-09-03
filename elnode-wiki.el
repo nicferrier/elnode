@@ -249,20 +249,19 @@ Emacs."
   (if elnode-wiki-page-use-rle
       (elnode-wiki-page-rle httpcon wikipage pageinfo)
       ;; Otherwise just do it
-      (let ((authenticated (elnode-http-cookie httpcon "elnodeauth")))
-        (elnode-http-start httpcon 200 `("Content-type" . "text/html"))
-        (with-stdout-to-elnode httpcon
-            (let ((page-info (or pageinfo (elnode-http-pathinfo httpcon)))
-                  (header elnode-wikiserver-body-header)
-                  (footer (if authenticated
-                              elnode-wikiserver-body-footer
-                              elnode-wikiserver-body-footer-not-loggedin)))
-              (creole-wiki
-               wikipage
-               :destination t
-               :variables (list (cons 'page page-info))
-               :body-header header
-               :body-footer footer))))))
+      (elnode-http-start httpcon 200 `("Content-type" . "text/html"))
+      (with-stdout-to-elnode httpcon
+          (let ((page-info (or pageinfo (elnode-http-pathinfo httpcon)))
+                (header elnode-wikiserver-body-header)
+                (footer (elnode-auth-if httpcon 'elnode-wiki-auth
+                          elnode-wikiserver-body-footer
+                          elnode-wikiserver-body-footer-not-loggedin)))
+            (creole-wiki
+             wikipage
+             :destination t
+             :variables (list (cons 'page page-info))
+             :body-header header
+             :body-footer footer)))))
 
 (defun elnode-wiki--text-param (httpcon)
   "Get the text param from HTTPCON and convert it."
@@ -342,20 +341,20 @@ provided. Otherwise it will just error."
       (elnode-wiki--setup)
       (elnode-wiki-handler httpcon elnode-wikiserver-wikiroot)))
 
-;; (defvar elnode-wiki-db
-;;   (elnode-db-make
-;;    `(elnode-db-hash
-;;      :filename
-;;      ,(expand-file-name
-;;        (concat elnode-config-directory "elnode-wiki-auth")))))
+(defvar elnode-wiki-db
+  (elnode-db-make
+   `(elnode-db-hash
+     :filename
+     ,(expand-file-name
+       (concat elnode-config-directory "elnode-wiki-auth")))))
 
-;; ;; Define the authentication scheme for the wiki
-;; (elnode-auth-define-scheme
-;;  'elnode-wiki-auth
-;;  :auth-db elnode-wiki-db
-;;  :redirect (elnode-auth-make-login-wrapper
-;;             'elnode-wikiserver
-;;             :target "/wiki/login/"))
+;; Define the authentication scheme for the wiki
+(elnode-auth-define-scheme
+ 'elnode-wiki-auth
+ :auth-db elnode-wiki-db
+ :redirect (elnode-auth-make-login-wrapper
+            'elnode-wikiserver
+            :target "/wiki/login/"))
 
 
 ;;; Tests
