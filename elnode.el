@@ -197,6 +197,7 @@ filenames to copy to the DIR."
                     (concat dir (file-name-nondirectory file))
                     nil)))))))))
 
+;;;###autoload
 (defmacro elnode-app (dir-var &rest features)
   "A macro that does useful boilerplate for Elnode apps.
 
@@ -215,6 +216,7 @@ of your module (which is useful for serving files and such)."
                            load-file-name
                            default-directory)))
      (require 'cl)
+     (require 'elnode)
      ,@(loop for f in features
             collect `(require (quote ,f)))))
 
