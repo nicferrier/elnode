@@ -3292,7 +3292,33 @@ should indicate a path where a user can login, for example
                 ,auth-schemev
                 elnode--defined-authentication-schemes))))
 
-(defmacro* elnode-with-auth (httpcon scheme &rest body)
+(defmacro elnode-auth-if (httpcon scheme consequent &rest else)
+  "Check the HTTPCON for SCHEME auth and eval CONSEQUENT.
+
+If the auth fails then evaluate ELSE instead."
+  (declare
+   (debug (sexp sexp sexp &rest form))
+   (indent defun))
+  (let ((httpconv (make-symbol "httpconv")))
+    `(let ((,httpconv ,httpcon)
+           (scheme-list
+            (gethash ,scheme
+                     elnode--defined-authentication-schemes)))
+       (if (eq :cookie (plist-get scheme-list :test))
+           (condition-case token
+               (let ((cookie
+                      (elnode-auth-cookie-check-p
+                       ,httpconv
+                       :cookie-name (plist-get scheme-list :cookie-name))))
+                 ;; Do whatever the code was now.
+                 ,consequent)
+             ;; On auth failure do the ELSE
+             (elnode-auth-token
+              (progn ,@else)))
+           ;; Not a cookie test - not sure what to do...
+           (message "ELNODE AUTH IF - NOT COOKIE!")))))
+
+(defmacro elnode-with-auth (httpcon scheme &rest body)
   "Protect code with authentication using HTTPCON and SCHEME.
 
 This macro protects code in a handler with a check for an
@@ -3302,43 +3328,29 @@ login page.
 
 SCHEME is the authentication scheme to use as defined by
 `elnode-auth-define-scheme'."
-  (declare
-   (debug (sexp sexp &rest form))
-   (indent defun))
-  (let ((httpconv (make-symbol "httpconv"))
-        (schemev (make-symbol "schemev")))
-    `(let ((,httpconv ,httpcon)
-           (scheme-list
-            (gethash ,scheme
-                     elnode--defined-authentication-schemes)))
-       (when (eq :cookie (plist-get scheme-list :test))
-         (condition-case token
-             (let ((cookie
-                    (elnode-auth-cookie-check-p
-                     ,httpconv
-                     :cookie-name (plist-get scheme-list :cookie-name))))
-               ;; Do whatever the code was now.
-               ,@body)
-           ;; On auth failure send the redirect to the login url
-           (elnode-auth-token
-            (let ((to
-                   (cond
-                     (;; We have a wrapper... other lists other
-                      ;; than wrappers are probably possible; we
-                      ;; should qualify the test here to be
-                      ;; wrapper specific
-                      (listp (plist-get scheme-list :redirect))
-                      (format
-                       "%s?to=%s"
-                       (elt (plist-get scheme-list :redirect) 3)
-                       (elnode-http-pathinfo ,httpconv)))
-                     ;; A plain string can be used directly
-                     ((stringp (plist-get scheme-list :redirect))
-                      (plist-get scheme-list :redirect))
-                     (t
-                      (error
-                       ":redirect MUST be  a list or a string")))))
-              (elnode-send-redirect ,httpconv to))))))))
+  (let ((httpconv (make-symbol "httpconv")))
+    `(let ((,httpconv ,httpcon))
+       (elnode-auth-if ,httpconv ,scheme
+         ,@body
+         (let ((to
+                (cond
+                  (;; We have a wrapper... other lists other
+                   ;; than wrappers are probably possible; we
+                   ;; should qualify the test here to be
+                   ;; wrapper specific
+                   (listp (plist-get scheme-list :redirect))
+                   (format
+                    "%s?to=%s"
+                    (elt (plist-get scheme-list :redirect) 3)
+                    (elnode-http-pathinfo ,httpconv)))
+                  ;; A plain string can be used directly
+                  ((stringp (plist-get scheme-list :redirect))
+                   (plist-get scheme-list :redirect))
+                  (t
+                   (error
+                    ":redirect MUST be  a list or a string")))))
+           (elnode-send-redirect ,httpconv to))))))
+
 
 ;;; Main customization stuff
 
