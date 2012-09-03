@@ -197,6 +197,27 @@ filenames to copy to the DIR."
                     (concat dir (file-name-nondirectory file))
                     nil)))))))))
 
+(defmacro elnode-app (dir-var &rest features)
+  "A macro that does useful boilerplate for Elnode apps.
+
+This sets up lexical binding, captures the module's parent
+directory in DIR-VAR, require's `cl' and any other features you
+list.  Use it like this:
+
+ (elnode-app my-app-dir esxml mongo-elnode)
+
+Once used you can access the variable `my-app-dir' as the dirname
+of your module (which is useful for serving files and such)."
+  `(progn
+     (setq lexical-binding t)
+     (defvar ,dir-var (file-name-directory
+                       (or (buffer-file-name)
+                           load-file-name
+                           default-directory)))
+     (require 'cl)
+     ,@(loop for f in features
+            collect `(require (quote ,f)))))
+
 (defcustom elnode-log-files-directory nil
   "The directory to store any Elnode log files.
 
