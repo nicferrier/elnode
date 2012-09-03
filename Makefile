@@ -2,7 +2,7 @@
 
 # These are the variables that are specific to the package
 NAME=elnode
-VERSION=0.9.9.1
+VERSION=0.9.9.4
 DOC="A simple event handling HTTP server."
 
 # Everything beyond here should be generic

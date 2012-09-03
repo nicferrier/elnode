@@ -199,7 +199,7 @@ filenames to copy to the DIR."
 
 ;;;###autoload
 (defmacro elnode-app (dir-var &rest features)
-  "A macro that does useful boilerplate for Elnode apps.
+  "A macro that sets up the boring boilerplate for Elnode apps.
 
 This sets up lexical binding, captures the module's parent
 directory in DIR-VAR, require's `cl' and any other features you
@@ -209,6 +209,7 @@ list.  Use it like this:
 
 Once used you can access the variable `my-app-dir' as the dirname
 of your module (which is useful for serving files and such)."
+  (declare (indent 2))
   `(progn
      (setq lexical-binding t)
      (defvar ,dir-var (file-name-directory
