@@ -2935,15 +2935,31 @@ implementations.")
                 username
                 password)))
 
-(defun elnode-auth-user-add (username password)
-  "Command to add a user to the internal authentication database."
-  (interactive (list (read-from-minibuffer "username: ")
-                     (read-passwd "password: ")))
+(defun elnode-auth-user-add (username password &optional auth-db)
+  "Command to add a user to the internal authentication database.
+
+With prefix-arg also request the authentication database variable
+name.  The authentication database must exist.  By default the
+main `elnode-auth-db' is used."
+  (interactive
+   (list (read-from-minibuffer "username: ")
+         (read-passwd "password: ")
+         (when current-prefix-arg
+             (read-from-minibuffer
+              "auth database variable: "
+              "elnode-auth-db"
+              ;; FIXME - would be great to have completion of variable
+              ;; names here
+              nil
+              t))))
+  (unless auth-db
+    (setq auth-db 'elnode-auth-db))
   (elnode-db-put
    username
    (elnode--auth-make-hash username password)
-   elnode-auth-db)
+   (symbol-value auth-db))
   (message "username is %s" username))
+
 
 (defun* elnode-auth-user-p (username
                             password
