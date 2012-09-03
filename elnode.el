@@ -404,43 +404,44 @@ the value of the GUARD."
 (defvar elnode-defer-processor-log-level elnode-log-critical
   "Log level of the defer processor.")
 
+(defun elnode--deferred-log (level msg &rest args)
+  "Special log for elnode-deferreds"
+  (when (> level elnode-defer-processor-log-level)
+    (apply
+     'elnode-error
+     (format "elnode-deferred-processor [%s] %s" run msg)
+     args)))
+
 (defun elnode--deferred-processor ()
   "Process the deferred queue."
   (let ((run (random 5000)) ; use this to disambiguate runs in the logs
         (new-deferred (list)))
-    (flet
-        ((log (level msg &rest args)
-           (when (> level elnode-defer-processor-log-level)
-             (apply
-              'elnode-error
-              (format "elnode-deferred-processor [%s] %s" run msg)
-              args))))
-      (log elnode-log-info "start")
-      (loop for pair in elnode--deferred
-         do
-           (let ((httpcon (car pair))
-                 (handler (cdr pair)))
-             (case (process-status httpcon)
-               ('open
-                (log elnode-log-info "open %s %s" httpcon handler)
-                (condition-case signal-value
-                    (elnode--deferred-process-open httpcon handler)
-                  ('elnode-defer
-                   (push
-                    (cons httpcon (cdr signal-value))
-                    new-deferred))
-                  (error
-                   (log elnode-log-critical
-                        "error %s - %s" httpcon signal-value))))
-               ('closed
-                (log elnode-log-info "closed %s %s" httpcon handler))
-               ('failed
-                (log elnode-log-info "failed %s %s" httpcon handler))
-               ('connect
-                (push
-                 (cons httpcon (cdr signal-value))
-                 new-deferred)))))
-      (log elnode-log-info "complete"))
+    (elnode--deferred-log elnode-log-info "start")
+    (loop for pair in elnode--deferred
+       do
+         (let ((httpcon (car pair))
+               (handler (cdr pair)))
+           (case (process-status httpcon)
+             ('open
+              (elnode--deferred-log elnode-log-info "open %s %s" httpcon handler)
+              (condition-case signal-value
+                  (elnode--deferred-process-open httpcon handler)
+                ('elnode-defer
+                 (push
+                  (cons httpcon (cdr signal-value))
+                  new-deferred))
+                (error
+                 (elnode--deferred-log elnode-log-critical
+                      "error %s - %s" httpcon signal-value))))
+             ('closed
+              (elnode--deferred-log elnode-log-info "closed %s %s" httpcon handler))
+             ('failed
+              (elnode--deferred-log elnode-log-info "failed %s %s" httpcon handler))
+             ('connect
+              (push
+               (cons httpcon (cdr signal-value))
+               new-deferred)))))
+    (elnode--deferred-log elnode-log-info "complete")
     ;; Set the correct queue
     (setq elnode--deferred new-deferred)))
 
