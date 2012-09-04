@@ -75,9 +75,11 @@
             (error "no such database implementation")))))
 
 (defun elnode-db-get (key db)
+  "Get the value from the DB with the KEY."
   (funcall (plist-get db :get) key db))
 
 (defun elnode-db-put (key value db)
+  "Put a new VALUE into the DB with the specified KEY."
   (funcall (plist-get db :put) key value db))
 
 (defun elnode-db-map (func db &optional query)
