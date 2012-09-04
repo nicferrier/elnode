@@ -79,7 +79,9 @@
   (funcall (plist-get db :get) key db))
 
 (defun elnode-db-put (key value db)
-  "Put a new VALUE into the DB with the specified KEY."
+  "Put a new VALUE into the DB with the specified KEY.
+
+Return the VALUE as it has been put into the DB."
   (funcall (plist-get db :put) key value db))
 
 (defun elnode-db-map (func db &optional query)
