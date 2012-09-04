@@ -65,6 +65,15 @@
       321
       (elnode-db-get "test-key" db)))))
 
+(ert-deftest elnode-db-put ()
+  "Test the put interface."
+  (let ((db (elnode-db-make '(elnode-db-hash))))
+    (should-not (elnode-db-get "test-key" db))
+    (should
+     (equal
+      '("1" "2" "3")
+      (elnode-db-put "test-key" '("1" "2" "3") db)))))
+
 (ert-deftest elnode-db-hash--save ()
   "Test the saving of a hash db."
   (unwind-protect
