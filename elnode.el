@@ -1396,13 +1396,13 @@ would result in:
 
 If NAMES are specified it is a filter list of symbols or strings
 which will be returned."
-  (or
-   (process-get httpcon :elnode-http-params)
-   (let ((query (elnode-http-query httpcon)))
-     (let ((alist (if query
-                      (elnode--http-query-to-alist query)
-                    '())))
-       (loop for pair in
+  (loop for pair in
+       (or
+        (process-get httpcon :elnode-http-params)
+        (let ((query (elnode-http-query httpcon)))
+          (let ((alist (if query
+                           (elnode--http-query-to-alist query)
+                           '())))
             (if (equal "POST" (elnode-http-method httpcon))
                 ;; If we're a POST we have to merge the params
                 (progn
@@ -1415,10 +1415,11 @@ which will be returned."
                   alist)
                 ;; Else just return the query params
                 (process-put httpcon :elnode-http-params alist)
-                alist)
-          if (or (not names)
-                 (memq (intern (car pair)) names))
-          collect pair)))))
+                alist))))
+     if (or (not names)
+            (memq (intern (car pair)) names)
+            (member (car pair) names))
+     collect pair))
 
 (defun elnode-http-param (httpcon name)
   "Get the named parameter from the request."
