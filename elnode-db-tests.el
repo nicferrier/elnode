@@ -97,6 +97,36 @@
                    (elnode-db-get 'test1 db)))))
     (delete-file "/tmp/elnode-test-db.elc")))
 
+(ert-deftest elnode-db-filter ()
+  "Test the filtering."
+  (let ((db (elnode-db-make
+             '(elnode-db-hash :filename "/tmp/elnode-test-db"))))
+    (elnode-db-put
+     "test001"
+     '(("uid" . "test001")
+       ("fullname" . "test user 1"))
+     db)
+    (elnode-db-put
+     "test002"
+     '(("uid" . "test002")
+       ("fullname" . "test user 2"))
+     db)
+    (elnode-db-put
+     "test003"
+     '(("uid" . "test001")
+       ("fullname" . "test user 1"))
+     db)
+    (flet ((filt (key value)
+             (cdr (assoc "fullname" value))))
+      (let ((filtered
+             (elnode-db-make
+              `(elnode-db-filter
+                :source ,db
+                :filter filt))))
+        (plist-get filtered :source)
+        (should
+         (equal (elnode-db-get "test002" filtered) "test user 2"))))))
+
 (provide 'elnode-db-tests)
 
 ;;; elnode-db-tests.el ends here

@@ -60,7 +60,7 @@
   "Hash of database type ids against funcs?")
 
 (defun* elnode-db-make (reference)
-  ;; we should look it up in the types somehow
+  "Make an elnode db based on the REFERENCE."
   (if (and (listp reference)
            (eq
             'elnode-db-hash
@@ -99,7 +99,9 @@ specification makes no recommendations about that."
   "Make a db-hash database.
 
 REFERENCE comes from the call to `elnode-db-make' and should
-include a `:filename' key arg to point to a file.
+include a `:filename' key arg to point to a file:
+
+  '(elnode-db-hash :filename \"/var/local/db/auth-db\")
 
 If the filename exists then it is loaded into the database."
   (let* ((filename (plist-get (cdr reference) :filename))
@@ -158,6 +160,50 @@ The QUERY is ignored.  We never filter."
     ;; and have a timer do the actual save.
     (elnode-db-hash--save db)
     v))
+
+
+;; Filter db - let's you filter another db
+
+(defun elnode-db-filter-get (key db)
+  (let* ((filter-func (plist-get db :filter))
+         (origin (plist-get db :source))
+         (value (elnode-db-get key origin)))
+    (funcall filter-func key value)))
+
+(defun elnode-db-filter-put (key value db)
+  (let* ((filter-func (plist-get db :filter))
+         (origin (plist-get db :source))
+         (ret (elnode-db-put key value origin)))
+    (funcall filter-func key ret)))
+
+(defun elnode-db-filter-map (key db &optional query)
+  (let* ((filter-func (plist-get db :filter))
+         (origin (plist-get db :source)))
+    (mapcar
+     filter-func
+     (elnode-db-map key origin query))))
+
+(defun elnode-db-filter (reference)
+  "Make a database object that is a filter around another.
+
+The reference should look something like:
+
+ '(elnode-db-filter
+    :source (elnode-db-hash :filename ....)
+    :filter (lambda (value) ...)
+
+The `:filter' function takes 2 arguments: KEY and VALUE with
+VALUE being the returned value from the `:source' database."
+  (let* ((ref-plist (cdr reference))
+         (db (list
+              :get 'elnode-db-filter-get
+              :put 'elnode-db-filter-put
+              :map 'elnode-db-filter-map
+              :filter (plist-get ref-plist :filter)
+              :source (plist-get ref-plist :source))))
+    db))
+
+(puthash 'elnode-db-filter 'elnode-db-filter elnode-db--types)
 
 (provide 'elnode-db)
 
