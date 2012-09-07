@@ -431,13 +431,13 @@ a=1&b=hello"
       (lambda (httpcon)
         (elnode-hostpath-dispatcher
          httpcon
-         '(("[^/]*//test/.*" . elnode-test-handler))))
-      (should-elnode-response
-       (elnode-test-call "/test/test.something")
-       :status-code 200
-       :header-name "Content-Type"
-       :header-value "text/html"
-         :body-match ".*<h1>Hello World</h1>")
+         '(("[^/]*//test/.*" . elnode-test-handler)))) t
+    (should-elnode-response
+     (elnode-test-call "/test/test.something")
+     :status-code 200
+     :header-name "Content-Type"
+     :header-value "text/html"
+     :body-match ".*<h1>Hello World</h1>")
     ;; With params
     (should-elnode-response
      (elnode-test-call "/test/test.something"
