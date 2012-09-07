@@ -2912,6 +2912,14 @@ subsequent attempt to wrap the same HANDLER-SYMBOL with the same
 WRAPPING-PATH will result in reinitialization.  This is designed
 to be consistent with Lisp evaluation semantics.
 
+If ARGS is specified it is bound with the wrapper such that the
+WRAPPING-HANDLER is called like:
+
+  (wrapping-handler httpcon args)
+
+Therefore the ARGS are a way of binding state at the time of
+wrapping which will apply later at the time of the wrapped call.
+
 Returns the wrapping specification which is exactly the same as
 the argument list."
   (let* ((sym-path (intern wrapping-path))
