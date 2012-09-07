@@ -922,7 +922,8 @@ For header and parameter names, strings MUST be used currently."
         (let ((eof-func (elnode--make-send-eof))
               (main-send-string (symbol-function 'elnode-http-send-string))
               (send-string-func (elnode--make-send-string))
-              (the-end 0))
+              (the-end 0)
+              (elnode-webserver-visit-file t))
           (flet
               ((elnode-http-send-string (httpcon str)
                  (funcall main-send-string httpcon str))
