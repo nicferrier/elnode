@@ -912,7 +912,11 @@ or:
                    :method \"POST\"
                    :parameters '((\"a\" . 10)))
 
-For header and parameter names, strings MUST be used currently."
+For header and parameter names, strings MUST be used currently.
+
+During the test the variable `elnode-webserver-visit-file' is set
+to `t' to ensure that Elnode does not pass fake HTTP connections
+to external processes."
   (let (result
         (fakir-mock-process-require-specified-buffer t))
     (fakir-mock-process :httpcon ()
