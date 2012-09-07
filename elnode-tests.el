@@ -376,12 +376,12 @@ The text spat out is tested, so is the status."
   (elnode-http-start httpcon 200 '("Content-Type" . "text/html"))
   (let ((params (elnode-http-params httpcon)))
     (elnode-http-return
-        httpcon
-      (format
-       "<html><body><h1>Hello World</h1>%s</body></html>"
-       (if params
-           (format "<div>%S</div>" params)
-           "")))))
+     httpcon
+     (format
+      "<html><body><h1>Hello World</h1>%s</body></html>"
+      (if params
+          (format "<div>%S</div>" params)
+          "")))))
 
 (ert-deftest elnode--make-test-call ()
   "Test the HTTP request construction."
