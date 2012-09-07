@@ -53,6 +53,7 @@
 (require 'mm-encode)
 (require 'mailcap)
 (require 'url-util)
+(require 'kv)
 (require 'web)
 (require 'json)
 (require 'elnode-db)
@@ -828,6 +829,12 @@ port number of the connection."
                     (elnode--format-response 500))
                    (delete-process process)))))))))))
 
+(defvar elnode--cookie-store nil
+  "Cookie store for test servers.
+
+This is a special defvar for dynamic overriding by
+`with-elnode-mock-server'.")
+
 (defmacro with-elnode-mock-server (handler &rest body)
   "Execute BODY with a fake server which is bound to HANDLER.
 
@@ -843,11 +850,12 @@ routines."
   (declare
    (indent defun)
    (debug t))
-  `(flet ((elnode--get-server-prop (proc key)
-            (cond
-              ((eq key :elnode-http-handler)
-               ,handler))))
-     ,@body))
+  `(let ((elnode--cookie-store (make-hash-table :test 'equal)))
+     (flet ((elnode--get-server-prop (proc key)
+              (cond
+                ((eq key :elnode-http-handler)
+                 ,handler))))
+       ,@body)))
 
 (defun elnode--alist-to-query (alist)
   "Turn an alist into a formdata/query string."
@@ -888,6 +896,18 @@ module."
        ,@headers
        (body . ,http-body)))))
 
+(defun elnode--response-header-to-cookie-store (response)
+  "Add Set-Cookie headers from RESPONSE to the cookie store."
+  (let ((cookie-set (assoc "Set-Cookie" response)))
+    (when cookie-set
+      (let* ((cookie-value (car (split-string (cdr cookie-set) ";"))))
+        (apply
+         'puthash
+         (append
+          (split-string cookie-value "=")
+          (list elnode--cookie-store))))))
+    elnode--cookie-store)
+
 (defun* elnode-test-call (path
                           &key
                           (method "GET")
@@ -920,7 +940,9 @@ to external processes."
   (let (result
         (fakir-mock-process-require-specified-buffer t))
     (fakir-mock-process :httpcon ()
-      (let ((req (elnode--make-test-call path method parameters headers))
+      (let ((req (elnode--make-test-call
+                  path method parameters
+                  (append headers (kvhash->alist elnode--cookie-store))))
             (http-connection :httpcon))
         ;; Capture the real eof-func and then override it to do fake ending.
         (let ((eof-func (elnode--make-send-eof))
@@ -952,6 +974,11 @@ to external processes."
             ;; Now we sleep till the-end is true
             (while (not the-end) (sit-for 0.1))
             (when the-end
+              (elnode--response-header-to-cookie-store
+               (process-get
+                http-connection
+                :elnode-httpresponse-header))
+              ;; Add to the cookie store?
               (setq result
                     (list
                      :result-string

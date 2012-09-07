@@ -39,6 +39,7 @@
 (require 'ert)
 (require 'fakir)
 (require 'elnode)
+(require 'kv)
 
 (ert-deftest elnode-join ()
   "Test the path joining."
@@ -447,6 +448,45 @@ a=1&b=hello"
      :header-value "text/html"
      :body-match ".*<div>((\"a\" . \"1\"))</div>")))
 
+(ert-deftest elnode-test-call-cookie-store ()
+  "Test the cookie store."
+  ;; Test with empty cookie store
+  (with-elnode-mock-server
+      (lambda (httpcon)
+        (elnode-http-start
+         httpcon 200
+         '("Content-Type" . "text/html")
+         (elnode-http-cookie-make
+          "mycookie" 101
+          :expiry "Mon, Feb 27 2012 22:10:21 GMT"))
+        (elnode-http-return httpcon "<h1>HA!</h1>")) t
+    ;; Let-bind empty cookie store
+    (let ((elnode--cookie-store (make-hash-table :test 'equal)))
+      (elnode-test-call "/anything")
+      (should
+       (equal
+        (kvhash->alist elnode--cookie-store)
+        '(("mycookie" . "101"))))))
+  ;; Test merging cookie store
+  (with-elnode-mock-server
+      (lambda (httpcon)
+        (elnode-http-start
+         httpcon 200
+         '("Content-Type" . "text/html")
+         (elnode-http-cookie-make
+          "mycookie" 101
+          :expiry "Mon, Feb 27 2012 22:10:21 GMT"))
+        (elnode-http-return httpcon "<h1>HA!</h1>")) t
+    (let ((elnode--cookie-store
+           (kvalist->hash '(("a" . "1")("b" . "hello!")))))
+      (elnode-test-call "/anything")
+      (should
+       (equal
+        (kvalist-sort (kvhash->alist elnode--cookie-store) 'string-lessp)
+        '(("a" . "1")
+          ("b" . "hello!")
+          ("mycookie" . "101")))))))
+
 (ert-deftest elnode-http-header ()
   "Test that we have headers."
   (fakir-mock-process
@@ -540,6 +580,35 @@ testing code so we specifically test that they work."
     (elnode-http-cookie-make
      "mycookie" 101
      :expiry "Mon, Feb 27 2012 22:10:21 GMT"))))
+
+(ert-deftest elnode--response-header-to-cookie-store ()
+  "Test increasing the cookie store."
+  (should
+   (equal
+    (kvhash->alist
+     (let ((elnode--cookie-store (make-hash-table :test 'equal)))
+       (elnode--response-header-to-cookie-store
+        '(("Cookie" . "a=10; b=20")
+          ("Content-Type" . "text/html")
+          ("Set-Cookie"
+           . "mycookie=101; Expires=Mon, Feb 27 2012 22:10:21 GMT;")))))
+    '(("mycookie" . "101"))))
+  (should
+   (equal
+    (kvalist-sort
+     (kvhash->alist
+      (let ((elnode--cookie-store
+             (kvalist->hash '(("a" . "20")
+                              ("b" . "this is it!")))))
+        (elnode--response-header-to-cookie-store
+         '(("Cookie" . "a=10; b=20")
+           ("Content-Type" . "text/html")
+           ("Set-Cookie"
+            . "mycookie=101; Expires=Mon, Feb 27 2012 22:10:21 GMT;")))))
+     'string-lessp)
+    '(("a" . "20")
+      ("b" . "this is it!")
+      ("mycookie" . "101")))))
 
 (ert-deftest elnode-test-http-get-params ()
   "Test that the params are ok if they are on the status line.
