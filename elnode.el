@@ -959,7 +959,11 @@ to external processes."
     (fakir-mock-process :httpcon ()
       (let ((req (elnode--make-test-call
                   path method parameters
-                  (append headers (kvhash->alist elnode--cookie-store))))
+                  (append
+                   headers
+                   (let ((cookies (elnode--cookie-store-to-header-value)))
+                     (when cookies
+                       (list (cons "Cookie" cookies)))))))
             (http-connection :httpcon))
         ;; Capture the real eof-func and then override it to do fake ending.
         (let ((eof-func (elnode--make-send-eof))
