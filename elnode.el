@@ -906,7 +906,24 @@ module."
          (append
           (split-string cookie-value "=")
           (list elnode--cookie-store))))))
-    elnode--cookie-store)
+  elnode--cookie-store)
+
+(defun elnode--cookie-store-to-header-value ()
+  "Turn the current cookie store into a header.
+
+The cookies in the header are sorted alphabetically - makes
+testing easier."
+  (let ((cookie-value
+         (mapconcat
+          (lambda (cookie)
+            (format "%s=%s" (car cookie)
+                    (url-hexify-string (cdr cookie))))
+          (kvalist-sort
+           (kvhash->alist elnode--cookie-store)
+           'string-lessp)
+          "; ")))
+    (unless (equal "" cookie-value)
+      cookie-value)))
 
 (defun* elnode-test-call (path
                           &key

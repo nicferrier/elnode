@@ -610,6 +610,20 @@ testing code so we specifically test that they work."
       ("b" . "this is it!")
       ("mycookie" . "101")))))
 
+(ert-deftest elnode--cookie-store-to-header-value ()
+  (let ((elnode--cookie-store
+         (kvalist->hash
+          '(("a" . "10")
+            ("b" . "hello world!")
+            ("mycookie" . "101")))))
+    (should
+     (equal
+      (elnode--cookie-store-to-header-value)
+      "a=10; b=hello%20world!; mycookie=101")))
+  (let ((elnode--cookie-store (make-hash-table :test 'equal)))
+    (should-not
+     (elnode--cookie-store-to-header-value))))
+
 (ert-deftest elnode-test-http-get-params ()
   "Test that the params are ok if they are on the status line.
 
