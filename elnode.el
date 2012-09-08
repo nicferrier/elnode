@@ -3119,6 +3119,11 @@ Optionally use the LOGGEDIN-DB supplied.  By default this is
   (let ((record (gethash username loggedin-db)))
     (equal token (plist-get record :hash))))
 
+(defun elnode-auth-cookie-decode (cookie-value)
+  "Decode an encoded elnode auth COOKIE-VALUE."
+  (when (string-match "\\(.*\\)::\\(.*\\)" cookie-value)
+    (cons (match-string 1 cookie-value) (match-string 2 cookie-value))))
+
 (defun* elnode-auth-cookie-check-p (httpcon
                                     &key
                                     (cookie-name "elnode-auth")
@@ -3131,7 +3136,7 @@ default is is \"elnode-auth\".
 LOGGEDIN-DB can be a loggedin state database which is expected to
 be an `elnode-db'.  By default it is `elnode-loggedin-db'."
   (let ((cookie-value (elnode-http-cookie httpcon cookie-name t)))
-    (if (not (string-match "\\(.*\\)::\\(.*\\)" (or cookie-value "")))
+    (if (not (elnode-auth-cookie-decode (or cookie-value "")))
         (signal 'elnode-auth-token cookie-value)
         (let ((username (match-string 1 cookie-value))
               (token (match-string 2 cookie-value)))
