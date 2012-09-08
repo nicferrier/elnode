@@ -3145,6 +3145,7 @@ be an `elnode-db'.  By default it is `elnode-loggedin-db'."
 (defun* elnode-auth-http-login (httpcon
                                 username password logged-in
                                 &key
+                                (cookie-name "elnodeauth")
                                 (auth-db elnode-auth-db)
                                 (loggedin-db elnode-loggedin-db))
   "Log the USERNAME in on the HTTPCON if PASSWORD is correct.
@@ -3165,7 +3166,7 @@ to `elnode-auth-login'."
     (elnode-http-header-set
      httpcon
      (elnode-http-cookie-make
-      "elnodeauth"
+      cookie-name
       (format "%s::%s" username hash)
       :path logged-in))
     (elnode-send-redirect httpcon (or logged-in "/"))))
@@ -3210,6 +3211,7 @@ This function sends the contents of the custom variable
                                              sender target
                                              &key
                                              (auth-db elnode-auth-db)
+                                             (cookie-name "elnodeauth")
                                              (loggedin-db elnode-loggedin-db))
   "The implementation of the login handler for wrapping.
 
@@ -3227,6 +3229,7 @@ This receives the SENDER and the TARGET from the wrapper spec."
            (elnode-auth-http-login
             httpcon
             username password logged-in
+            :cookie-name cookie-name
             :auth-db auth-db)
          (elnode-auth-credentials
           (elnode-send-redirect
@@ -3236,14 +3239,13 @@ This receives the SENDER and the TARGET from the wrapper spec."
                (format "%s?redirect=%s" target logged-in)))))))))
 
 (defun elnode--auth-wrapping-sender (httpcon sender target &optional args)
-  "The function that wraps the target."
-  (if args
-      (elnode-auth--wrapping-login-handler
-       httpcon sender target
-       :auth-db (car args))
-      ;; Else normal call
-      (elnode-auth--wrapping-login-handler
-       httpcon sender target)))
+  "Send the wrap call."
+  (destructuring-bind (&key (auth-db elnode-auth-db)
+                            (cookie-name "elnodeauth")) args
+    (elnode-auth--wrapping-login-handler
+     httpcon sender target
+     :auth-db auth-db
+     :cookie-name cookie-name)))
 
 (defun* elnode-auth-make-login-wrapper (wrap-target
                                          &key
@@ -3290,7 +3292,10 @@ being the symbol `:elnode-wrapper-spec'."
   (make-hash-table :test 'equal)
   "The hash of defined authentication schemes.")
 
-(defun elnode--auth-define-scheme-do-wrap (wrapper-spec auth-db)
+(defun* elnode--auth-define-scheme-do-wrap (wrapper-spec
+                                            &key
+                                            (auth-db elnode-auth-db)
+                                            (cookie-name "elnodeauth"))
   "Setup the auth wrapping.
 
 WRAPPER-SPEC was specified by the author of the auth declaration
@@ -3298,7 +3303,7 @@ when defining the wrapper.
 
 The WRAPPER-SPEC is used to setup the wrapping.
 
-The AUTH-DB is passed to the wrapper as `args'."
+The AUTH-DB and the COOKIE-NAME are passed to the wrapper."
   (flet ((wrapper (wrapped-target ; define a func over the wrapper-spec
                    wrapping-func
                    &optional (path "/login/"))
@@ -3306,10 +3311,8 @@ The AUTH-DB is passed to the wrapper as `args'."
             wrapped-target
             path
             wrapping-func
-            ;; FIXME - Think we need more info here - how to pull
-            ;; token out of complex structure stored here (like a hash
-            ;; or an alist)
-            auth-db)))
+            :auth-db auth-db
+            :cookie-name cookie-name)))
     (apply 'wrapper wrapper-spec)))
 
 (defmacro* elnode-auth-define-scheme (scheme-name
@@ -3353,13 +3356,15 @@ should indicate a path where a user can login, for example
   (let ((redirect-specv (make-symbol "redirectv"))
         (scheme-namev (make-symbol "scheme-namev"))
         (auth-schemev (make-symbol "auth-schemev"))
+        (cookie-namev (make-symbol "cookie-namev"))
         (auth-dbv (make-symbol "auth-dbv")))
     `(let* ((,scheme-namev ,scheme-name)
+            (,cookie-namev ,cookie-name)
             (,auth-dbv ,auth-db)
             (,redirect-specv ,redirect)
             (,auth-schemev
              (list :test ,test
-                   :cookie-name ,cookie-name
+                   :cookie-name ,cookie-namev
                    :failure-type ,failure-type
                    :redirect ,redirect-specv)))
        ;; Do some type checking
@@ -3368,7 +3373,8 @@ should indicate a path where a user can login, for example
                (eq :elnode-wrapper-spec (car ,redirect-specv)))
           (elnode--auth-define-scheme-do-wrap
            (cdr ,redirect-specv)
-           ,auth-dbv))
+           :auth-db ,auth-dbv
+           :cookie-name ,cookie-namev))
          ((not (stringp ,redirect-specv))
           (error ":REDIRECT must be a string or a wrapper specification")))
        ;; Now just add the scheme to the list of defined schemes
