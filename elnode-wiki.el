@@ -253,7 +253,7 @@ Emacs."
       (with-stdout-to-elnode httpcon
           (let ((page-info (or pageinfo (elnode-http-pathinfo httpcon)))
                 (header elnode-wikiserver-body-header)
-                (footer (elnode-auth-if httpcon 'elnode-wiki-auth
+                (footer (if-elnode-auth httpcon 'elnode-wiki-auth
                           elnode-wikiserver-body-footer
                           elnode-wikiserver-body-footer-not-loggedin)))
             (creole-wiki
@@ -311,7 +311,7 @@ Update operations are protected by authentication."
            (elnode-wiki-page httpcon (concat wikiroot "/index.creole"))
            (elnode-wiki-page httpcon target-path))))
     (POST
-     (elnode-with-auth httpcon 'elnode-wiki-auth
+     (with-elnode-auth httpcon 'elnode-wiki-auth
        (let* ((path (elnode-http-pathinfo httpcon))
               (text (elnode-wiki--text-param httpcon)))
          (if (not (elnode-http-param httpcon "preview"))

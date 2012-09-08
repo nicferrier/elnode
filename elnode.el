@@ -3382,7 +3382,7 @@ should indicate a path where a user can login, for example
                 ,auth-schemev
                 elnode--defined-authentication-schemes))))
 
-(defmacro elnode-auth-if (httpcon scheme consequent &rest else)
+(defmacro if-elnode-auth (httpcon scheme consequent &rest else)
   "Check the HTTPCON for SCHEME auth and eval CONSEQUENT.
 
 If the auth fails then evaluate ELSE instead."
@@ -3408,7 +3408,7 @@ If the auth fails then evaluate ELSE instead."
            ;; Not a cookie test - not sure what to do...
            (message "ELNODE AUTH IF - NOT COOKIE!")))))
 
-(defmacro elnode-with-auth (httpcon scheme &rest body)
+(defmacro with-elnode-auth (httpcon scheme &rest body)
   "Protect code with authentication using HTTPCON and SCHEME.
 
 This macro protects code in a handler with a check for an
@@ -3420,7 +3420,7 @@ SCHEME is the authentication scheme to use as defined by
 `elnode-auth-define-scheme'."
   (let ((httpconv (make-symbol "httpconv")))
     `(let ((,httpconv ,httpcon))
-       (elnode-auth-if ,httpconv ,scheme
+       (if-elnode-auth ,httpconv ,scheme
          ,@body
          (let ((to
                 (cond

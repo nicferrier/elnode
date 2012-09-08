@@ -1300,7 +1300,7 @@ so we test it deliberately here."
   (declare (debug (&rest form)))
   `(flet
        ((auth-reqd-handler (httpcon)
-          (elnode-with-auth httpcon 'test-auth
+          (with-elnode-auth httpcon 'test-auth
             (elnode-dispatcher
              httpcon
              '(("^/someplace/.*" .
