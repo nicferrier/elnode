@@ -3382,10 +3382,10 @@ should indicate a path where a user can login, for example
                 ,auth-schemev
                 elnode--defined-authentication-schemes))))
 
-(defmacro if-elnode-auth (httpcon scheme consequent &rest else)
-  "Check the HTTPCON for SCHEME auth and eval CONSEQUENT.
+(defmacro if-elnode-auth (httpcon scheme authd &rest anonymous)
+  "Check the HTTPCON for SCHEME auth and eval AUTHD.
 
-If the auth fails then evaluate ELSE instead."
+If the auth fails then evaluate ANONYMOUS instead."
   (declare
    (debug (sexp sexp sexp &rest form))
    (indent defun))
@@ -3401,10 +3401,10 @@ If the auth fails then evaluate ELSE instead."
                        ,httpconv
                        :cookie-name (plist-get scheme-list :cookie-name))))
                  ;; Do whatever the code was now.
-                 ,consequent)
+                 ,authd)
              ;; On auth failure do the ELSE
              (elnode-auth-token
-              (progn ,@else)))
+              (progn ,@anonymous)))
            ;; Not a cookie test - not sure what to do...
            (message "ELNODE AUTH IF - NOT COOKIE!")))))
 

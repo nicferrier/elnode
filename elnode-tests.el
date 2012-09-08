@@ -1276,24 +1276,18 @@ so we test it deliberately here."
            (should (equal wrap-target 'blah))
            (should (equal path "/doit/"))))
     (elnode--auth-define-scheme-do-wrap
-     (list
-      'blah
-      (lambda (httpcon)
-        (elnode-send-500 httpcon))
-      "/doit/")
-     ;; Use an empty db
-     nil))
+     (list 'blah
+           (lambda (httpcon)
+             (elnode-send-500 httpcon))
+           "/doit/")))
   ;; Now with the default path
   (flet ((elnode--wrap-handler (wrap-target path wrapping-func &rest args)
            (should (equal wrap-target 'blah))
            (should (equal path "/login/"))))
     (elnode--auth-define-scheme-do-wrap
-     (list
-      'blah
-      (lambda (httpcon)
-        (elnode-send-500 httpcon)))
-     ;; Use an empty db
-     nil)))
+     (list 'blah
+           (lambda (httpcon)
+             (elnode-send-500 httpcon))))))
 
 (defmacro elnode-auth-flets (&rest body)
   "Wrap the BODY with some standard handler flets."
