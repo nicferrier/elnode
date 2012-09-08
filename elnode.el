@@ -1024,6 +1024,7 @@ to external processes."
                                 status-code
                                 header-name
                                 header-value
+                                header-list
                                 body-match)
   "Assert on the supplied RESPONSE.
 
@@ -1039,18 +1040,28 @@ the header and that it's value is the same as the HEADER-VALUE.
 If HEADER-VALUE is `nil' then we assert that the HEADER-NAME is
 NOT present.
 
+If HEADER-LIST is present then we assert that all those headers
+are present and `equal' to the value.
+
 If BODY-MATCH is present then it is a regex used to match the
 whole body of the RESPONSE."
   (when status-code
     (should (equal status-code (plist-get response :status))))
-  (when header-name
+  (when (or header-name header-list)
     (let ((hdr (plist-get response :header)))
-      (if header-value
-          (should (equal
-                   header-value
-                   (assoc-default header-name hdr)))
-          ;; Else we want to ensure the header isn't there
-          (should (eq nil (assoc header-name hdr))))))
+      (when header-name
+        (if header-value
+            (should (equal
+                     header-value
+                     (assoc-default header-name hdr)))
+            ;; Else we want to ensure the header isn't there
+            (should (eq nil (assoc-default header-name hdr)))))
+      (when header-list
+        (loop for reqd-hdr in header-list
+           do (should
+               (equal
+                (assoc-default (car reqd-hdr) hdr)
+                (cdr reqd-hdr)))))))
   (when body-match
     (should-match body-match (plist-get response :result-string))))
 

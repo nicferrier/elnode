@@ -373,7 +373,10 @@ Especially tests the mix of header setting techniques."
   "A simple handler for testing `elnode-test-call'.
 
 The text spat out is tested, so is the status."
-  (elnode-http-start httpcon 200 '("Content-Type" . "text/html"))
+  (elnode-http-start
+   httpcon 200
+   '("Content-Type" . "text/html")
+   '("User-Agent" . "elnode-test"))
   (let ((params (elnode-http-params httpcon)))
     (elnode-http-return
      httpcon
@@ -438,6 +441,15 @@ a=1&b=hello"
      :header-name "Content-Type"
      :header-value "text/html"
      :body-match ".*<h1>Hello World</h1>")
+    ;; Success with multiple headders
+    (should-elnode-response
+     (elnode-test-call "/test/test.something"
+                       :method "POST"
+                       :parameters '(("a" . 1)))
+     :status-code 200
+     :header-list '(("Content-Type" . "text/html")
+                    ("User-Agent" . "elnode-test"))
+     :body-match ".*<div>((\"a\" . \"1\"))</div>")
     ;; With params
     (should-elnode-response
      (elnode-test-call "/test/test.something"
