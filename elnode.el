@@ -1025,6 +1025,7 @@ to external processes."
                                 header-name
                                 header-value
                                 header-list
+                                header-list-match
                                 body-match)
   "Assert on the supplied RESPONSE.
 
@@ -1043,11 +1044,14 @@ NOT present.
 If HEADER-LIST is present then we assert that all those headers
 are present and `equal' to the value.
 
+If HEADER-LIST-MATCH is present then we assert that all those
+headers are present and `equal' to the value.
+
 If BODY-MATCH is present then it is a regex used to match the
 whole body of the RESPONSE."
   (when status-code
     (should (equal status-code (plist-get response :status))))
-  (when (or header-name header-list)
+  (when (or header-name header-list header-list-match)
     (let ((hdr (plist-get response :header)))
       (when header-name
         (if header-value
@@ -1061,9 +1065,16 @@ whole body of the RESPONSE."
            do (should
                (equal
                 (assoc-default (car reqd-hdr) hdr)
-                (cdr reqd-hdr)))))))
+                (cdr reqd-hdr)))))
+      (when header-list-match
+        (loop for reqd-hdr in header-list-match
+           do (should
+               (>=
+                (string-match
+                 (cdr reqd-hdr)
+                 (assoc-default (car reqd-hdr) hdr)) 0)))))
   (when body-match
-    (should-match body-match (plist-get response :result-string))))
+    (should-match body-match (plist-get response :result-string)))))
 
 
 (defun elnode--log-fn (server con msg)

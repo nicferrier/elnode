@@ -441,7 +441,7 @@ a=1&b=hello"
      :header-name "Content-Type"
      :header-value "text/html"
      :body-match ".*<h1>Hello World</h1>")
-    ;; Success with multiple headders
+    ;; Success with multiple headers
     (should-elnode-response
      (elnode-test-call "/test/test.something"
                        :method "POST"
@@ -449,6 +449,15 @@ a=1&b=hello"
      :status-code 200
      :header-list '(("Content-Type" . "text/html")
                     ("User-Agent" . "elnode-test"))
+     :body-match ".*<div>((\"a\" . \"1\"))</div>")
+    ;; Success with multiple header regexes
+    (should-elnode-response
+     (elnode-test-call "/test/test.something"
+                       :method "POST"
+                       :parameters '(("a" . 1)))
+     :status-code 200
+     :header-list-match '(("Content-Type" . "text/html")
+                          ("User-Agent" . "elnode-.*"))
      :body-match ".*<div>((\"a\" . \"1\"))</div>")
     ;; With params
     (should-elnode-response
