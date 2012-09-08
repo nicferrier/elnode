@@ -1261,45 +1261,39 @@ currently supported conversions are:
       (t
        val))))
 
+(defun elnode-http-cookies (httpcon)
+  "Return the list of cookies attached to this HTTPCON.
+
+The list of cookies is an alist."
+  (or
+   (process-get httpcon :elnode-http-cookie-list)
+   (let* ((cookie-hdr (elnode-http-header httpcon "Cookie"))
+          (lst (when cookie-hdr
+                 (kvalist-sort
+                  (mapcar
+                   (lambda (pair)
+                     (cons
+                      (url-unhex-string (car pair))
+                      (url-unhex-string (cdr pair))))
+                   (url-parse-args cookie-hdr))
+                  'string-lessp))))
+     (process-put httpcon :elnode-http-cookie-list lst)
+     lst)))
 
 (defun elnode-http-cookie (httpcon name &optional cookie-key)
   "Return the cookie value for HTTPCON specified by NAME.
 
-The cookie is an association list where one of the elements is
-the named property; for example:
+The cookie is a cons:
 
-  (elnode-http-cookie httpcon \"my-cookie\")
-  => '((\"my-cookie\" . \"value\")
-       (\"expires\" . \"Tue 4 Feb 2012 09:15:00\"))
+  name . value
 
-The other pairs in the association list are the other properties
-of the cookie.
-
-Using COOKIE-KEY you can specify a key to `assoc' on the
-resulting cookie.  If COOKIE-KEY is `t' then the NAME is used."
-  (let ((cookie-list
-         (or
-          (process-get httpcon :elnode-http-cookie-list)
-          ;; Split out the cookies
-          (let* ((cookie-hdr (elnode-http-header httpcon "Cookie"))
-                 (parts (split-string (or cookie-hdr "") ";")))
-            (let ((lst
-                   (mapcar
-                    (lambda (s)
-                      (url-parse-args
-                       (if (string-match "[ \t]*\\(.*\\)[ \t]*$" s)
-                           (replace-match "\\1" nil nil s)
-                           s)))
-                    parts)))
-              (process-put httpcon :elnode-http-cookie-list lst)
-              lst)))))
-    (loop for cookie in cookie-list
-       do (if (assoc-string name cookie)
-              (if cookie-key
-                  (if (eq cookie-key t)
-                      (return (cdr (assoc name cookie)))
-                      (return (cdr (assoc cookie-key cookie))))
-                  (return cookie))))))
+If COOKIE-KEY is `t' then only the value is returned, else the
+cons is returned."
+  (let* ((cookie-list (elnode-http-cookies httpcon))
+         (cookie (assoc-string name cookie-list)))
+    (if cookie-key
+        (cdr cookie)
+        cookie)))
 
 
 (defun elnode--http-parse-status (httpcon &optional property)
@@ -3114,11 +3108,7 @@ default is is \"elnode-auth\".
 
 LOGGEDIN-DB can be a loggedin state database which is expected to
 be an `elnode-db'.  By default it is `elnode-loggedin-db'."
-  (let ((cookie-value
-         (cdr-safe
-          (assoc-string
-           cookie-name
-           (elnode-http-cookie httpcon cookie-name)))))
+  (let ((cookie-value (elnode-http-cookie httpcon cookie-name t)))
     (if (not (string-match "\\(.*\\)::\\(.*\\)" (or cookie-value "")))
         (signal 'elnode-auth-token cookie-value)
         (let ((username (match-string 1 cookie-value))
@@ -3219,6 +3209,7 @@ This receives the SENDER and the TARGET from the wrapper spec."
                (format "%s?redirect=%s" target logged-in)))))))))
 
 (defun elnode--auth-wrapping-sender (httpcon sender target &optional args)
+  "The function that wraps the target."
   (if args
       (elnode-auth--wrapping-login-handler
        httpcon sender target
@@ -3288,6 +3279,9 @@ The AUTH-DB is passed to the wrapper as `args'."
             wrapped-target
             path
             wrapping-func
+            ;; FIXME - Think we need more info here - how to pull
+            ;; token out of complex structure stored here (like a hash
+            ;; or an alist)
             auth-db)))
     (apply 'wrapper wrapper-spec)))
 

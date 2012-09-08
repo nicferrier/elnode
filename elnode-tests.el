@@ -521,30 +521,43 @@ a=1&b=hello"
      (equal "Mon, Feb 27 2012 22:10:21 GMT"
             (elnode-http-header :httpcon 'if-modified-since)))))
 
+(ert-deftest elnode-test-cookies ()
+  "Test that we can get all the cookies."
+  (fakir-mock-process :httpcon
+      ((:elnode-http-header
+        '(("Cookie" . "csrf=213u2132%20321412nsfnwlv; username=nicferrier"))))
+    (should
+     (equal
+      (elnode-http-cookies :httpcon)
+      '(("csrf" . "213u2132 321412nsfnwlv")
+        ("username" . "nicferrier")))))
+  ;; Now with empty header
+  (fakir-mock-process :httpcon
+      ((:elnode-http-header
+        '(("Content-type" . "text/xml"))))
+    (should-not
+     (elnode-http-cookies :httpcon))))
+
 (ert-deftest elnode-test-cookie ()
   "Test the cookie retrieval"
   ;; First test no cookie header
-  (fakir-mock-process
-    :httpcon
-    ((:elnode-http-header
-      '(("Referer" . "http://somehost.example/com"))))
+  (fakir-mock-process :httpcon
+      ((:elnode-http-header
+        '(("Referer" . "http://somehost.example/com"))))
     (should-not
      (elnode-http-cookie :httpcon "username")))
   ;; Now do we have a cookie?
-  (fakir-mock-process
-    :httpcon
-    ((:elnode-http-header
-      '(("Cookie" . "csrf=213u21321321412nsfnwlv; username=nicferrier"))))
+  (fakir-mock-process :httpcon
+      ((:elnode-http-header
+        '(("Cookie" . "csrf=213u21321321412nsfnwlv; username=nicferrier"))))
     (should
      (equal
-      "((\"username\" . \"nicferrier\"))\n"
-      (pp-to-string (elnode-http-cookie :httpcon "username"))))
+      (elnode-http-cookie :httpcon "username")
+      '("username" . "nicferrier")))
     (should
      (equal
       "nicferrier"
-      (cdr (assoc-string
-            "username"
-            (elnode-http-cookie :httpcon "username")))))))
+      (elnode-http-cookie :httpcon "username" t)))))
 
 (ert-deftest elnode-test-cookie-list ()
   "Test that a cookie list property is set on the connection.
@@ -563,12 +576,12 @@ testing code so we specifically test that they work."
   (fakir-mock-process
     :httpcon
     ((:elnode-http-header
-      '(("Cookie" . "name=value"))))
+      '(("Cookie" . "name=value; other=hello%20world"))))
     (elnode-http-cookie :httpcon "name")
     (should
      (equal
-      ;; ... is this really right? a list of a list of a list???
-      '((("name" . "value")))
+      '(("name" . "value")
+        ("other" . "hello world"))
       (process-get :httpcon :elnode-http-cookie-list)))))
 
 (ert-deftest elnode-http-cookie-make ()
@@ -1204,21 +1217,19 @@ authenticated."
                                  ("someuser" "secret")))
     ;; Now test
     (let ((hash (elnode-auth-login "nferrier" "password")))
-      (fakir-mock-process
-	:httpcon
-	((:elnode-http-header
-	  `(("Cookie" . ,(concat "elnode-auth=nferrier::" hash)))))
-	(should (elnode-auth-cookie-check-p :httpcon))))
+      (fakir-mock-process :httpcon
+          ((:elnode-http-header
+            `(("Cookie" . ,(concat "elnode-auth=nferrier::" hash)))))
+        (should (elnode-auth-cookie-check-p :httpcon))))
     ;; Test what happens without a cookie
     (let ((hash (elnode-auth-login "nferrier" "password")))
-      (fakir-mock-process
-	:httpcon
-	((:elnode-http-header
-	  `(("Referer" . "http://somehost.example.com"))))
-	(should-not
-	 (condition-case token
-	     (elnode-auth-cookie-check-p :httpcon)
-	   (elnode-auth-token (cdr token))))))))
+      (fakir-mock-process :httpcon
+          ((:elnode-http-header
+            `(("Referer" . "http://somehost.example.com"))))
+        (should-not
+         (condition-case token
+             (elnode-auth-cookie-check-p :httpcon)
+           (elnode-auth-token (cdr token))))))))
 
 (ert-deftest elnode-auth-login-sender ()
   "Low levelish test of the login page sender."
