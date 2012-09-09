@@ -3168,7 +3168,7 @@ to `elnode-auth-login'."
      (elnode-http-cookie-make
       cookie-name
       (format "%s::%s" username hash)
-      :path logged-in))
+      :path "/"))
     (elnode-send-redirect httpcon (or logged-in "/"))))
 
 (defcustom elnode-auth-login-page "<html>
