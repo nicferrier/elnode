@@ -810,11 +810,8 @@ Content-Type: text/html\r
           (elnode-send-json httpcon (list "a string in a list")))
          sent-data))))))
 
-(ert-deftest elnode--buffer-template ()
-  "Test the buffer templating."
-  (let ((result
-         (with-temp-buffer
-           (insert "<!doctype html>
+(defconst elnode--buffer-template-example
+  "<!doctype html>
 <head>
   <meta charset='utf-8'>
   <meta http-equiv='X-UA-Compatible' content='IE=edge,chrome=1'>
@@ -824,22 +821,33 @@ Content-Type: text/html\r
   <link rel='stylesheet' href='/talk/stuff/css/basic.css'/>
 </head>
 <body>
-    <div id='header'>
-        <ul>
-            <li><a href='javascript:;'>talk to a friend</a></li>
-            <li><a href='/about/'>about</a></li>
-            <li><a href='/blog/'>blog</a></li>
-        </ul>
-        <!##E name-html E##!>
-    </div>
+  <a href='<!##E username E##!>'><!##E username E##!></a>
+  <div id='header'>
+    <ul>
+      <li><a href='javascript:;'>talk to a friend</a></li>
+      <li><a href='/about/'>about</a></li>
+      <li><a href='/blog/'>blog</a></li>
+    </ul>
+    <!##E name-html E##!>
+  </div>
 </body>
-</html>")
+</html>"
+  "Example template source for `elnode--buffer-template' tests.")
+
+(ert-deftest elnode--buffer-template ()
+  "Test the buffer templating."
+  (let ((result
+         (with-temp-buffer
+           (insert elnode--buffer-template-example)
            (elnode--buffer-template
             (current-buffer)
             '(("title" . "My webpage")
+              ("username" . "nicferrier")
               ("name-html" . "<div>you are talking to Caroline</div>"))))))
     (should
      (string-match ".*<title>My webpage</title>.*" result))
+    (should
+     (string-match ".*<a href='nicferrier'>nicferrier</a>.*" result))
     (should
      (string-match ".*<div>you are talking to Caroline</div>.*" result))))
 
