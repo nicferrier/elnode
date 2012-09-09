@@ -89,11 +89,26 @@ Return the VALUE as it has been put into the DB."
 
 QUERY, if specified, should be a list of query terms.
 
-FUNC should take whatever record the DB produces.  This
-specification makes no recommendations about that."
-  ;; The query should be implemented here, around the func
-  (funcall (plist-get db :map) func db query))
+FUNC should take 2 arguments:
 
+  KEY DB-VALUE
+
+where the DB-VALUE is whatever the DB has attached to the
+specified KEY.
+
+This returns an alist of the KEY and the value the function
+returned."
+  ;; The query should be implemented here, around the func
+  (let ((retlist nil))
+    (funcall (plist-get db :map)
+             (lambda (key value)
+               (when key
+                 (setq retlist
+                       (append
+                        (list (cons key (funcall func key value)))
+                        retlist))))
+             db query)
+    retlist))
 
 (defun elnode-db-hash (reference)
   "Make a db-hash database.
