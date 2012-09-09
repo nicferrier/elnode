@@ -3418,6 +3418,7 @@ login page.
 
 SCHEME is the authentication scheme to use as defined by
 `elnode-auth-define-scheme'."
+  (declare (debug (sexp sexp &rest form)))
   (let ((httpconv (make-symbol "httpconv")))
     `(let ((,httpconv ,httpcon))
        (if-elnode-auth ,httpconv ,scheme
