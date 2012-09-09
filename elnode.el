@@ -3388,7 +3388,7 @@ should indicate a path where a user can login, for example
 If the auth fails then evaluate ANONYMOUS instead."
   (declare
    (debug (sexp sexp sexp &rest form))
-   (indent defun))
+   (indent 2))
   (let ((httpconv (make-symbol "httpconv")))
     `(let ((,httpconv ,httpcon)
            (scheme-list
