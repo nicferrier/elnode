@@ -2541,7 +2541,7 @@ Write code like this:
    (evenmorecode)))"
   (declare
    (debug (sexp &rest (sexp &rest form)))
-   (indent defun))
+   (indent 1))
   (let* ((var (make-symbol "v"))
          (conv (make-symbol "con")))
      `(let* ((,conv ,httpcon)
