@@ -1072,9 +1072,9 @@ whole body of the RESPONSE."
                (>=
                 (string-match
                  (cdr reqd-hdr)
-                 (assoc-default (car reqd-hdr) hdr)) 0)))))
+                 (assoc-default (car reqd-hdr) hdr)) 0))))))
   (when body-match
-    (should-match body-match (plist-get response :result-string)))))
+    (should-match body-match (plist-get response :result-string))))
 
 
 (defun elnode--log-fn (server con msg)
