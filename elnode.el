@@ -848,7 +848,7 @@ The test call with be passed to the
 `elnode-hostpath-default-handler' via the normal HTTP parsing
 routines."
   (declare
-   (indent defun)
+   (indent 1)
    (debug t))
   `(let ((elnode--cookie-store (make-hash-table :test 'equal)))
      (flet ((elnode--get-server-prop (proc key)
