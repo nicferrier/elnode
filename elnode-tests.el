@@ -1274,28 +1274,39 @@ authenticated."
                "<input type='hidden' name='redirect' value='/myapp/loggedin'/>"
                nil 't)))))
 
-(ert-deftest elnode--auth-define-scheme-do-wrap ()
-  "Test wrapper destructuring.
+;; (ert-deftest elnode--auth-define-scheme-do-wrap ()
+;;   "Test wrapper destructuring.
 
-The function under test uses some slightly exotic destructuring
-so we test it deliberately here."
-  ;; First, test with a specified path
-  (flet ((elnode--wrap-handler (wrap-target path wrapping-func &rest args)
-           (should (equal wrap-target 'blah))
-           (should (equal path "/doit/"))))
-    (elnode--auth-define-scheme-do-wrap
-     (list 'blah
-           (lambda (httpcon)
-             (elnode-send-500 httpcon))
-           "/doit/")))
-  ;; Now with the default path
-  (flet ((elnode--wrap-handler (wrap-target path wrapping-func &rest args)
-           (should (equal wrap-target 'blah))
-           (should (equal path "/login/"))))
-    (elnode--auth-define-scheme-do-wrap
-     (list 'blah
-           (lambda (httpcon)
-             (elnode-send-500 httpcon))))))
+;; The function under test uses some slightly exotic destructuring
+;; so we test it deliberately here."
+;;   ;; First, test with a specified path
+;;   (flet ((elnode--wrap-handler (wrap-target path wrapping-func &rest args)
+;;            (should (equal wrap-target 'blah))
+;;            (should (equal path "/doit/"))))
+;;     (elnode--auth-define-scheme-do-wrap
+;;      (list 'blah
+;;            (lambda (httpcon)
+;;              (elnode-send-500 httpcon))
+;;            "/doit/")))
+;;   ;; Now with the default path
+;;   (flet ((elnode--wrap-handler (wrap-target path wrapping-func &rest args)
+;;            (should (equal wrap-target 'blah))
+;;            (should (equal path "/login/"))))
+;;     (elnode--auth-define-scheme-do-wrap
+;;      (list 'blah
+;;            (lambda (httpcon)
+;;              (elnode-send-500 httpcon))))))
+
+;; this is the thing I did to test the new let-elnode-handlers macro
+
+;; (let-handlers
+;;  ((my-handler-4 (httpcon)
+;;      (elnode-send-html httpcon "<P>hello!</P>"))
+;;   (my-handler-5 (httpcon)
+;;      (elnode-send-html httpcon "<P>Goodbye!</P>")))
+;;  (symbol-plist 'my-handler-4)
+;;  )
+
 
 (defmacro elnode-auth-flets (&rest body)
   "Wrap the BODY with some standard handler flets."
