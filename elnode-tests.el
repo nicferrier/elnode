@@ -1311,7 +1311,7 @@ authenticated."
 (defmacro elnode-auth-flets (&rest body)
   "Wrap the BODY with some standard handler flets."
   (declare (debug (&rest form)))
-  `(flet
+  `(let-elnode-handlers
        ((auth-reqd-handler (httpcon)
           (with-elnode-auth httpcon 'test-auth
             (elnode-dispatcher

@@ -1119,7 +1119,7 @@ Example:
   (defun nic-server (httpcon)
     (elnode-http-start httpcon 200 '((\"Content-Type: text/html\")))
     (elnode-http-return httpcon \"<html><b>BIG!</b></html>\")
-  )
+x  )
   (elnode-start 'nic-server)
 
 Now visit http://127.0.0.1:8000
@@ -2920,67 +2920,147 @@ HTTPCON is the HTTP connection to the user agent."
 
 ;;; Elnode wrapper stuff
 
-(defun elnode--wrap-implementation (httpcon
-                                    wrapping-path
-                                    wrapping-handler
-                                    args
-                                    current-handler)
-  "A handler to dispatch to wrappers."
-  (elnode-dispatcher
-   httpcon
-   (list (cons wrapping-path
-               (lambda (httpcon)
-                 (funcall wrapping-handler httpcon args))))
-   current-handler))
+(defun elnode--wrapper-make-handler-chain (base wrapper-list)
+  "Makes a chain of handlers doing WRAPPER-LIST ending in BASE.
 
-(defun elnode--wrap-handler (handler-symbol
-                             wrapping-path
-                             wrapping-handler
-                             &rest args)
-  "Wrap the handler attached to HANDLER-SYMBOL with another handler.
+Any optional arguments attached to each wrapper are passed to the
+wrapper when it is called.
 
-The WRAPPING-PATH is mapped to the WRAPPING-HANDLER before the
-wrapped handler is called.  The WRAPPING-PATH is a non-hostpath
-path.  It does not match the hostname, so just a path match is
-necessary, such as \"^/\" for a root match.
+The top most handler is returned."
+  (let ((next-handler base))
+    (loop for wrapper-spec in (reverse wrapper-list)
+       do
+         (destructuring-bind
+               (handler-name path-handler match-path &rest args) wrapper-spec
+           (let ((next next-handler))
+             (setq next-handler
+                   (lambda (httpcon)
+                     (elnode-dispatcher
+                      httpcon
+                      (list (cons
+                             match-path
+                             (lambda (httpcon)
+                               (if args
+                                   (funcall path-handler httpcon args)
+                                   (funcall path-handler httpcon)))))
+                      next))))))
+    next-handler))
 
-A single WRAPPING-PATH may only wrap a handler once.  Any
-subsequent attempt to wrap the same HANDLER-SYMBOL with the same
-WRAPPING-PATH will result in reinitialization.  This is designed
-to be consistent with Lisp evaluation semantics.
+(defmacro define-elnode-handler (name arglist &rest body)
+  "Define an Elnode handler function.
 
-If ARGS is specified it is bound with the wrapper such that the
-WRAPPING-HANDLER is called like:
+This is just like `defun' but it allows Elnode handlers to be
+wrapped by other HTTP implementations."
+  (declare (debug (sexp sexp &rest form))
+           (indent defun))
+  (let ((procv (make-symbol "procv"))
+        (namev (make-symbol "namev")))
+    `(let ((,namev (quote ,name))
+           (,procv (lambda ,arglist
+                     ,@body)))
+       ;; Store the base function on a property on the symbol
+       (put ,namev '__elnode_wrapper_base ,procv)
+       (if (get ,namev '__elnode_wrapper_list)
+           (fset ,namev
+                 (elnode--wrapper-make-handler-chain
+                  ,procv
+                  (kvalist->values (get ,namev '__elnode_wrapper_list))))
+           (fset ,namev ,procv)))))
 
-  (wrapping-handler httpcon args)
+(defmacro let-elnode-handlers (handlers &rest body)
+  (let ((fbinds ; capture the name, the function and the current sym-plist
+         (loop for bind in handlers
+            collect
+              (destructuring-bind (name args &rest body) bind
+                `(,name
+                  (lambda ,args ,@body)
+                  ,(copy-list (symbol-plist name)))))))
+    `(unwind-protect
+          (progn
+            (loop for fbind in (quote ,fbinds)
+               do
+                 (destructuring-bind (name proc plist) fbind
+                   ;; We're not saving anything - we need to??
+                   (put name '__elnode_wrapper_base proc)
+                   (if (get name '__elnode_wrapper_list)
+                       (fset name
+                             (elnode--wrapper-make-handler-chain
+                              name
+                              (kvalist->values
+                               (get name '__elnode_wrapper_list))))
+                       (fset name proc))))
+            ,@body)
+       ;; Put everything back the way it was
+       (loop for fbind in (quote ,fbinds)
+            do
+            (destructuring-bind (name proc plist) fbind
+              (fset name proc)
+              (setplist name plist))))))
 
-Therefore the ARGS are a way of binding state at the time of
-wrapping which will apply later at the time of the wrapped call.
+(defun elnode-set-wrapper (to-wrap match-handle path-match &rest args)
+  "Add or set a wrapper on TO-WRAP.
 
-Returns the wrapping specification which is exactly the same as
-the argument list."
-  (let* ((sym-path (intern wrapping-path))
-         (wrapped-func (get handler-symbol sym-path))
-         (current-handler (if (and
-                               wrapped-func
-                               (functionp wrapped-func))
-                              wrapped-func
-                              (symbol-function handler-symbol))))
-    ;; Store the current handler which is the wrapped func
-    (put handler-symbol sym-path current-handler)
-    ;; Set the function for the symbol to one wrapping the func
-    (fset handler-symbol
-          (lambda (httpcon)
-            (elnode--wrap-implementation
-             httpcon
-             wrapping-path
-             wrapping-handler
-             args
-             current-handler)))
-    (list handler-symbol wrapping-path wrapping-handler args)))
+Wrappers are a way of declaratively adding extra HTTP path
+handling to a handler.  For example, adding an authentication
+page /login/ to an existing handler.  Wrappers are an advanced
+feature, mainly useful only to Elnode library code (such as the
+Elnode authentication system)
+
+TO-WRAP is the function to be wrapped.  It must be a function
+defined by `define-elnode-handler', an error is raised if it is
+not.  TO-WRAP's function is altered to be the new chain of
+handlers.
+
+MATCH-HANDLE is the Elnode handler function that will be mapped
+to the added path mapping.  In the authentication example this
+might serve a username/password HTML FORM page on HTTP GET and
+process logins on HTTP POST.  MATCH-HANDLE should be a normal
+Elnode handler, accepting an HTTPCON as it's argument.
+Optionally MATCH-HANDLE may accept an ARGS argument which is a
+collection of any other arguments that were used to create the
+wrapper.
+
+PATH-MATCH is the extra path to be mapped.  In the authentication
+example this might be \"/login/\".  PATH-MATCH can only be a
+path, never a host-path mapping specification.  See
+`elnode-dispatcher' for more details.
+
+ARGS is an optional final part to the wrapper specification.  If
+ARGS exist they are passed to the MATCH-HANDLE as an additional
+argument when it is called.
+
+The wrappers are stored against the TO-WRAP by PATH-MATCH so that
+we can have multiple wrapper reasons, for example two different
+authentication mechanisms (using two different PATH-MATCH).
+Re-setting the same PATH-MATCH will replace the MATCH-HANDLER for
+that PATH-MATCH.
+
+TO-WRAP must be a function defined by `define-elnode-handler', an
+error is raised if it is not.  TO-WRAP's function is altered to
+be the new chain of handlers."
+  (unless (functionp (get to-wrap '__elnode_wrapper_base))
+    (error (format
+            "Elnode cannot set a wrapper for %s on %s"
+            path-match
+            (symbol-name to-wrap))))
+  (let ((wrapper-spec `(,to-wrap ,match-handle ,path-match . ,args))
+        (path-sym (intern path-match)))
+    (let* ((wrapper-list (get to-wrap '__elnode_wrapper_list))
+           (wrapper (assoc path-sym wrapper-list)))
+      ;; Setup the wrapper list correctly on the to-wrap symbol
+      (if wrapper
+          (setcdr wrapper wrapper-spec)
+          (put to-wrap
+               '__elnode_wrapper_list
+               (acons path-sym wrapper-spec wrapper-list)))
+      ;; Now fset the to-wrap with the chain handler
+      (fset to-wrap
+            (elnode--wrapper-make-handler-chain
+             (get to-wrap '__elnode_wrapper_base)
+             (kvalist->values (get to-wrap '__elnode_wrapper_list)))))))
 
 
-;; Elnode authentication stuff
+;; Default elnode auth databases
 
 (defconst elnode-auth-db-spec-default
   `(elnode-db-hash
@@ -3238,15 +3318,6 @@ This receives the SENDER and the TARGET from the wrapper spec."
                target
                (format "%s?redirect=%s" target logged-in)))))))))
 
-(defun elnode--auth-wrapping-sender (httpcon sender target &optional args)
-  "Send the wrap call."
-  (destructuring-bind (&key (auth-db elnode-auth-db)
-                            (cookie-name "elnodeauth")) args
-    (elnode-auth--wrapping-login-handler
-     httpcon sender target
-     :auth-db auth-db
-     :cookie-name cookie-name)))
-
 (defun* elnode-auth-make-login-wrapper (wrap-target
                                          &key
                                          (sender 'elnode-auth-login-sender)
@@ -3256,21 +3327,17 @@ This receives the SENDER and the TARGET from the wrapper spec."
 Wrappers are high level ways of specifying redirect targets for
 authentication.  A wrapper is a list with 2 or 3 elements:
 
-  a handler function name to wrap
+  a handler function name to wrap which must have been defined
+  with `define-elnode-handler'
 
   a function to handle login (the wrapping handler function)
 
   optionally a url for the wrap point, \"/login/\" by default.
 
-In the case of authentication, the handler function to wrap
-should be the main handler for your application.  It is wrapped
-to add the authentication url which will be handled by the
-wrapping function.
-
-So if you have a top level handler `my-app-handler' and you make
-a wrapper with this function then you will change
-`my-app-handler' so that requests for \"/login/\" go to the
-authentication handler produced by this function.
+So if you have a handler `my-app-handler' and you make a wrapper
+with this function then you will change `my-app-handler' so that
+requests for \"/login/\" go to the authentication handler
+produced by this function.
 
 SENDER is a function that sends the login page to the client.
 The SENDER is passed the TARGET as well as the `to' parameter
@@ -3285,7 +3352,12 @@ being the symbol `:elnode-wrapper-spec'."
   (list :elnode-wrapper-spec
         wrap-target
         (lambda (httpcon &optional args)
-          (elnode--auth-wrapping-sender httpcon sender target args))
+          (destructuring-bind (&key (auth-db elnode-auth-db)
+                                    (cookie-name "elnodeauth")) args
+            (elnode-auth--wrapping-login-handler
+             httpcon sender target
+             :auth-db auth-db
+             :cookie-name cookie-name)))
         target))
 
 (defvar elnode--defined-authentication-schemes
@@ -3304,16 +3376,10 @@ when defining the wrapper.
 The WRAPPER-SPEC is used to setup the wrapping.
 
 The AUTH-DB and the COOKIE-NAME are passed to the wrapper."
-  (flet ((wrapper (wrapped-target ; define a func over the wrapper-spec
-                   wrapping-func
-                   &optional (path "/login/"))
-           (elnode--wrap-handler
-            wrapped-target
-            path
-            wrapping-func
-            :auth-db auth-db
-            :cookie-name cookie-name)))
-    (apply 'wrapper wrapper-spec)))
+  (destructuring-bind (func match-handler match-path) wrapper-spec
+    (elnode-set-wrapper func match-handler match-path
+                        :auth-db auth-db
+                        :cookie-name cookie-name)))
 
 (defmacro* elnode-auth-define-scheme (scheme-name
                                       &key
