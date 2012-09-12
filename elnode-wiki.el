@@ -329,7 +329,7 @@ Update operations are protected by authentication."
   (featurep 'creole))
 
 ;;;###autoload
-(defun elnode-wikiserver (httpcon)
+(define-elnode-handler elnode-wikiserver (httpcon)
   "Serve Wiki pages from `elnode-wikiserver-wikiroot'.
 
 HTTPCON is the request.
