@@ -3510,6 +3510,15 @@ SCHEME is the authentication scheme to use as defined by
                     ":redirect MUST be  a list or a string")))))
            (elnode-send-redirect ,httpconv to))))))
 
+(defun elnode-test-login (auth target username password)
+  "Send a test login to Elnode."
+  ;; FIXME - use AUTH as a reference to an elnode-authentication
+  ;; declaration and pull things like /login/ from it
+  (elnode-test-call
+   (format "/login/?redirect=%s" target)
+   :method "POST"
+   :parameters (list (cons "username" username)
+                     (cons "password" password))))
 
 ;;; Main customization stuff
 
