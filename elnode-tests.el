@@ -1356,7 +1356,7 @@ the wrapping of a specified handler with the login sender."
         (elnode-test-call "/")
         :status-code 302
         :header-name "Location"
-        :header-value "/my-login/?to=/")
+        :header-value "/my-login/?redirect=/")
        ;; Test that we get the login page - this tests that the main
        ;; handler was wrapped
         (should-elnode-response
@@ -1368,7 +1368,7 @@ the wrapping of a specified handler with the login sender."
          (elnode-test-call "/somepage/test/")
          :status-code 302
          :header-name "Location"
-         :header-value "/my-login/?to=/somepage/test/")
+         :header-value "/my-login/?redirect=/somepage/test/")
         ;; Test that we get the login page - this tests that the main
         ;; handler was wrapped
         (should-elnode-response

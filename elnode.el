@@ -3499,7 +3499,7 @@ SCHEME is the authentication scheme to use as defined by
                    ;; wrapper specific
                    (listp (plist-get scheme-list :redirect))
                    (format
-                    "%s?to=%s"
+                    "%s?redirect=%s"
                     (elt (plist-get scheme-list :redirect) 3)
                     (elnode-http-pathinfo ,httpconv)))
                   ;; A plain string can be used directly
