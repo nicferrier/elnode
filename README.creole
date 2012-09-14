@@ -191,7 +191,8 @@ as {{{elnode-docroot-for}}}.
 
 When a handler is called by {{{elnode-hostpath-dispatcher}}} then the
 parts of the match are available through the function
-{{{elnode-http-mapping}}}. So we could code the {{{user-admin}}} handler like this:
+{{{elnode-http-mapping}}}. So we could code the {{{user-admin}}}
+handler like this:
 
 {{{
 ##! emacs-lisp
