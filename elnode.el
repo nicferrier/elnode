@@ -3352,11 +3352,11 @@ being the symbol `:elnode-wrapper-spec'."
   (list :elnode-wrapper-spec
         wrap-target
         (lambda (httpcon &optional args)
-          (destructuring-bind (&key (auth-db elnode-auth-db)
+          (destructuring-bind (&key (auth-db 'elnode-auth-db)
                                     (cookie-name "elnodeauth")) args
             (elnode-auth--wrapping-login-handler
              httpcon sender target
-             :auth-db auth-db
+             :auth-db (symbol-value auth-db)
              :cookie-name cookie-name)))
         target))
 
@@ -3366,7 +3366,7 @@ being the symbol `:elnode-wrapper-spec'."
 
 (defun* elnode--auth-define-scheme-do-wrap (wrapper-spec
                                             &key
-                                            (auth-db elnode-auth-db)
+                                            (auth-db 'elnode-auth-db)
                                             (cookie-name "elnodeauth"))
   "Setup the auth wrapping.
 
@@ -3426,13 +3426,8 @@ should indicate a path where a user can login, for example
         (auth-dbv (make-symbol "auth-dbv")))
     `(let* ((,scheme-namev ,scheme-name)
             (,cookie-namev ,cookie-name)
-            (,auth-dbv ,auth-db)
-            (,redirect-specv ,redirect)
-            (,auth-schemev
-             (list :test ,test
-                   :cookie-name ,cookie-namev
-                   :failure-type ,failure-type
-                   :redirect ,redirect-specv)))
+            (,auth-dbv (quote ,auth-db))
+            (,redirect-specv ,redirect))
        ;; Do some type checking
        (cond
          ((and (listp ,redirect-specv)
@@ -3444,9 +3439,14 @@ should indicate a path where a user can login, for example
          ((not (stringp ,redirect-specv))
           (error ":REDIRECT must be a string or a wrapper specification")))
        ;; Now just add the scheme to the list of defined schemes
-       (puthash ,scheme-namev
-                ,auth-schemev
-                elnode--defined-authentication-schemes))))
+       (let ((,auth-schemev
+              (list :test ,test
+                    :cookie-name ,cookie-namev
+                    :failure-type ,failure-type
+                    :redirect ,redirect-specv)))
+         (puthash ,scheme-namev
+                  ,auth-schemev
+                  elnode--defined-authentication-schemes)))))
 
 (defmacro if-elnode-auth (httpcon scheme authd &rest anonymous)
   "Check the HTTPCON for SCHEME auth and eval AUTHD.
