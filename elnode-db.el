@@ -84,7 +84,7 @@
 Return the VALUE as it has been put into the DB."
   (funcall (plist-get db :put) key value db))
 
-(defun elnode-db-map (func db &optional query)
+(defun elnode-db-map (func db &optional query filter)
   "Call FUNC for every record in DB optionally QUERY filter.
 
 QUERY, if specified, should be a list of query terms.
@@ -97,6 +97,7 @@ where the DB-VALUE is whatever the DB has attached to the
 specified KEY.
 
 This returns an alist of the KEY and the value the function
+returned.  If FILTER is `t' then only pairs with a value are
 returned."
   ;; The query should be implemented here, around the func
   (let ((retlist nil))
@@ -108,7 +109,11 @@ returned."
                         (list (cons key (funcall func key value)))
                         retlist))))
              db query)
-    retlist))
+    (if filter
+        (loop for p in retlist
+           if (cdr p)
+           collect p)
+        retlist)))
 
 (defun elnode-db-hash (reference)
   "Make a db-hash database.
