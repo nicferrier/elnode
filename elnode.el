@@ -1117,6 +1117,28 @@ Serves only to connect the server process to the client processes"
   (mapcar 'car elnode-server-socket))
 
 ;;;###autoload
+(defun elnode-list ()
+  (interactive)
+  "List the Elnode servers we have running."
+  (with-current-buffer (get-buffer-create "*elnode servers*")
+    (setq buffer-read-only t)
+    (unwind-protect
+         (let ((inhibit-read-only t))
+           (erase-buffer)
+           (loop for server in elnode-server-socket
+              do
+                (destructuring-bind (port . socket-proc) server
+                  (let ((fn (process-get socket-proc :elnode-http-handler)))
+                    (princ
+                     (format
+                      "%s on %s\n%s\n\n"
+                      port
+                      (process-get socket-proc :elnode-http-handler)
+                      (or (documentation fn) "no documentation."))
+                   (current-buffer)))))
+           (switch-to-buffer (current-buffer))))))
+
+;;;###autoload
 (defun* elnode-start (request-handler
                       &key
                       port
