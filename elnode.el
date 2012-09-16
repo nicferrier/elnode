@@ -2450,7 +2450,9 @@ being returned."
         (t
          ;; Presume it's an alist
          (or
-          (assoc-default (match-string 1 matched) replacements nil t)))))
+          (assoc-default
+           (match-string-no-properties 1 matched)
+           replacements nil t)))))
      (buffer-substring (point-min)(point-max)))))
 
 (defvar elnode-webserver-visit-file nil
