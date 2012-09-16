@@ -1019,19 +1019,19 @@ to external processes."
     ;; Finally return the result
     result))
 
-(defun* should-elnode-response (response
-                                &key
-                                status-code
-                                header-name
-                                header-value
-                                header-list
-                                header-list-match
-                                body-match)
+(defmacro* should-elnode-response (call
+                                   &key
+                                   status-code
+                                   header-name
+                                   header-value
+                                   header-list
+                                   header-list-match
+                                   body-match)
   "Assert on the supplied RESPONSE.
 
-RESPONSE is an `elnode-test-call' response.  Assertions are done
-by checking the specified values of the other parameters to this
-function.
+CALL should be an `elnode-test-call', something that can make a
+response.  Assertions are done by checking the specified values
+of the other parameters to this function.
 
 If STATUS-CODE is not nil we assert that the RESPONSE status-code
 is equal to the STATUS-CODE.
@@ -1049,33 +1049,53 @@ headers are present and `equal' to the value.
 
 If BODY-MATCH is present then it is a regex used to match the
 whole body of the RESPONSE."
-  (when status-code
-    (should (equal status-code (plist-get response :status))))
-  (when (or header-name header-list header-list-match)
-    (let ((hdr (plist-get response :header)))
-      (when header-name
-        (if header-value
-            (should (equal
-                     header-value
-                     (assoc-default header-name hdr)))
-            ;; Else we want to ensure the header isn't there
-            (should (eq nil (assoc-default header-name hdr)))))
-      (when header-list
-        (loop for reqd-hdr in header-list
-           do (should
-               (equal
-                (assoc-default (car reqd-hdr) hdr)
-                (cdr reqd-hdr)))))
-      (when header-list-match
-        (loop for reqd-hdr in header-list-match
-           do (should
-               (>=
-                (string-match
-                 (cdr reqd-hdr)
-                 (assoc-default (car reqd-hdr) hdr)) 0))))))
-  (when body-match
-    (should-match body-match (plist-get response :result-string))))
-
+  (let ((status-codev (make-symbol "status-codev"))
+        (header-namev (make-symbol "header-namev"))
+        (header-valuev (make-symbol "header-valuev"))
+        (header-listv (make-symbol "header-listv"))
+        (header-list-matchv (make-symbol "header-list-match"))
+        (body-matchv (make-symbol "body-matchv"))
+        (responsev (make-symbol "responsev")))
+    `(let ((,responsev ,call)
+           (,status-codev ,status-code)
+           (,header-namev ,header-name)
+           (,header-valuev ,header-value)
+           (,header-listv ,header-list)
+           (,header-list-matchv ,header-list-match)
+           (,body-matchv ,body-match))
+       (when ,status-codev
+         (should
+          (equal
+           ,status-codev
+           (plist-get ,responsev :status))))
+       (when (or ,header-namev ,header-listv ,header-list-matchv)
+         (let ((hdr (plist-get ,responsev :header)))
+           (when ,header-namev
+             (if ,header-valuev
+                 (should
+                  (equal
+                   ,header-valuev
+                   (assoc-default ,header-namev hdr)))
+                 ;; Else we want to ensure the header isn't there
+                 (should
+                  (eq nil (assoc-default ,header-namev hdr)))))
+           (when ,header-listv
+             (loop for reqd-hdr in ,header-listv
+                do (should
+                    (equal
+                     (assoc-default (car reqd-hdr) hdr)
+                     (cdr reqd-hdr)))))
+           (when ,header-list-matchv
+             (loop for reqd-hdr in ,header-list-matchv
+                do (should
+                    (>=
+                     (string-match
+                      (cdr reqd-hdr)
+                      (assoc-default (car reqd-hdr) hdr)) 0))))))
+       (when ,body-matchv
+         (should-match
+          ,body-matchv
+          (plist-get ,responsev :result-string))))))
 
 (defun elnode--log-fn (server con msg)
   "Log function for elnode.
