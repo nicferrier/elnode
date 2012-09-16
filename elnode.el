@@ -2474,7 +2474,8 @@ being returned."
          (or
           (assoc-default
            (match-string-no-properties 1 matched)
-           replacements nil t)))))
+           replacements nil t)
+          ""))))
      (buffer-substring (point-min)(point-max)))))
 
 (defvar elnode-webserver-visit-file nil
