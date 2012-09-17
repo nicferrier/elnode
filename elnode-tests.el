@@ -1408,11 +1408,15 @@ the wrapping of a specified handler with the login sender."
           :header-name "Location"
           :header-value "/my-login/?redirect=/somepage/test/")))))
 
+
+(defvar elnode-test--my-db nil
+  "Special variable just for specific db test.")
+
 (ert-deftest elnode-with-auth-specific-db ()
   "Test using a specific database."
   ;; Setup the user db
   (let ((elnode-auth-db (elnode-db-make '(elnode-db-hash)))
-        (my-db (elnode-db-make '(elnode-db-hash))))
+        (elnode-test--my-db (elnode-db-make '(elnode-db-hash))))
     (elnode--auth-init-user-db
      '(("nferrier" . "password")
        ("someuser" . "secret"))
@@ -1420,13 +1424,13 @@ the wrapping of a specified handler with the login sender."
     (elnode--auth-init-user-db
      '(("nic" . "test")
        ("other" . "simple"))
-     my-db)
+     elnode-test--my-db)
     ;; Setup handlers to wrap
     (elnode-auth-flets
      (elnode-auth-define-scheme
       'test-auth
       :test :cookie
-      :auth-db my-db
+      :auth-db elnode-test--my-db
       :cookie-name "secret"
       :redirect (elnode-auth-make-login-wrapper
                  'auth-reqd-handler
@@ -1455,6 +1459,7 @@ the wrapping of a specified handler with the login sender."
         :status-code 302
         :header-name "Location"
         :header-value "/somepage/test/")))))
+
 
 (provide 'elnode-tests)
 

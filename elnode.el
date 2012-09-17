@@ -3267,6 +3267,20 @@ be an `elnode-db'.  By default it is `elnode-loggedin-db'."
               (token (match-string 2 cookie-value)))
           (elnode-auth-check-p username token :loggedin-db loggedin-db)))))
 
+(defun* elnode-auth-cookie-check (httpcon
+                                  &key
+                                  (cookie-name "elnode-auth")
+                                  (loggedin-db elnode-loggedin-db))
+  "Signal on cookie failure.
+
+See `elnode-auth-cookie-check-p' for more details."
+  (unless (elnode-auth-cookie-check-p
+           httpcon
+           :cookie-name cookie-name
+           :loggedin-db loggedin-db)
+    ;; Not sure this is the correct token...
+    (signal 'elnode-auth-token :not-logged-in)))
+
 (defun* elnode-auth-http-login (httpcon
                                 username password logged-in
                                 &key
@@ -3507,10 +3521,10 @@ If the auth fails then evaluate ANONYMOUS instead."
                      elnode--defined-authentication-schemes)))
        (if (eq :cookie (plist-get scheme-list :test))
            (condition-case token
-               (let ((cookie
-                      (elnode-auth-cookie-check-p
-                       ,httpconv
-                       :cookie-name (plist-get scheme-list :cookie-name))))
+               (progn
+                 (elnode-auth-cookie-check
+                  ,httpconv
+                  :cookie-name (plist-get scheme-list :cookie-name))
                  ;; Do whatever the code was now.
                  ,authd)
              ;; On auth failure do the ELSE
