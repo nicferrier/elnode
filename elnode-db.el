@@ -181,6 +181,25 @@ The QUERY is ignored.  We never filter."
     (elnode-db-hash--save db)
     v))
 
+(defvar elnode-db--hash-clear-history nil
+  "History variable for completing read.")
+
+(defun elnode-db-hash-clear (db)
+  "Clear the specified DB (a hash-db)."
+  (interactive
+   (list (symbol-value
+          (intern
+           (completing-read
+            "Database: "
+            obarray
+            nil
+            't
+            nil
+            'elnode-db--hash-clear-history)))))
+  (clrhash (plist-get db :db))
+  (if (file-exists-p (plist-get db :filename))
+      (delete-file (plist-get db :filename))))
+
 
 ;; Filter db - let's you filter another db
 
