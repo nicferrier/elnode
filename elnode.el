@@ -1004,7 +1004,7 @@ to external processes."
                     (list
                      :result-string
                      (with-current-buffer (fakir-get-output-buffer)
-                       (buffer-substring (point-min) (point-max)))
+                       (buffer-substring-no-properties (point-min) (point-max)))
                      :buffer
                      (process-buffer http-connection)
                      ;; These properties are set by elnode-http-start
@@ -2466,17 +2466,16 @@ being returned."
     (replace-regexp-in-string
      "<!##E \\(.*?\\) E##!>"
      (lambda (matched)
-       (cond
-        ((hash-table-p replacements)
-         (gethash (match-string 1 matched) replacements ""))
-        (t
-         ;; Presume it's an alist
-         (or
-          (assoc-default
-           (match-string-no-properties 1 matched)
-           replacements nil t)
-          ""))))
-     (buffer-substring (point-min)(point-max)))))
+       (let ((match-var (match-string-no-properties 1 matched)))
+         (cond
+           ((hash-table-p replacements)
+            (gethash match-var replacements ""))
+           (t
+            ;; Presume it's an alist
+            (or
+             (assoc-default match-var replacements nil t)
+             "")))))
+     (buffer-substring-no-properties (point-min)(point-max)))))
 
 (defvar elnode-webserver-visit-file nil
   "Whether the webserver reads files by visiting buffers or not.
