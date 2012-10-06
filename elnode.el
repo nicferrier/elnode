@@ -56,7 +56,7 @@
 (require 'kv)
 (require 'web)
 (require 'json)
-(require 'elnode-db)
+(require 'db)
 (require 'dired) ; needed for the setup
 (require 'ert) ; we provide some assertions and need 'should'
 (eval-when-compile (require 'cl))
@@ -278,6 +278,7 @@ The TEXT is logged with the current date and time formatted with
         (when name
           (if (not (file-exists-p (file-name-directory name)))
               (make-directory (file-name-directory name) t))
+          ;; could be switched to write-region - probably better
           (append-to-file elnode-log-buffer-position-written (point-max) name)
           (set-marker elnode-log-buffer-position-written (point-max)))
         ;; Truncate the file if it's grown too large
@@ -2990,6 +2991,7 @@ The top most handler is returned."
                       next))))))
     next-handler))
 
+;;;###autoload
 (defmacro define-elnode-handler (name arglist &rest body)
   "Define an Elnode handler function.
 
@@ -3107,19 +3109,19 @@ be the new chain of handlers."
 ;; Default elnode auth databases
 
 (defconst elnode-auth-db-spec-default
-  `(elnode-db-hash
+  `(db-hash
     :filename
     ,(expand-file-name (concat elnode-config-directory "elnode-auth")))
   "The default elnode-auth-db specification.")
 
 (defcustom elnode-auth-db-spec
   elnode-auth-db-spec-default
-  "The elnode-db specification of where the auth db is."
+  "The `db' specification of where the auth db is."
   :group 'elnode
   :type '(list symbol symbol string))
 
 (defvar elnode-auth-db
-  (elnode-db-make elnode-auth-db-spec)
+  (db-make elnode-auth-db-spec)
   "Authentication database.
 
 This is the data structure storing hashed passwords against
@@ -3157,7 +3159,7 @@ main `elnode-auth-db' is used."
               t))))
   (unless auth-db
     (setq auth-db 'elnode-auth-db))
-  (elnode-db-put
+  (db-put
    username
    (elnode--auth-make-hash username password)
    (symbol-value auth-db))
@@ -3172,10 +3174,10 @@ main `elnode-auth-db' is used."
 The password is stored in the db hashed keyed by the USERNAME,
 this looks up and tests the hash.
 
-The AUTH-DB is an `elnode-db', by default it is
+The AUTH-DB is an `db', by default it is
 `elnode-auth-db'"
   (let ((token (elnode--auth-make-hash username password)))
-    (equal token (elnode-db-get username auth-db))))
+    (equal token (db-get username auth-db))))
 
 
 (defvar elnode-loggedin-db (make-hash-table :test 'equal)
@@ -3258,7 +3260,7 @@ The name of the cookie can be supplied with :COOKIE-NAME - by
 default is is \"elnode-auth\".
 
 LOGGEDIN-DB can be a loggedin state database which is expected to
-be an `elnode-db'.  By default it is `elnode-loggedin-db'."
+be a `db'.  By default it is `elnode-loggedin-db'."
   (let ((cookie-value (elnode-http-cookie httpcon cookie-name t)))
     (if (not (elnode-auth-cookie-decode (or cookie-value "")))
         (signal 'elnode-auth-token cookie-value)
@@ -3460,7 +3462,7 @@ COOKIE-NAME is used when the TEST is `:cookie'.  It is the name
 of the cookie to use for authentication.  By default this is
 `elnode-auth'.  It must be specified as a string.
 
-AUTH-DB is the `elnode-db' used for authentication information.
+AUTH-DB is the `db' used for authentication information.
 It is used as the authority of information on users.  By default
 this is `elnode-auth-db'.
 

@@ -44,6 +44,7 @@
 ;;; Code:
 
 (require 'elnode)
+(require 'db)
 (eval-when-compile 'fakir)
 (require 'creole nil 't)
 ;;(require 'vc)
@@ -342,8 +343,8 @@ provided. Otherwise it will just error."
       (elnode-wiki-handler httpcon elnode-wikiserver-wikiroot)))
 
 (defvar elnode-wiki-db
-  (elnode-db-make
-   `(elnode-db-hash
+  (db-make
+   `(db-hash
      :filename
      ,(expand-file-name
        (concat elnode-config-directory "elnode-wiki-auth")))))
