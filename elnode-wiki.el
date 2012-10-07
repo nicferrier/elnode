@@ -325,6 +325,7 @@ Update operations are protected by authentication."
                (insert text))
              (elnode-wiki-send httpcon "/tmp/preview" path)))))))
 
+;;;###autoload
 (defun elnode-wikiserver-test ()
   "Test whether we should serve Wiki or not."
   (featurep 'creole))
