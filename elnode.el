@@ -194,7 +194,7 @@ filenames to copy to the DIR."
                    (dired-copy-file
                     ;; from...
                     (resolve-filename file)
-                    ;; to...
+                    ;; to...nd
                     (concat dir (file-name-nondirectory file))
                     nil)))))))))
 
@@ -213,10 +213,10 @@ of your module (which is useful for serving files and such)."
   (declare (indent 2))
   `(progn
      (setq lexical-binding t)
-     (defvar ,dir-var (file-name-directory
-                       (or (buffer-file-name)
-                           load-file-name
-                           default-directory)))
+     (defconst ,dir-var (file-name-directory
+                         (or (buffer-file-name)
+                             load-file-name
+                             default-directory)))
      (require 'cl)
      (require 'elnode)
      ,@(loop for f in features
