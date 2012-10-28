@@ -432,10 +432,10 @@ the value of the GUARD."
 
 (defun elnode--deferred-log (level msg &rest args)
   "Special log for elnode-deferreds"
-  (when (> level elnode-defer-processor-log-level)
+  (when (>= level elnode-defer-processor-log-level)
     (apply
      'elnode-error
-     (format "elnode-deferred-processor [%s] %s" run msg)
+     (format "elnode-deferred-processor %s" msg)
      args)))
 
 (defun elnode--deferred-processor ()
