@@ -346,7 +346,7 @@ by elnode iteslf."
         (buffer-name (format "*%s-elnode-access*" logname))
         (filename (elnode--log-filename logname)))
     (elnode-log-buffer-log
-     (format "%s % 6d %s %s\n"
+     (format "%s % 6d %s %s"
              (process-get httpcon :elnode-httpresponse-status)
              (or (process-get httpcon :elnode-bytes-written) 0)
              (elnode-http-method httpcon)
