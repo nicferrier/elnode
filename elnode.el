@@ -417,7 +417,7 @@ the value of the GUARD."
 
 (defun elnode--deferred-process-open (httpcon handler)
   "Process the HANDLER with the known open HTTPCON."
-  (elnode-error "defer - just before calling the handler %s" handler)
+  ;; (elnode-error "defer - just before calling the handler %s" handler)
   (funcall handler httpcon))
 
 
