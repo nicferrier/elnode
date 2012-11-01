@@ -438,6 +438,13 @@ the value of the GUARD."
      (format "elnode-deferred-processor %s" msg)
      args)))
 
+(defvar elnode-defer-failure-hook nil
+  "Hook called when a deferred socket fails.
+
+The hook function is called with the http connection and the
+failure state which either the symbol `closed' or the symbol
+`failed'.")
+
 (defun elnode--deferred-processor ()
   "Process the deferred queue."
   (let ((run (random 5000)) ; use this to disambiguate runs in the logs
@@ -449,7 +456,8 @@ the value of the GUARD."
                (handler (cdr pair)))
            (case (process-status httpcon)
              ('open
-              (elnode--deferred-log elnode-log-info "open %s %s" httpcon handler)
+              (elnode--deferred-log elnode-log-info
+                                    "open %s %s" httpcon handler)
               (condition-case signal-value
                   (elnode--deferred-process-open httpcon handler)
                 ('elnode-defer
@@ -458,11 +466,21 @@ the value of the GUARD."
                   new-deferred))
                 (error
                  (elnode--deferred-log elnode-log-critical
-                      "error %s - %s" httpcon signal-value))))
+                                       "error %s - %s" httpcon signal-value))))
              ('closed
-              (elnode--deferred-log elnode-log-info "closed %s %s" httpcon handler))
+              (elnode--deferred-log elnode-log-info
+                                    "closed %s %s" httpcon handler)
+              ;; Call any hook function for defer closes
+              (loop for hook-func in elnode-defer-failure-hook
+                 do
+                   (funcall hook-func httpcon 'closed)))
              ('failed
-              (elnode--deferred-log elnode-log-info "failed %s %s" httpcon handler))
+              (elnode--deferred-log
+               elnode-log-info "failed %s %s" httpcon handler)
+              ;; Call any hook function for defer failures
+              (loop for hook-func in elnode-defer-failure-hook
+                 do
+                   (funcall hook-func httpcon 'failed)))
              ('connect
               (push
                (cons httpcon (cdr signal-value))
