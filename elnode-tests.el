@@ -1154,34 +1154,6 @@ Test that we get the right chunked encoding stuff going on."
 (defvar elnode-test-wrapped-handler-counter 0)
 (defvar elnode-test-wrapping-handler-counter 0)
 
-(ert-deftest elnode--wrap-handler ()
-  "Test wrapping a handler held in a symbol with another."
-  (let ((elnode-test-wrapped-handler-counter 0)
-        (elnode-test-wrapping-handler-counter 0))
-    ;; Define the handler we'll wrap
-    (flet ((wrap-test-handler (httpcon)
-             (incf elnode-test-wrapped-handler-counter)))
-      (unwind-protect
-           (progn
-             ;; Wrap that handler
-             (elnode--wrap-handler
-              'wrap-test-handler
-              "testit/$"
-              (lambda (httpcon &rest args)
-                (incf elnode-test-wrapping-handler-counter)))
-             (with-elnode-mock-server 'wrap-test-handler t
-               ;; Call something to invoke the wrapper
-               (elnode-test-call "/something/")
-               (should (equal elnode-test-wrapped-handler-counter 1))
-               (should (equal elnode-test-wrapping-handler-counter 0))
-               (elnode-test-call "/testit/")
-               (should (equal elnode-test-wrapped-handler-counter 1))
-               (should (equal elnode-test-wrapping-handler-counter 1))))
-        ;; We need to clear the symbol and it's plist whenever the
-        ;; test runs, otherwise we keep state in the symbol.
-        (setplist 'wrap-test-handler nil)
-        (unintern 'wrap-test-handler)))))
-
 
 ;; Elnode auth tests
 
@@ -1205,53 +1177,71 @@ default is `elnode-auth-db')."
   "Check the authentication check.
 
 This tests the authentication database check."
-  (let ((elnode-auth-db (elnode-db-make '(elnode-db-hash))))
+  (let* ((elnode-auth-db (elnode-db-make '(elnode-db-hash)))
+         ;; auth test
+         (auth-test
+          (lambda (username)
+            (elnode-auth-default-test username 'elnode-auth-db))))
     ;; The only time we really need clear text passwords is when
     ;; faking records for test
     (elnode--auth-init-user-db '(("nferrier" . "password")
                                  ("someuser" . "secret")))
     (should
-     (elnode-auth-user-p "someuser" "secret"))))
+     (elnode-auth-user-p "someuser" "secret" :auth-test auth-test))))
 
 (ert-deftest elnode-auth-check-p ()
   "Test basic login.
 
 Tess that we can login a user and then assert that they are
 authenticated."
-  (let ((elnode-loggedin-db (make-hash-table :test 'equal))
-        (elnode-auth-db (elnode-db-make '(elnode-db-hash))))
+  (let* ((elnode-loggedin-db (make-hash-table :test 'equal))
+         (elnode-auth-db (elnode-db-make '(elnode-db-hash)))
+         ;; Make an auth-test function
+         (auth-test
+          (lambda (username)
+            (elnode-auth-default-test username 'elnode-auth-db))))
     ;; The only time we really need clear text passwords is when
     ;; faking records for test
     (elnode--auth-init-user-db '(("nferrier" . "password")
                                  ("someuser" "secret")))
-    ;; Test a failure
+
+;; Test a failure
     (should
      (equal "an error occured!"
             (condition-case credentials
-                (elnode-auth-login "nferrier" "secret")
+                (elnode-auth-login
+                 "nferrier" "secret"
+                 :auth-test auth-test)
               (elnode-auth
                "an error occured!"))))
 
     ;; Now test
-    (let ((hash (elnode-auth-login "nferrier" "password")))
+    (let ((hash (elnode-auth-login
+                 "nferrier" "password" :auth-test auth-test)))
       (should (elnode-auth-check-p "nferrier" hash)))))
 
 (ert-deftest elnode-auth-cookie-check-p ()
   "Check that a cookie can be used for auth."
-  (let ((elnode-loggedin-db (make-hash-table :test 'equal))
-        (elnode-auth-db (elnode-db-make '(elnode-db-hash))))
+  (let* ((elnode-loggedin-db (make-hash-table :test 'equal))
+         (elnode-auth-db (elnode-db-make '(elnode-db-hash)))
+         ;; auth-test function
+         (auth-test
+          (lambda (username)
+            (elnode-auth-default-test username 'elnode-auth-db))))
     ;; The only time we really need clear text passwords is when
     ;; faking records for test
     (elnode--auth-init-user-db '(("nferrier" . "password")
                                  ("someuser" "secret")))
     ;; Now test
-    (let ((hash (elnode-auth-login "nferrier" "password")))
+    (let ((hash (elnode-auth-login
+                 "nferrier" "password" :auth-test auth-test)))
       (fakir-mock-process :httpcon
           ((:elnode-http-header
             `(("Cookie" . ,(concat "elnode-auth=nferrier::" hash)))))
         (should (elnode-auth-cookie-check-p :httpcon))))
     ;; Test what happens without a cookie
-    (let ((hash (elnode-auth-login "nferrier" "password")))
+    (let ((hash (elnode-auth-login
+                 "nferrier" "password" :auth-test auth-test)))
       (fakir-mock-process :httpcon
           ((:elnode-http-header
             `(("Referer" . "http://somehost.example.com"))))

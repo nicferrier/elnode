@@ -3190,8 +3190,9 @@ main `elnode-auth-db' is used."
 
 (defun* elnode-auth-user-p (username
                             password
-                            &key (auth-db elnode-auth-db))
-  "Is the user in the AUTH-DB?
+                            &key
+                            auth-test)
+  "Does the AUTH-TEST pass?
 
 The password is stored in the db hashed keyed by the USERNAME,
 this looks up and tests the hash.
@@ -3199,7 +3200,7 @@ this looks up and tests the hash.
 The AUTH-DB is an `db', by default it is
 `elnode-auth-db'"
   (let ((token (elnode--auth-make-hash username password)))
-    (equal token (db-get username auth-db))))
+    (equal token (funcall auth-test username))))
 
 
 (defvar elnode-loggedin-db (make-hash-table :test 'equal)
@@ -3228,7 +3229,7 @@ See `elnode-auth-login' for how this is updated.")
 (defun* elnode-auth-login (username
                            password
                            &key
-                           (auth-db elnode-auth-db)
+                           auth-test
                            (loggedin-db elnode-loggedin-db))
   "Log a user in.
 
@@ -3240,7 +3241,8 @@ Takes optional AUTH-DB which is the database variable to
 use (which is `elnode-auth-db' by default) and LOGGEDIN-DB which
 is the logged-in state database to use and which is
 `elnode-loggedin-db' by default."
-  (if (elnode-auth-user-p username password :auth-db auth-db)
+  ;; FIXME - pass in the test function
+  (if (elnode-auth-user-p username password :auth-test auth-test)
       (let* ((rndstr (format "%d" (random)))
              (hash (sha1 (format "%s:%s:%s"
                                  username
@@ -3304,11 +3306,14 @@ See `elnode-auth-cookie-check-p' for more details."
     ;; Not sure this is the correct token...
     (signal 'elnode-auth-token :not-logged-in)))
 
+(defvar elnode-auth-httpcon nil
+  "Dynamic scope variable for HTTP con while we auth.")
+
 (defun* elnode-auth-http-login (httpcon
                                 username password logged-in
                                 &key
                                 (cookie-name "elnodeauth")
-                                (auth-db elnode-auth-db)
+                                auth-test
                                 (loggedin-db elnode-loggedin-db))
   "Log the USERNAME in on the HTTPCON if PASSWORD is correct.
 
@@ -3320,11 +3325,12 @@ Actually uses `elnode-auth-login' to do the assertion.
 
 AUTH-DB is a database, by default `elnode-auth-db', it's passed
 to `elnode-auth-login'."
-  (let ((hash
-         (elnode-auth-login
-          username password
-          :auth-db auth-db
-          :loggedin-db loggedin-db)))
+  (let* ((elnode-auth-httpcon httpcon)
+         (hash
+          (elnode-auth-login
+           username password
+           :auth-test auth-test
+           :loggedin-db loggedin-db)))
     (elnode-http-header-set
      httpcon
      (elnode-http-cookie-make
@@ -3372,7 +3378,7 @@ This function sends the contents of the custom variable
 (defun* elnode-auth--wrapping-login-handler (httpcon
                                              sender target
                                              &key
-                                             (auth-db elnode-auth-db)
+                                             auth-test ; assert not nil?
                                              (cookie-name "elnodeauth")
                                              (loggedin-db elnode-loggedin-db))
   "The implementation of the login handler for wrapping.
@@ -3391,14 +3397,18 @@ This receives the SENDER and the TARGET from the wrapper spec."
            (elnode-auth-http-login
             httpcon
             username password logged-in
-            :cookie-name cookie-name
-            :auth-db auth-db)
+            :auth-test auth-test
+            :cookie-name cookie-name)
          (elnode-auth-credentials
           (elnode-send-redirect
            httpcon
            (if (not logged-in)
                target
                (format "%s?redirect=%s" target logged-in)))))))))
+
+(defun elnode-auth-default-test (username database)
+  "The default test function used for Elnode auth."
+  (db-get username (symbol-value database)))
 
 (defun* elnode-auth-make-login-wrapper (wrap-target
                                          &key
@@ -3435,11 +3445,20 @@ being the symbol `:elnode-wrapper-spec'."
         wrap-target
         (lambda (httpcon &optional args)
           (destructuring-bind (&key (auth-db 'elnode-auth-db)
+                                    auth-test ; nil by default
                                     (cookie-name "elnodeauth")) args
-            (elnode-auth--wrapping-login-handler
-             httpcon sender target
-             :auth-db (symbol-value auth-db)
-             :cookie-name cookie-name)))
+            (let ((auth-test-fn
+                   (if auth-test
+                       auth-test
+                       ;; Else make a default one of the database
+                       (lambda (username)
+                         (elnode-auth-default-test username auth-db)))))
+              (elnode-auth--wrapping-login-handler
+               httpcon sender target
+               ;; FIXME - possibly have test function here
+               ;; as well as default test function
+               :auth-test auth-test-fn
+               :cookie-name cookie-name))))
         target))
 
 (defvar elnode--defined-authentication-schemes
@@ -3448,6 +3467,7 @@ being the symbol `:elnode-wrapper-spec'."
 
 (defun* elnode--auth-define-scheme-do-wrap (wrapper-spec
                                             &key
+                                            auth-test
                                             (auth-db 'elnode-auth-db)
                                             (cookie-name "elnodeauth"))
   "Setup the auth wrapping.
@@ -3460,12 +3480,14 @@ The WRAPPER-SPEC is used to setup the wrapping.
 The AUTH-DB and the COOKIE-NAME are passed to the wrapper."
   (destructuring-bind (func match-handler match-path) wrapper-spec
     (elnode-set-wrapper func match-handler match-path
+                        :auth-test auth-test
                         :auth-db auth-db
                         :cookie-name cookie-name)))
 
 (defmacro* elnode-auth-define-scheme (scheme-name
                                       &key
                                       (test :cookie)
+                                      auth-test
                                       (auth-db 'elnode-auth-db)
                                       (cookie-name "elnodeauth")
                                       (failure-type :redirect)
@@ -3487,6 +3509,10 @@ of the cookie to use for authentication.  By default this is
 AUTH-DB is the `db' used for authentication information.
 It is used as the authority of information on users.  By default
 this is `elnode-auth-db'.
+
+AUTH-TEST is a function to implement retrieval of users.  It is
+used in preference to AUTH-DB but can be nil in which case a
+default based on AUTH-DB will be used.
 
 FAILURE-TYPE is what to do if authentication fails.  Currently
 only `:redirect' is supported.  To redirect on failure means to
@@ -3516,6 +3542,7 @@ should indicate a path where a user can login, for example
                (eq :elnode-wrapper-spec (car ,redirect-specv)))
           (elnode--auth-define-scheme-do-wrap
            (cdr ,redirect-specv)
+           :auth-test ,auth-test
            :auth-db ,auth-dbv
            :cookie-name ,cookie-namev))
          ((not (stringp ,redirect-specv))
