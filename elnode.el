@@ -337,22 +337,59 @@ This function mainly exists to make testing easier."
              elnode-log-files-directory
              logname))))
 
+(defvar elnode-log-access-format-path-width 20)
+(defun elnode-log-access-format-func (httpcon)
+  "Standard access log format function."
+  (format
+   (concat
+    "%s % 8d %s % "
+    (number-to-string elnode-log-access-format-path-width)
+    "s")
+   (process-get httpcon :elnode-httpresponse-status)
+   (or (process-get httpcon :elnode-bytes-written) 0)
+   (elnode-http-method httpcon)
+   (elnode-http-pathinfo httpcon)))
+
+(defcustom elnode-log-access-default-formatter-function
+  'elnode-log-access-format-func
+  "The default access log formatter function.
+
+This is used when there is no specific logger function for a
+log-name."
+  :group 'elnode
+  :type 'function)
+
+(defcustom elnode-log-access-alist nil
+  "An association list of access log format functions for log names.
+
+An access log format function receives the http connection and
+should return a log line to be entered in the log buffer.
+
+These override the default log formatter."
+  :group 'elnode
+  :type '(alist
+          :key-type string
+          :value-type function))
+
 (defun elnode-log-access (logname httpcon)
   "Log the HTTP access in buffer LOGNAME.
 
 This function is available for handlers to call.  It is also used
 by elnode iteslf."
-  (let ((elnode-log-buffer-datetime-format "%Y-%m-%d-%H:%M:%S")
-        (buffer-name (format "*%s-elnode-access*" logname))
-        (filename (elnode--log-filename logname)))
-    (elnode-log-buffer-log
-     (format "%s % 8d %s %s"
-             (process-get httpcon :elnode-httpresponse-status)
-             (or (process-get httpcon :elnode-bytes-written) 0)
-             (elnode-http-method httpcon)
-             (elnode-http-pathinfo httpcon))
-     buffer-name
-     filename)))
+  (let* ((elnode-log-buffer-datetime-format "%Y-%m-%d-%H:%M:%S")
+         (buffer-name (format "*%s-elnode-access*" logname))
+         (filename (elnode--log-filename logname))
+         (formatter
+          (assoc-default
+           logname
+           elnode-log-access-alist
+           'equal
+           elnode-log-access-default-formatter-function))
+         (formatted
+          (when formatter
+            (funcall formatter httpcon))))
+    (message "formatted is %s" formatted)
+    (elnode-log-buffer-log formatted buffer-name filename)))
 
 
 ;; Defer stuff
