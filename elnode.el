@@ -1772,19 +1772,8 @@ DATA must be a string, it's just passed to `elnode-http-send'."
   (elnode-http-start httpcon 200 '("Content-Type" . "text/html"))
   (elnode-http-return httpcon html))
 
-(defun* elnode-send-json (httpcon data &key content-type jsonp)
-  "Send a 200 OK to the HTTPCON along with DATA as JSON.
-
-If CONTENT-TYPE is specified then it is used as the HTTP Content
-Type of the response.
-
-If JSONP is specified the content is sent as a JSON-P response.
-If the variable specifies a name for the JSON-P callback function
-that that is used.  Alternately, if the JSONP parameter does not
-specify a name, the parameter `callback' is looked up on the
-HTTPCON and the value of that used.  If neither the JSONP
-parameter, not the HTTP parameter `callback' is present that the
-name \"callback\" is used."
+(defun elnode-json-fix (data)
+  "Fix JSON "
   (let ((json-to-send
          (flet
              ((json-alist-p
@@ -1799,7 +1788,22 @@ name \"callback\" is used."
                             (cdr list)
                             'not-alist)))
                 (null list)))
-           (json-encode data))))
+           (json-encode data)))) json-to-send))
+
+(defun* elnode-send-json (httpcon data &key content-type jsonp)
+  "Send a 200 OK to the HTTPCON along with DATA as JSON.
+
+If CONTENT-TYPE is specified then it is used as the HTTP Content
+Type of the response.
+
+If JSONP is specified the content is sent as a JSON-P response.
+If the variable specifies a name for the JSON-P callback function
+that that is used.  Alternately, if the JSONP parameter does not
+specify a name, the parameter `callback' is looked up on the
+HTTPCON and the value of that used.  If neither the JSONP
+parameter, not the HTTP parameter `callback' is present that the
+name \"callback\" is used."
+  (let ((json-to-send (elnode-json-fix data)))
     (elnode-http-start
      httpcon 200
      `("Content-type" . ,(or content-type "application/json")))
