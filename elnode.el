@@ -388,7 +388,6 @@ by elnode iteslf."
          (formatted
           (when formatter
             (funcall formatter httpcon))))
-    (message "formatted is %s" formatted)
     (elnode-log-buffer-log formatted buffer-name filename)))
 
 
