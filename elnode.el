@@ -2955,7 +2955,10 @@ handlers."
                 (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
                 (elnode-http-return httpcon index))))
         ;; Send a file.
-        (elnode-send-file httpcon targetfile)))))
+        (elnode-send-file
+         httpcon
+         targetfile
+         :mime-types mime-types)))))
 
 (defun elnode-webserver-handler-maker (&optional docroot extra-mime-types)
   "Make a webserver handler possibly with the DOCROOT and EXTRA-MIME-TYPES.
