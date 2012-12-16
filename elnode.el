@@ -2627,10 +2627,10 @@ delivered."
                           (elnode-replacements-targetfile targetfile))
                       (funcall replacements))
                     replacements))))
-          (elnode-child-process
-           httpcon
-           elnode-send-file-program
-           targetfile))))))
+            (elnode-child-process
+             httpcon
+             elnode-send-file-program
+             (expand-file-name targetfile)))))))
 
 (defmacro elnode-method (httpcon &rest method-mappings)
   "Map the HTTP method.
