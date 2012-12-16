@@ -2041,8 +2041,10 @@ it it's found to be a function, or as a last resort
      (t
       (funcall function-404 httpcon)))))
 
-(defun elnode-dispatcher (httpcon url-mapping-table &optional function-404)
-  "Dispatch the HTTPCON to the correct function based on the URL-MAPPING-TABLE.
+(defun* elnode-dispatcher (httpcon
+                           url-mapping-table
+                           &key (function-404 'elnode-send-404))
+  "Dispatch HTTPCON to the function mapped in URL-MAPPING-TABLE.
 
 URL-MAPPING-TABLE is an alist of:
 
@@ -2065,8 +2067,8 @@ An example server setup:
      '((\"^/$\" . root-view)
        (\"^/1/$\" . view-1))))
 
-If FUNCTION-404 is non-nil then it is called when no regexp is
-matched."
+If FUNCTION-404 is specified it is called when no regexp is
+matched, otherwise `elnode-send-404' is used."
   (elnode-normalize-path
    httpcon
    (lambda (httpcon)
