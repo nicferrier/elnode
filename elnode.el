@@ -1382,6 +1382,24 @@ currently supported conversions are:
       (t
        val))))
 
+(defun* elnode-http-host (httpcon &key split just-host)
+  "Return the HTTP `host' name header.
+
+With SPLIT return a list of the hostname and any port part (the
+port part might be empty if not specifically specified).  With
+JUST-HOST return just the host-name part, dropping any port entirely."
+  (let ((host (elnode-http-header httpcon "Host")))
+    (cond
+      (split
+       (string-match "\\([^:]+\\)\\(:\\([0-9]+\\)\\)*" host)
+       (list (match-string-no-properties 1 host)
+             (match-string-no-properties 3 host)))
+      (just-host
+       (string-match "\\([^:]+\\)\\(:\\([0-9]+\\)\\)*" host)
+       (match-string-no-properties 1 host))
+      (t
+       host))))
+
 (defun elnode-http-cookies (httpcon)
   "Return the list of cookies attached to this HTTPCON.
 
