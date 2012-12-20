@@ -675,6 +675,8 @@ waited for is indicated.
 Important side effects of this function are to add certain
 process properties to the HTTP connection.  These are the result
 of succesful parsing."
+  ;; FIXME - we don't need to do this - we should check for
+  ;; header-parsed and avoid it we we can
   (with-current-buffer (process-buffer httpcon)
     (save-excursion
       (goto-char (point-min))
