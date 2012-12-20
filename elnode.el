@@ -2753,7 +2753,6 @@ default it just calls `elnode-send-404'."
       (elt (file-attributes target-file) 5)
       modified-since))))
 
-
 (defun elnode-cached (httpcon)
   "`elnode-docroot-for' calls this when the resources was cached.
 

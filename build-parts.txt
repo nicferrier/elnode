@@ -1,9 +1,0 @@
-elnode.el
-elnode-tests.el 
-elnode-rle.el
-elnode-wiki.el
-default-wiki-index.creole
-default-webserver-test.html
-default-webserver-image.png
-README.creole
-COPYING

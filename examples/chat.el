@@ -1,6 +1,6 @@
-;;; chat example - very simple webchat -*- lexical-binding: t -*-
-(require 'esxml)
-(require 'cl)
+;;; chat example - very simple webchat
+
+(elnode-app chat-dir esxml)
 
 (defvar chat-list '())
 
@@ -14,16 +14,18 @@
        if (time-less-p since (car rec))
        collect rec))
 
-;; And now the elnode
 
-(require 'elnode)
+;; And now the elnode
 
 (defun chat-comet-handler (httpcon)
   "Defer until there is new chat."
+  ;; FIXME - when this breaks it seems to be down to lexical-binding
+  ;; not being true
   (let ((entered (current-time)))
     (elnode-defer-until (chat-list-since entered)
         (elnode-send-json
-         httpcon elnode-defer-guard-it :jsonp t))))
+         httpcon
+         elnode-defer-guard-it :jsonp t))))
 
 (defun chat-send-handler (httpcon)
   (let* ((username (elnode-http-cookie httpcon "chatusername" t))
@@ -31,13 +33,7 @@
     (chat-add username msg)
     (elnode-send-json httpcon (json-encode '("thanks")))))
 
-
 ;; Main page setup stuff
-
-(defconst chat-dir (file-name-directory
-                    (or (buffer-file-name)
-                        load-file-name
-                        default-directory)))
 
 (defun chat-list-to-html ()
   "Return the `chat-list' as rows for initial chat display."
@@ -48,15 +44,15 @@
         `(tr
           ()
           (td
-           ((class . ,(concat "username " (elt entry 1)))) ,(elt entry 1))
-          (td ((class . "message")) ,(elt entry 2))))))
+           ((class ,(concat "username " (elt entry 1)))) ,(elt entry 1))
+          (td ((class "message")) ,(elt entry 2))))))
 
 (defun chat-main-templater ()
   "Return the `chat-list' as rows for initial chat display."
   (list
    (cons
     "messages"
-    (let ((chat-list
+       (let ((chat-list
            (subseq chat-list
                    0 (if (> (length chat-list) 10)
                          12
@@ -67,7 +63,7 @@
   "The main handler."
   (let ((chat-js (concat chat-dir "chat.js"))
         (chat-html (concat chat-dir "chat.html"))
-        (chat-css (concat chat-dir "styles.css")))
+         (chat-css (concat chat-dir "styles.css")))
     (elnode-hostpath-dispatcher
      httpcon
      `(("^.*//chat/poll/" . chat-comet-handler)

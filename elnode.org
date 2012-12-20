@@ -1,4 +1,23 @@
 
+* process logging
+** log to a process
+** code like this
+(defun nic-make-log-process (filename)
+  (let ((log-name (format "*log-%s*" filename))
+        (buf-name (concat " " log-name)))
+  (start-process-shell-command
+   log-name (get-buffer-create buf-name)
+   (format
+    "while read line ; do echo $line >> %s ; done"
+    filename))))
+(setq nic-logger (nic-make-log-process))
+(process-send-string nic-logger "hello!\n")
+(process-send-string nic-logger "goodbye!\n")
+(process-send-eof nic-logger)
+** elnode-log-buffer-log does logging
+*** it takes text, buffer-or-name
+*** buffer-or-name could be a process?
+
 * planned FAQ
 ** FAQ for installation
 *** why does it not start?
