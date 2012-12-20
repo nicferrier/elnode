@@ -3071,6 +3071,13 @@ The top most handler is returned."
                       next))))))
     next-handler))
 
+
+
+;; FIXME - thought of a way to avoid this... if wrappers worked with
+;; routers... if you define a wrapper and they go into an elnode wide
+;; wrapper variable and routers can check that variable... maybe that
+;; would work better?
+
 ;;;###autoload
 (defmacro define-elnode-handler (name arglist &rest body)
   "Define an Elnode handler function.
