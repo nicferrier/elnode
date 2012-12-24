@@ -1216,9 +1216,8 @@ You can use functions such as `elnode-http-start' and
 Example:
 
   (defun nic-server (httpcon)
-    (elnode-http-start httpcon 200 '((\"Content-Type: text/html\")))
-    (elnode-http-return httpcon \"<html><b>BIG!</b></html>\")
-x  )
+    (elnode-http-start httpcon 200 '(\"Content-Type\" . \"text/html\"))
+    (elnode-http-return httpcon \"<html><b>BIG!</b></html>\"))
   (elnode-start 'nic-server)
 
 Now visit http://127.0.0.1:8000
