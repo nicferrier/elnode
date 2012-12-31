@@ -52,22 +52,13 @@ on your {{{load-path}}} somewhere and:
 
 === Install from this repository ===
 
-You can make a package locally, with this repository:
+Installing from the sources is complex and requires the dependancies
+declared in the file {{{recipes/elnode}}}.
 
-{{{
-M-x compile [RET] make clean all [RET]
-}}}
+The recipe file is used by {{{elpakit}}} or other tools to build the
+package.
 
-And then you can install that package:
-
-{{{
-M-x package-install-file [RET] elnode-0.9.9.tar [RET]
-}}}
-
-You can also use the other Makefile targets, such as {{{test}}}.
-
-Unless you are developing Elnode I advise that you use the packaged
-version.
+Elnode does not transform the source Elisp in anyway.
 
 == Out of the box ==
 
