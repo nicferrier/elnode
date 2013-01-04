@@ -55,10 +55,32 @@ on your {{{load-path}}} somewhere and:
 Installing from the sources is complex and requires the dependancies
 declared in the file {{{recipes/elnode}}}.
 
-The recipe file is used by {{{elpakit}}} or other tools to build the
-package.
+The recipe file is used by
+[[http://github.com/nicferrier/elpakit|elpakit]] or other tools to
+build the package.
 
-Elnode does not transform the source Elisp in anyway.
+elpakit can help build elnode, and help with running tests. Install
+elpakit from [[http://marmalade-repo.org/packages/elpakit|marmalade]]
+and then you can build Elnode with elpakit by doing:
+
+{{{
+M-x elpakit-make-multi
+}}}
+
+in the Elnode directory.
+
+You can build the Elnode package and run the Elnode tests on that
+package with the following lisp:
+
+{{{
+(elpakit-test (list elnode-directory) 'elnode-tests 'elnode)
+}}}
+
+Where {{{elnode-directory}}} specifies your local Elnode repository
+directory.
+
+The list //can// include more repository directories which will be
+combined into a single package archive.
 
 == Out of the box ==
 
