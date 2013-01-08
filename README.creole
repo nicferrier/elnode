@@ -436,18 +436,27 @@ github.
 
 If you're playing with elnode but you can't think of anything to do with it...
 
- * an elpa repository written with elnode
- ** turn the package list into html
- ** allow packages to be downloaded from elnode
- ** upload of packages will require fixing the request management a little
- * an emacsclient with elnode
- ** write a command line client that submits data to the server over HTTP
- ** it should interact with the emacs user in the same way that emacs server does
- ** //why?// because then a single Emacs could have just 1 server socket open for all sorts of different roles
- * alter {{{elnode-webserver-handler-maker}}} to do indexing better
- ** take an optional index producing function?
- ** take keyword flags that set the behaviour? 
- ** eg: {{{:doindexes 't }}}
- * browse-current-buffer
- ** start an elnode server on some random port exposing the current buffer
- ** automatically open a browser on the started server
+* make an elnode param handler that sanitzes input
+** one way to do that was found by aidalgol:
+
+{{{
+(require 'htmlize)
+(htmlize-protect-string
+ "<a href='/blah?a=10&b=2'></a><script>call_func()</script>")
+}}}
+
+* an elpa repository written with elnode
+** turn the package list into html
+** allow packages to be downloaded from elnode
+** upload of packages will require fixing the request management a little
+* an emacsclient with elnode
+** write a command line client that submits data to the server over HTTP
+** it should interact with the emacs user in the same way that emacs server does
+** //why?// because then a single Emacs could have just 1 server socket open for all sorts of different roles
+* alter {{{elnode-webserver-handler-maker}}} to do indexing better
+** take an optional index producing function?
+** take keyword flags that set the behaviour? 
+** eg: {{{:doindexes 't }}}
+* browse-current-buffer
+** start an elnode server on some random port exposing the current buffer
+** automatically open a browser on the started server
