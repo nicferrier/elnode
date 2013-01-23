@@ -4,6 +4,7 @@
  :requires 
  ((web "0.1.4") ;; for rle
   (creole "0.8.14") ;; for wiki
+  (fakir "0.0.14") ;; we provide the test-call with fakir 
   (db "0.0.1")
   (kv "0.0.9"))
  :files 
@@ -16,7 +17,5 @@
   "README.creole"
   "COPYING")
  :test
- (:requires 
-  ((fakir "0.0.14"))
-  :files
+ (:files
   ("elnode-tests.el")))
