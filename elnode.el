@@ -50,6 +50,7 @@
 
 ;;; Code:
 
+(require 'fakir)
 (require 'mm-encode)
 (require 'mailcap)
 (require 'url-util)
