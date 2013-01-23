@@ -872,7 +872,9 @@ port number of the connection."
                       ('t
                        ;; FIXME: we need some sort of check to see if the
                        ;; header has been written
-                       (elnode-error "elnode--filter: default handling")
+                       (elnode-error
+                        "elnode--filter: default handling %S"
+                        signal-value)
                        (process-send-string
                         process
                         (elnode--format-response 500))))
@@ -1800,8 +1802,16 @@ of a buffer."
   (elnode-error "elnode--http-end ending socket %s" httpcon)
   (let ((access-log-name (process-get httpcon :elnode-access-log-name)))
     (when access-log-name
-      (elnode-log-access access-log-name httpcon)))
-  (process-send-eof httpcon)
+      (condition-case err
+          (elnode-log-access access-log-name httpcon)
+        (error
+         (message
+          (concat
+           "elnode--http-end: an error occurred "
+           "processing the access log"))))))
+  (condition-case nil
+      (process-send-eof httpcon)
+    (error (message "elnode--http-endL could not send EOF")))
   (delete-process httpcon)
   (kill-buffer (process-buffer httpcon)))
 
@@ -3521,7 +3531,10 @@ path (the path to call this handler)."
            httpcon
            (if (not logged-in)
                target
-               (format "%s?redirect=%s" target logged-in)))))))))
+               (format "%s?redirect=%s" target logged-in))))
+         (t (elnode-error
+             "elnode-auth--login-handler: unexpected error: %S"
+             err)))))))
 
 (defun elnode-auth-default-test (username database)
   "The default test function used for Elnode auth."
