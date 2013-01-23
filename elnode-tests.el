@@ -1344,7 +1344,7 @@ authenticated."
 (defmacro elnode-auth-flets (&rest body)
   "Wrap the BODY with some standard handler flets."
   (declare (debug (&rest form)))
-  `(let-elnode-handlers
+  `(flet
        ((auth-reqd-handler (httpcon)
           (with-elnode-auth httpcon 'test-auth
             (elnode-dispatcher
@@ -1380,9 +1380,8 @@ the wrapping of a specified handler with the login sender."
       'test-auth
       :test :cookie
       :cookie-name "secret"
-      :redirect (elnode-auth-make-login-wrapper
-                 'auth-reqd-handler
-                 :target "/my-login/"))
+      :redirect "/my-login/"
+      :sender auth-reqd-handler)
      ;; Test that we are redirected to login when we don't have cookie
      (with-elnode-mock-server 'auth-reqd-handler t
        (should-elnode-response
