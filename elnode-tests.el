@@ -368,6 +368,67 @@ The text spat out is tested, so is the status."
           (format "<div>%S</div>" params)
           "")))))
 
+(ert-deftest elnode--dispatch-proc ()
+  "Test the dispatch mechanism."
+  ;; Normal dispatch
+  (let (result)
+    (should
+     (equal
+      :login
+      (fakir-mock-process :httpcon ()
+        (elnode--dispatch-proc
+         :httpcon "/login/"
+         `(("^/a/$" . (lambda (httpcon) (setq result :ha0)))
+           ("^/b/$" . (lambda (httpcon) (setq result :ha1)))
+           ("^/login/$" . (lambda (httpcon) (setq result :login)))))))))
+  ;; Providing an extra table to dispatch from auth
+  (let (result
+        (elnode--defined-authentication-schemes
+         (make-hash-table :test 'equal)))
+    (elnode-defauth :test-scheme1
+      :sender
+      (lambda (httpcon target redirect)
+        (setq result :login)))
+    (should
+     (equal
+      :login
+      (fakir-mock-process :httpcon
+          ((:elnode-http-method "GET")
+           (:elnode-http-params '(("redirect" . "/a/"))))
+        (elnode--dispatch-proc
+         :httpcon
+         "/login/"
+         `(("^/a/$" . (lambda (httpcon) (setq result :ha0)))
+           ("^/b/$" . (lambda (httpcon) (setq result :ha1))))
+         :auth-scheme :test-scheme1))))
+    ;; ... as well as stuff in the main table
+    (should
+     (equal
+      :ha1
+      (fakir-mock-process :httpcon
+          ((:elnode-http-method "GET")
+           (:elnode-http-params '(("redirect" . "/b/"))))
+        (elnode--dispatch-proc
+         :httpcon
+         "/b/"
+         `(("^/a/$" . (lambda (httpcon) (setq result :ha0)))
+           ("^/b/$" . (lambda (httpcon) (setq result :ha1))))
+         :auth-scheme :test-scheme1))))))
+
+(ert-deftest elnode-test-call-simple ()
+  "Simple test of calling a handler.
+
+This tests the basics of mocked server, it goes through the
+filter so it's very useful for working stuff out."
+  (setplist 'elnode-test-handler (list :dispatcher :blah))
+  (with-elnode-mock-server 'elnode-test-handler
+    (should-elnode-response
+     (elnode-test-call "/test/test.something")
+     :status-code 200
+     :header-name "Content-Type"
+     :header-value "text/html"
+     :body-match ".*<h1>Hello World</h1>")))
+
 (ert-deftest elnode--make-test-call ()
   "Test the HTTP request construction."
   (should
@@ -1432,6 +1493,69 @@ the wrapping of a specified handler with the login sender."
         :header-name "Location"
         :header-value "/somepage/test/")))))
 
+;; Wiki tests
+
+(ert-deftest elnode-wiki--setup ()
+  "Test the wiki setup function."
+  ;; Test that it's not called if we can't find the source file
+  (let (called)
+    (flet ((make-directory (dirname &optional parents)
+             (setq called t))
+           ;; We fake buffer-file-name so that the wiki-index-source
+           ;; will not be found
+           (buffer-file-name ()
+             "/tmp/elnode/elnode-wiki.el"))
+      (elnode-wiki--setup)
+      (should-not called)))
+  ;; Test that when called we're going to copy things right
+  (let (make-dir
+        copy-file
+        ;; Ensure the configurable wikiroot is set to the default
+        (elnode-wikiserver-wikiroot elnode-wikiserver-wikiroot-default))
+    (flet ((make-directory (dirname &optional parents)
+             (setq make-dir (list dirname parents)))
+           (dired-copy-file (from to ok-flag)
+             (setq copy-file (list from to ok-flag)))
+           ;; Mock the source filename environment
+           (buffer-file-name ()
+             "/tmp/elnode--wiki-setup-test/elnode-wiki.el")
+           (file-exists-p (filename)
+             (equal
+              filename
+              "/tmp/elnode--wiki-setup-test/default-wiki-index.creole")))
+      (elnode-wiki--setup)
+      (should
+       (equal
+        (list
+         ;; This is the dir we should make
+         '("/home/nferrier/.emacs.d/elnode/wiki/" t)
+         ;; This is the copy file spec
+         '("/tmp/elnode--wiki-setup-test/default-wiki-index.creole"
+           "/home/nferrier/.emacs.d/elnode/wiki/index.creole"
+           nil))
+        ;; So this is the directory that make-directory will create
+        ;; and the copy-file spec
+        (list make-dir copy-file))))))
+
+(ert-deftest elnode-wiki-page ()
+  "Full stack Wiki test."
+  (with-elnode-mock-server
+      ;; The dispatcher function
+      (lambda (httpcon)
+        (let ((elnode-wikiserver-wikiroot "/home/elnode/wiki"))
+          (elnode-hostpath-dispatcher
+           httpcon
+           '(("[^/]*//wiki/\\(.*\\)" . elnode-wikiserver))))) t
+    (fakir-mock-file (fakir-file
+                      :filename "test.creole"
+                      :directory "/home/elnode/wiki"
+                      :content "= Hello World =\nthis is a creole wiki file!\n")
+        (let* ((elnode--do-error-logging nil)
+               (elnode--do-access-logging-on-dispatch nil))
+          (should-elnode-response
+           (elnode-test-call "/wiki/test.creole")
+           :status-code 200
+           :body-match ".*<h1>Hello World</h1>.*")))))
 
 (provide 'elnode-tests)
 

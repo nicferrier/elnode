@@ -1932,13 +1932,18 @@ Otherwise it calls HANDLER."
          (format "%s/" path))
       (funcall handler httpcon))))
 
+(defun elnode--mapper-find-match-func (match-path match-pair)
+  "Funtion to test MATCH-PATH against MATCH-PAIR."
+  (let ((m (string-match (car match-pair) match-path)))
+    (and m
+         (numberp m)
+         (>= m 0)
+         match-pair)))
+
 (defun elnode--mapper-find-mapping (match-path mapping-table)
   "Return the mapping that matches MATCH-PATH in MAPPING-TABLE."
   (loop for mapping in mapping-table
-     if (let ((m (string-match (car mapping) match-path)))
-          (and m
-               (numberp m)
-               (>= m 0)))
+     if (elnode--mapper-find-match-func match-path mapping)
      return mapping))
 
 (defun elnode--mapper-find (httpcon path mapping-table)
@@ -2029,6 +2034,12 @@ The resulting file is NOT checked for existance or safety."
             (or path pathinfo)))))
     targetfile))
 
+
+;; We need to declare this before the dispatcher stuff, which uses it.
+(defvar elnode--defined-authentication-schemes
+  (make-hash-table :test 'equal)
+  "The hash of defined authentication schemes.")
+
 (defvar elnode--do-access-logging-on-dispatch t
   "Needed to suppress logging in testing.")
 
@@ -2047,20 +2058,27 @@ The resulting file is NOT checked for existance or safety."
                               url-mapping-table
                               &key
                               (function-404 'elnode-send-404)
-                              (log-name "elnode"))
+                              (log-name "elnode")
+                              auth-scheme)
   "Dispatch to the matched handler for the PATH on the HTTPCON.
-
 The handler for PATH is matched in the URL-MAPPING-TABLE via
 `elnode--mapper-find'.
 
 If no handler is found then a 404 is attempted via FUNCTION-404,
 it it's found to be a function, or as a last resort
-`elnode-send-404'."
+`elnode-send-404'.
+
+The function also supports the searching of the map provided by
+an AUTH-SCHEME.  Specify the name given to your `elnode-defauth'
+scheme and the redirect mapping will be used here."
   (let ((handler-func
-         (elnode--mapper-find
-          httpcon
-          path
-          url-mapping-table)))
+         (let ((extra-table
+                (elnode--auth-entry->dispatch-table auth-scheme)))
+           (or (and extra-table
+                    (elnode--mapper-find
+                     httpcon path extra-table))
+               (elnode--mapper-find
+                httpcon path url-mapping-table)))))
     (when elnode--do-access-logging-on-dispatch
       (process-put httpcon :elnode-access-log-name log-name))
     (cond
@@ -2072,7 +2090,9 @@ it it's found to be a function, or as a last resort
 
 (defun* elnode-dispatcher (httpcon
                            url-mapping-table
-                           &key (function-404 'elnode-send-404))
+                           &key
+                           (function-404 'elnode-send-404)
+                           auth-scheme)
   "Dispatch HTTPCON to the function mapped in URL-MAPPING-TABLE.
 
 URL-MAPPING-TABLE is an alist of:
@@ -2097,7 +2117,11 @@ An example server setup:
        (\"^/1/$\" . view-1))))
 
 If FUNCTION-404 is specified it is called when no regexp is
-matched, otherwise `elnode-send-404' is used."
+matched, otherwise `elnode-send-404' is used.
+
+AUTH-SCHEME is an optional authentication scheme, defined with
+`elnode-defauth', which specifies a redirect mapping for
+authentications."
   (elnode-normalize-path
    httpcon
    (lambda (httpcon)
@@ -2107,7 +2131,8 @@ matched, otherwise `elnode-send-404' is used."
         httpcon
         pathinfo
         url-mapping-table
-        :function-404 function-404)))))
+        :function-404 function-404
+        :auth-scheme auth-scheme)))))
 
 (defun elnode--hostpath (host path)
   "Turn the host and path into a hostpath."
@@ -2125,7 +2150,8 @@ matched, otherwise `elnode-send-404' is used."
                                    hostpath-mapping-table
                                    &key
                                    (function-404 'elnode-send-404)
-                                   (log-name "elnode"))
+                                   (log-name "elnode")
+                                   auth-scheme)
   "Dispatch HTTPCON to a handler based on the HOSTPATH-MAPPING-TABLE.
 
 HOSTPATH-MAPPING-TABLE has regexs of the host and the path double
@@ -2136,7 +2162,11 @@ slash separated, thus:
 FUNCTION-404 should be a 404 handling function, by default it's
 `elnode-send-404'.
 
-LOG-NAME is an optional log-name."
+LOG-NAME is an optional log-name.
+
+AUTH-SCHEME is an optional authentication scheme, defined with
+`elnode-defauth', which specifies a redirect mapping for
+authentications."
   (let ((hostpath (elnode--hostpath
                    (elnode-http-header httpcon "Host")
                    (elnode-http-pathinfo httpcon))))
@@ -2145,7 +2175,8 @@ LOG-NAME is an optional log-name."
      hostpath
      hostpath-mapping-table
      :function-404 function-404
-     :log-name log-name)))
+     :log-name log-name
+     :auth-scheme auth-scheme)))
 
 ;;;###autoload
 (defcustom elnode-hostpath-default-table
@@ -3451,19 +3482,28 @@ This function sends the contents of the custom variable
       `(("target" . ,target)
         ("redirect" . ,redirect))))))
 
-(defun* elnode-auth--wrapping-login-handler (httpcon
-                                             sender target
-                                             &key
-                                             auth-test ; assert not nil?
-                                             (cookie-name "elnodeauth")
-                                             (loggedin-db elnode-loggedin-db))
-  "The implementation of the login handler for wrapping.
+(defun* elnode-auth--login-handler (httpcon
+                                    sender target
+                                    &key
+                                    auth-test ; assert not nil?
+                                    (cookie-name "elnodeauth")
+                                    (loggedin-db elnode-loggedin-db))
+  "The implementation of the login handler for auth testing.
 
-This receives the SENDER and the TARGET from the wrapper spec."
+This is the handler that is mapped to /login/ (which is the
+default login path) or whatever you want the login path to be.
+
+SENDER is the function which will send the login page to the
+user, it takes an HTTPCON.  It must send a 'username' and
+'password' HTTP parameters to this handler.
+
+TARGET is the path that will be used as the login handler
+path (the path to call this handler)."
   (elnode-method httpcon
       (GET
-       (let ((to (or (elnode-http-param httpcon "redirect")
-                     "/")))
+       (let ((to (or
+                  (elnode-http-param httpcon "redirect")
+                  "/")))
          (funcall sender httpcon target to)))
     (POST
      (let ((username (elnode-http-param httpcon "username"))
@@ -3484,90 +3524,37 @@ This receives the SENDER and the TARGET from the wrapper spec."
 
 (defun elnode-auth-default-test (username database)
   "The default test function used for Elnode auth."
-  (db-get username (symbol-value database)))
+  (db-get username database))
 
-(defun* elnode-auth-make-login-wrapper (wrap-target
-                                         &key
-                                         (sender 'elnode-auth-login-sender)
-                                         (target "/login/"))
-  "Make an auth wrapper around WRAP-TARGET with content from SENDER.
+(defun* elnode-auth--make-login-handler
+    (&key
+     (sender 'elnode-auth-login-sender)
+     (target "/login/")
+     auth-test
+     (auth-db elnode-auth-db) ; only used if the auth-test is not present
+     (cookie-name "elnodeauth")
+     (loggedin-db elnode-loggedin-db))
+  "Make an `elnode-auth--login-handler', binding parameters."
+  (lambda (httpcon)
+    (elnode-auth--login-handler
+     httpcon
+     sender target
+     ;; Make a test function if we don't have one
+     :auth-test (or (functionp auth-test)
+                    (lambda (username)
+                      (elnode-auth-default-test username auth-db)))
+     :cookie-name cookie-name
+     :loggedin-db loggedin-db)))
 
-Wrappers are high level ways of specifying redirect targets for
-authentication.  A wrapper is a list with 2 or 3 elements:
-
-  a handler function name to wrap which must have been defined
-  with `define-elnode-handler'
-
-  a function to handle login (the wrapping handler function)
-
-  optionally a url for the wrap point, \"/login/\" by default.
-
-So if you have a handler `my-app-handler' and you make a wrapper
-with this function then you will change `my-app-handler' so that
-requests for \"/login/\" go to the authentication handler
-produced by this function.
-
-SENDER is a function that sends the login page to the client.
-The SENDER is passed the TARGET as well as the `to' parameter
-from the HTTPCON.  `to' is / by default (if it cannot be found in
-the HTTP request).  By default the SENDER is
-`elnode-auth-login-sender' which offers some customization, but
-you might want to specify your own SENDER to provide a custom
-login page.
-
-This function returns the wrapper spec as a list with the car
-being the symbol `:elnode-wrapper-spec'."
-  (list :elnode-wrapper-spec
-        wrap-target
-        (lambda (httpcon &optional args)
-          (destructuring-bind (&key (auth-db 'elnode-auth-db)
-                                    auth-test ; nil by default
-                                    (cookie-name "elnodeauth")) args
-            (let ((auth-test-fn
-                   (if auth-test
-                       auth-test
-                       ;; Else make a default one of the database
-                       (lambda (username)
-                         (elnode-auth-default-test username auth-db)))))
-              (elnode-auth--wrapping-login-handler
-               httpcon sender target
-               ;; FIXME - possibly have test function here
-               ;; as well as default test function
-               :auth-test auth-test-fn
-               :cookie-name cookie-name))))
-        target))
-
-(defvar elnode--defined-authentication-schemes
-  (make-hash-table :test 'equal)
-  "The hash of defined authentication schemes.")
-
-(defun* elnode--auth-define-scheme-do-wrap (wrapper-spec
-                                            &key
-                                            auth-test
-                                            (auth-db 'elnode-auth-db)
-                                            (cookie-name "elnodeauth"))
-  "Setup the auth wrapping.
-
-WRAPPER-SPEC was specified by the author of the auth declaration
-when defining the wrapper.
-
-The WRAPPER-SPEC is used to setup the wrapping.
-
-The AUTH-DB and the COOKIE-NAME are passed to the wrapper."
-  (destructuring-bind (func match-handler match-path) wrapper-spec
-    (elnode-set-wrapper func match-handler match-path
-                        :auth-test auth-test
-                        :auth-db auth-db
-                        :cookie-name cookie-name)))
-
-(defmacro* elnode-auth-define-scheme (scheme-name
-                                      &key
-                                      (test :cookie)
-                                      auth-test
-                                      (auth-db 'elnode-auth-db)
-                                      (cookie-name "elnodeauth")
-                                      (failure-type :redirect)
-                                      (redirect "/login/"))
+(defun* elnode-defauth (scheme-name
+                        &key
+                        (test :cookie)
+                        auth-test
+                        (auth-db 'elnode-auth-db)
+                        (cookie-name "elnodeauth")
+                        (failure-type :redirect)
+                        (redirect "/login/")
+                        (sender 'elnode-auth-login-sender))
   "Define an Elnode authentication scheme.
 
 An authentication scheme consists of the following attributes:
@@ -3595,43 +3582,56 @@ only `:redirect' is supported.  To redirect on failure means to
 send a 302 with a location to visit a login page.  :FAILURE-TYPE
 is `:redirect' by default.
 
-REDIRECT is where to redirect to if FAILURE-TYPE is
-`:redirect'.  This can be either a String (in which case it
-should indicate a path where a user can login, for example
-\"/login/\") or it can be a wrapper.  See
-`elnode-auth-make-login-wrapper' for a description of wrappers."
-  ;;      (let ((redirect-spec (elnode--with-auth-do-wrap redir)))
+REDIRECT is where to redirect to if FAILURE-TYPE is `:redirect'.
+By default this is \"/login/\".  If SENDER is not nil then a
+dispatcher told about this auth scheme will dispatch a path
+naming REDIRECT to SENDER.
+
+SENDER is an Elnode handler taking additional parameters of
+`target' and `redirect'.  By default this is the function
+`elnode-auth-login-sender'.  Specify a different function if you
+want to totally change the login page."
+  (let* ((login-handler (elnode-auth--make-login-handler
+                         :sender sender
+                         :target redirect
+                         :auth-test auth-test
+                         :auth-db auth-db
+                         :cookie-name cookie-name))
+         (auth-scheme (list
+                       :test test
+                       :cookie-name cookie-name
+                       :failure-type failure-type
+                       :redirect redirect
+                       :login-handler login-handler)))
+    (puthash scheme-name
+             auth-scheme
+             elnode--defined-authentication-schemes)))
+
+(defmacro elnode-auth-dispatcher (httpcon auth-scheme &rest body)
+  "Dispatch HTTPCON to AUTH-SCHEME's handler if it matches.
+
+Otherwise do BODY."
   (declare
-   (debug (sexp sexp &rest form)))
-  (let ((redirect-specv (make-symbol "redirectv"))
-        (scheme-namev (make-symbol "scheme-namev"))
-        (auth-schemev (make-symbol "auth-schemev"))
-        (cookie-namev (make-symbol "cookie-namev"))
-        (auth-dbv (make-symbol "auth-dbv")))
-    `(let* ((,scheme-namev ,scheme-name)
-            (,cookie-namev ,cookie-name)
-            (,auth-dbv (quote ,auth-db))
-            (,redirect-specv ,redirect))
-       ;; Do some type checking
-       (cond
-         ((and (listp ,redirect-specv)
-               (eq :elnode-wrapper-spec (car ,redirect-specv)))
-          (elnode--auth-define-scheme-do-wrap
-           (cdr ,redirect-specv)
-           :auth-test ,auth-test
-           :auth-db ,auth-dbv
-           :cookie-name ,cookie-namev))
-         ((not (stringp ,redirect-specv))
-          (error ":REDIRECT must be a string or a wrapper specification")))
-       ;; Now just add the scheme to the list of defined schemes
-       (let ((,auth-schemev
-              (list :test ,test
-                    :cookie-name ,cookie-namev
-                    :failure-type ,failure-type
-                    :redirect ,redirect-specv)))
-         (puthash ,scheme-namev
-                  ,auth-schemev
-                  elnode--defined-authentication-schemes)))))
+   (debug (sexp sexp &rest form))
+   (indent 2))
+  (let ((httpcon-v (make-symbol "httpcon-v"))
+        (auth-scheme-v (make-symbol "auth-scheme-v"))
+        (redirect-v (make-symbol "redirect-v"))
+        (handler-v (make-symbol "handler-v")))
+    `(let* ((,httpcon-v ,httpcon)
+            (,auth-scheme-v
+             (gethash
+              ,auth-scheme
+              elnode--defined-authentication-schemes))
+            (,redirect-v (plist-get ,auth-scheme-v :redirect))
+            (,handler-v (plist-get ,auth-scheme-v :login-handler)))
+       (if (elnode--mapper-find-match-func
+            (elnode-http-pathinfo ,httpcon-v)
+            (cons ,redirect-v ,handler-v))
+           ;; If the current path matches call the auth handler
+           (funcall ,handler-v ,httpcon-v)
+           ;; Else do whatever the body was
+           ,@body))))
 
 (defmacro if-elnode-auth (httpcon scheme authd &rest anonymous)
   "Check the HTTPCON for SCHEME auth and eval AUTHD.
