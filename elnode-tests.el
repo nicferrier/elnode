@@ -1210,7 +1210,7 @@ Optionally allow the database to be specified with DB (the
 default is `elnode-auth-db')."
   (loop for pair in user-alist
        do
-       (elnode-db-put
+       (db-put
         (car pair)
         (elnode--auth-make-hash
          (car pair)
@@ -1221,11 +1221,11 @@ default is `elnode-auth-db')."
   "Check the authentication check.
 
 This tests the authentication database check."
-  (let* ((elnode-auth-db (elnode-db-make '(elnode-db-hash)))
+  (let* ((elnode-auth-db (db-make '(db-hash)))
          ;; auth test
          (auth-test
           (lambda (username)
-            (elnode-auth-default-test username 'elnode-auth-db))))
+            (elnode-auth-default-test username elnode-auth-db))))
     ;; The only time we really need clear text passwords is when
     ;; faking records for test
     (elnode--auth-init-user-db '(("nferrier" . "password")
@@ -1239,17 +1239,16 @@ This tests the authentication database check."
 Tess that we can login a user and then assert that they are
 authenticated."
   (let* ((elnode-loggedin-db (make-hash-table :test 'equal))
-         (elnode-auth-db (elnode-db-make '(elnode-db-hash)))
+         (elnode-auth-db (db-make '(db-hash)))
          ;; Make an auth-test function
          (auth-test
           (lambda (username)
-            (elnode-auth-default-test username 'elnode-auth-db))))
+            (elnode-auth-default-test username elnode-auth-db))))
     ;; The only time we really need clear text passwords is when
     ;; faking records for test
     (elnode--auth-init-user-db '(("nferrier" . "password")
                                  ("someuser" "secret")))
-
-;; Test a failure
+    ;; Test a failure
     (should
      (equal "an error occured!"
             (condition-case credentials
@@ -1267,11 +1266,11 @@ authenticated."
 (ert-deftest elnode-auth-cookie-check-p ()
   "Check that a cookie can be used for auth."
   (let* ((elnode-loggedin-db (make-hash-table :test 'equal))
-         (elnode-auth-db (elnode-db-make '(elnode-db-hash)))
+         (elnode-auth-db (db-make '(db-hash)))
          ;; auth-test function
          (auth-test
           (lambda (username)
-            (elnode-auth-default-test username 'elnode-auth-db))))
+            (elnode-auth-default-test username elnode-auth-db))))
     ;; The only time we really need clear text passwords is when
     ;; faking records for test
     (elnode--auth-init-user-db '(("nferrier" . "password")
@@ -1368,7 +1367,7 @@ authenticated."
 This tests that the auth protection macro does its job, including
 the wrapping of a specified handler with the login sender."
   ;; Setup the user db
-  (let ((elnode-auth-db (elnode-db-make '(elnode-db-hash))))
+  (let ((elnode-auth-db (db-make '(db-hash))))
     ;; The only time we really need clear text passwords is when
     ;; faking records for test
     (elnode--auth-init-user-db '(("nferrier" . "password")
@@ -1413,7 +1412,7 @@ the wrapping of a specified handler with the login sender."
 (ert-deftest elnode-with-auth-bad-auth ()
   "Test bad auth causes login page again."
   ;; Setup the user db
-  (let ((elnode-auth-db (elnode-db-make '(elnode-db-hash))))
+  (let ((elnode-auth-db (db-make '(db-hash))))
     ;; The only time we really need clear text passwords is when
     ;; faking records for test
     (elnode--auth-init-user-db '(("nferrier" . "password")
@@ -1449,8 +1448,8 @@ the wrapping of a specified handler with the login sender."
 (ert-deftest elnode-with-auth-specific-db ()
   "Test using a specific database."
   ;; Setup the user db
-  (let ((elnode-auth-db (elnode-db-make '(elnode-db-hash)))
-        (elnode-test--my-db (elnode-db-make '(elnode-db-hash))))
+  (let ((elnode-auth-db (db-make '(db-hash)))
+        (elnode-test--my-db (db-make '(db-hash))))
     (elnode--auth-init-user-db
      '(("nferrier" . "password")
        ("someuser" . "secret"))
