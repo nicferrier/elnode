@@ -206,7 +206,7 @@ Update operations are protected by authentication."
              ;; text that's been sent.
              (with-temp-file "/tmp/preview"
                (insert text))
-             (elnode-wiki-send httpcon "/tmp/preview" path)))))))
+             (elnode-wiki-page httpcon "/tmp/preview" path)))))))
 
 ;;;###autoload
 (defun elnode-wikiserver-test ()
