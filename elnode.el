@@ -788,6 +788,7 @@ Does any necessary encoding."
 Does any necessary encoding."
     (elnode--process-send-eof con)))
 
+
 (defun elnode--handler-call (handler process)
   "Simple function to wrap calling the HANDLER."
   (elnode-error "filter: calling handler on %s" process)
@@ -1810,7 +1811,6 @@ HTTPCON is the http connection which must have had the headers
 sent with `elnode-http-start'
 
 DATA must be a string, it's just passed to `elnode-http-send'."
-  (declare (indent 1)) ; helpful indent hint
   (if (not (process-get httpcon :elnode-http-started))
       (elnode-error "Http not started")
     (progn
