@@ -518,9 +518,11 @@ failure state which either the symbol `closed' or the symbol
               (loop for hook-func in elnode-defer-failure-hook
                  do
                    (funcall hook-func httpcon 'failed)))
+             ;; Not sure how to do connect... same as open?
+             ;; ... or just put it back?
              ('connect
               (push
-               (cons httpcon (cdr signal-value))
+               (cons httpcon handler)
                new-deferred)))))
     (elnode--deferred-log elnode-log-info "complete")
     ;; Set the correct queue
