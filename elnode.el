@@ -381,10 +381,8 @@ by elnode iteslf."
          (buffer-name (format "*%s-elnode-access*" logname))
          (filename (elnode--log-filename logname))
          (formatter
-          (assoc-default
-           logname
-           elnode-log-access-alist
-           'equal
+          (or
+           (aget elnode-log-access-alist "elnode")
            elnode-log-access-default-formatter-function))
          (formatted
           (when formatter
