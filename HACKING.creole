@@ -1,0 +1,39 @@
+= Hacking Elnode =
+
+Elnode is a hackers webserver and part of that is being hackable.
+
+
+== Testing with elpakit ==
+
+Elpakit helps with testing.  You can test inside your running Emacs or
+with an external Emacs daemon.
+
+Elpakit is available from [[http://marmalade-repo.org|marmalade-repo]].
+
+Using elpakit to run the tests inside your Emacs:
+
+{{{
+##! emacs-lisp
+
+(defconst elnode-elpakit
+  '("~/work/emacs-kv"
+    "~/work/emacs-db"
+    "~/work/emacs-fakir"
+    "~/work/elnode-auth"))
+
+(elpakit-test elnode-elpakit 'elnode-tests "elnode")
+}}}
+
+With an external daemon:
+
+{{{
+##! emacs-lisp
+
+(defconst elnode-elpakit
+  '("~/work/emacs-kv"
+    "~/work/emacs-db"
+    "~/work/emacs-fakir"
+    "~/work/elnode-auth"))
+
+(elpakit-start-server elnode-elpakit 'elnode-tests)
+}}}
