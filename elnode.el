@@ -1562,7 +1562,7 @@ A is considered the priority (it's elements go in first)."
   ;; cope with transfer encodings.
   (let ((postdata
          (with-current-buffer (process-buffer httpcon)
-           (buffer-substring (point-min) (point-max)) ;debug
+           ;; (buffer-substring (point-min) (point-max)) ;debug
            (buffer-substring
             ;; we might have to add 2 to this because of trailing \r\n
             (process-get httpcon :elnode-header-end)
