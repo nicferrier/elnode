@@ -1037,7 +1037,7 @@ to external processes."
                  (funcall main-send-string httpcon str))
                (elnode--make-send-string ()
                  (lambda (httpcon str)
-                   (send-string-func httpcon str)))
+                   (funcall send-string-func httpcon str)))
                (elnode--make-send-eof ()
                  (lambda (httpcon)
                    ;; Flet everything in elnode--http-end
