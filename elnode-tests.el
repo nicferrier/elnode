@@ -5,6 +5,7 @@
 (require 'ert)
 (require 'fakir)
 (require 'elnode)
+(require 'elnode-wiki)
 (require 'kv)
 
 (ert-deftest elnode-join ()
