@@ -22,18 +22,6 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-;;; Commentary:
-;;
-;; This is an elisp version of the popular node.js asynchronous
-;; webserver toolkit.
-;;
-;; You can define HTTP request handlers and start an HTTP server
-;; attached to the handler.  Many HTTP servers can be started, each
-;; must have it's own TCP port.  Handlers can defer processing with a
-;; signal (which allows comet style resource management)
-;;
-;; See elnode-start for how to start an HTTP server.
-
 ;;; Source code
 ;;
 ;; elnode's code can be found here:
@@ -47,6 +35,18 @@
 ;;
 ;; for private functions.
 
+
+;;; Commentary:
+;;
+;; This is an elisp version of the popular node.js asynchronous
+;; webserver toolkit.
+;;
+;; You can define HTTP request handlers and start an HTTP server
+;; attached to the handler.  Many HTTP servers can be started, each
+;; must have it's own TCP port.  Handlers can defer processing with a
+;; signal (which allows comet style resource management)
+;;
+;; See elnode-start for how to start an HTTP server.
 
 ;;; Code:
 
