@@ -2032,6 +2032,16 @@ The resulting file is NOT checked for existance or safety."
 (defvar elnode--do-access-logging-on-dispatch t
   "Needed to suppress logging in testing.")
 
+(defun elnode--auth-entry->dispatch-table (auth-scheme)
+  "Make a dispatch table from the AUTH-SCHEME."
+  (let* ((auth-scheme (gethash
+                       auth-scheme
+                       elnode--defined-authentication-schemes))
+         (redirect (plist-get auth-scheme :redirect))
+         (login-handler (plist-get auth-scheme :login-handler)))
+    (when redirect
+      (list (cons (concat "^" redirect "$") login-handler)))))
+
 (defun* elnode--dispatch-proc (httpcon
                               path
                               url-mapping-table

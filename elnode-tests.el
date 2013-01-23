@@ -334,6 +334,22 @@ Especially tests the mix of header setting techniques."
       (should
        (re-search-forward "^Accept: application/javascript\r\n" nil t)))))
 
+(ert-deftest elnode--auth-entry->dispatch-table ()
+  "Test the construction of dispatch tables."
+  (let ((elnode--defined-authentication-schemes
+         (make-hash-table :test 'equal)))
+    (elnode-defauth :test-scheme1)
+    (let ((tbl (elnode--auth-entry->dispatch-table :test-scheme1)))
+      (should
+       (and
+        (equal (caar tbl) "^/login/$")
+        (functionp (cdr (car tbl))))))
+    (elnode-defauth :test-scheme2 :redirect "/testauth/")
+    (let ((tbl (elnode--auth-entry->dispatch-table :test-scheme2)))
+      (should
+       (and
+        (equal (caar tbl) "^/testauth/$")
+        (functionp (cdr (car tbl))))))))
 
 (defun elnode-test-handler (httpcon)
   "A simple handler for testing `elnode-test-call'.
