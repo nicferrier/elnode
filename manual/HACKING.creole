@@ -35,5 +35,5 @@ With an external daemon:
     "~/work/emacs-fakir"
     "~/work/elnode-auth"))
 
-(elpakit-start-server elnode-elpakit 'elnode-tests)
+(elpakit-start-server elnode-elpakit 'elnode-tests "elnode")
 }}}

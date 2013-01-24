@@ -1,0 +1,79 @@
+//
+
+NB the manual is going to be in creole isn't it?
+
+we need to make sure that we have sensible sections.
+
+//
+
+= Authentication with Elnode =
+
+* Define a scheme with elnode-defauth
+** the scheme name is used to refer to the scheme
+** the scheme defines
+*** what type of authentication you have
+**** is it cookie? ssl? whatever?
+**** only cookie supported right now
+*** information necessary for the authentication scheme
+**** cookie needs to know what cookie-name you are using
+**** normally this is all defaulted
+* define where authentication is used with {{{with-elnode-auth}}} or {{{if-elnode-auth}}}
+** these take an HTTP connection and a scheme name and check authentication on the request before doing a certain thing
+* define where the authentication redirect is to be applied
+** the authentication scheme name can be passed to a dispatcher
+** or {{{elnode-auth-dispatcher}}} can be used
+
+
+== Dispatchers and authentication ==
+
+Elnode's authentication attempts to offer a single declarative point
+for saying what the authentication scheme //consists of//. That means
+that the login page, the device used to carry the authentication (a
+cookie normally) and the database used for users are all declared
+together.
+
+Elnode still needs a way of including the login page in your
+application though. Doing this magically is possible but seems like a
+bad idea. So Elnode dispatchers take an authentication scheme name
+which they use to decoarate the dispatch table with the login
+{{{redirect}}} page processor.
+
+If you aren't using an Elnode dispatcher, or you need to avoid adding
+an authentication scheme to it for some reason, you can add a special
+authentication dispatcher to your function. This looks like this:
+
+{{{
+##! emacs-lisp
+(elnode-defauth 'my-auth :cookie-name "myauth")
+
+(defun my-elnode-handler (httpcon)
+  "Some handler for Elnode things."
+  (elnode-auth-dispatcher httpcon 'my-auth
+    (elnode-send-json httpcon '(("data" . "secret!")))))
+}}}
+
+== Cookie authentication scheme ==
+
+The cookie authentication scheme works by checking some authentication
+details in a database, making a signed key for the user and attaching
+it to the cookie and to an in-memory database. The key is then checked
+against the database whenever the user does anything that requires
+authentication.
+
+What does it need to declare a cookie type authentication scheme?
+
+* :cookie-name
+** the name of the cookie to use to authenticate
+** by default this is {{{"elnodeauth"}}}
+* an :auth-test
+** this is a function to return a user object from some store
+* an :auth-db
+** this is used to construct an :auth-test function if one is not present
+* :redirect
+** where to send the user if they are not logged in
+** by default this is {{{/login/}}}
+* :sender
+** the function or the symbol name of a function that will send the login page
+** the login page contains a form with the username and password fields in it
+** and sends it back to wherever :redirect is
+
