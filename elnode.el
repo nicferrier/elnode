@@ -2054,15 +2054,21 @@ The resulting file is NOT checked for existance or safety."
 (defvar elnode--do-access-logging-on-dispatch t
   "Needed to suppress logging in testing.")
 
-(defun elnode--auth-entry->dispatch-table (auth-scheme)
-  "Make a dispatch table from the AUTH-SCHEME."
+(defun elnode--auth-entry->dispatch-table (auth-scheme &optional hostpath)
+  "Make a dispatch table from the AUTH-SCHEME.
+
+If HOSTPATH is specified then the resulting match spec is of the
+`hostpath' type for use with `elnode-hostpath-dispatcher'."
   (let* ((auth-scheme (gethash
                        auth-scheme
                        elnode--defined-authentication-schemes))
          (redirect (plist-get auth-scheme :redirect))
          (login-handler (plist-get auth-scheme :login-handler)))
     (when redirect
-      (list (cons (concat "^" redirect "$") login-handler)))))
+      (list
+       (cons
+        (concat (if hostpath "^.*/" "^") redirect "$")
+        login-handler)))))
 
 (defun* elnode--dispatch-proc (httpcon
                               path
@@ -2070,7 +2076,7 @@ The resulting file is NOT checked for existance or safety."
                               &key
                               (function-404 'elnode-send-404)
                               (log-name "elnode")
-                              auth-scheme)
+                              extra-table)
   "Dispatch to the matched handler for the PATH on the HTTPCON.
 The handler for PATH is matched in the URL-MAPPING-TABLE via
 `elnode--mapper-find'.
@@ -2080,16 +2086,17 @@ it it's found to be a function, or as a last resort
 `elnode-send-404'.
 
 The function also supports the searching of the map provided by
-an AUTH-SCHEME.  Specify the name given to your `elnode-defauth'
-scheme and the redirect mapping will be used here."
+an EXTRA-TABLE.  This is useful for authentication and other
+wrappers.  If it is specified it is searched first."
   (let ((handler-func
-         (let ((extra-table
-                (elnode--auth-entry->dispatch-table auth-scheme)))
-           (or (and extra-table
-                    (elnode--mapper-find
-                     httpcon path extra-table))
+         (or
+          ;; Either a match from extra-table ...
+          (and extra-table
                (elnode--mapper-find
-                httpcon path url-mapping-table)))))
+                httpcon path extra-table))
+          ;; ... or from the standard url-mapping-table
+          (elnode--mapper-find
+           httpcon path url-mapping-table))))
     (when elnode--do-access-logging-on-dispatch
       (process-put httpcon :elnode-access-log-name log-name))
     (cond
@@ -2137,13 +2144,15 @@ authentications."
    httpcon
    (lambda (httpcon)
      ;; Get pathinfo again because we may have redirected.
-     (let ((pathinfo (elnode-http-pathinfo httpcon)))
+     (let ((pathinfo (elnode-http-pathinfo httpcon))
+           (extra-table
+            (elnode--auth-entry->dispatch-table auth-scheme)))
        (elnode--dispatch-proc
         httpcon
         pathinfo
         url-mapping-table
         :function-404 function-404
-        :auth-scheme auth-scheme)))))
+        :extra-table extra-table)))))
 
 (defun elnode--hostpath (host path)
   "Turn the host and path into a hostpath."
@@ -2180,14 +2189,17 @@ AUTH-SCHEME is an optional authentication scheme, defined with
 authentications."
   (let ((hostpath (elnode--hostpath
                    (elnode-http-header httpcon "Host")
-                   (elnode-http-pathinfo httpcon))))
+                   (elnode-http-pathinfo httpcon)))
+        (extra-table
+         ;; Make sure it's a hostpath type
+         (elnode--auth-entry->dispatch-table auth-scheme t)))
     (elnode--dispatch-proc
      httpcon
      hostpath
      hostpath-mapping-table
      :function-404 function-404
      :log-name log-name
-     :auth-scheme auth-scheme)))
+     :extra-table extra-table)))
 
 ;;;###autoload
 (defcustom elnode-hostpath-default-table
