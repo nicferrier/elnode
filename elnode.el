@@ -3401,7 +3401,8 @@ path (the path to call this handler)."
      httpcon
      sender target
      ;; Make a test function if we don't have one
-     :auth-test (or (functionp auth-test)
+     :auth-test (if (functionp auth-test)
+                    auth-test
                     (lambda (username)
                       (elnode-auth-default-test username auth-db)))
      :cookie-name cookie-name
