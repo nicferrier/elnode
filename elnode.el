@@ -1770,10 +1770,7 @@ data.  This is done mainly for testing infrastructure."
     ;; Send the header
     (elnode-error "starting HTTP response on %s" httpcon)
     (let ((header-alist
-           (append
-            (process-get httpcon :elnode-headers-to-set)
-            (list (cons "Transfer-encoding" "chunked"))
-            header))
+           (append (process-get httpcon :elnode-headers-to-set) header))
           (status-code (if (stringp status)
                            (string-to-number status)
                            status)))
