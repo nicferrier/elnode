@@ -1904,7 +1904,7 @@ Optionally include MSG."
   "Sends a Bad Request error to the HTTPCON.
 
 Optionally include MSG."
-  (elnode-send-status httpcon 404 msg))
+  (elnode-send-status httpcon 400 msg))
 
 (defun elnode-send-500 (httpcon &optional msg)
   "Sends a Server Error to the HTTPCON.
