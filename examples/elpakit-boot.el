@@ -11,7 +11,7 @@
   (file-name-directory
    (directory-file-name
     (file-name-directory
-     (buffer-file-name))))
+     (buffer-file-name)))))
  'elnode)
 
 ;;; elpakit-boot.el ends here.
