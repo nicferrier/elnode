@@ -53,11 +53,16 @@ when it does the relevant element is deleted.")
 </body>
 </html>"))
 
+(defun elnode-ijs/test (httpcon)
+  "A test thing."
+  (elnode-send-json httpcon '(just a test)))
+
 (defun elnode-ijs-router (httpcon)
   "Main router for ijs"
   (elnode-dispatcher
    httpcon
    `(("^/boot/" . elnode-ijs/bootstrap)
+     ("^/test/" . elnode-ijs/test)
      ("^/ijs\\.js" . ,(elnode-make-send-file
                        (concat elnode-ijs-dir "elnode-ijs.js")))
      ("^/ijsresult/" . elnode-ijs-result-handler)

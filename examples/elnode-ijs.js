@@ -11,7 +11,9 @@ var elnode_ijs =
                                var val = data[key];
                                var result;
                                try {
-                                   result = eval(val);
+                                   with (window) {
+                                       result = JSON.stringify(eval(val));
+                                   }
                                } 
                                catch (err) {
                                    console.log("error: ", err);
