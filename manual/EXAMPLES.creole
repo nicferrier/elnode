@@ -1,0 +1,29 @@
+= Examples bundled with Elnode =
+
+There are a bunch of examples of using Elnode in the GitHub
+repository.
+
+== Interactive Javascript Mode ==
+
+Is a Javascript shell done via Elnode. It shows how you can hook the
+running Emacs and the remote browser together, quite easily.
+
+The Elnode handler uses comet to wait for a Javascript string and when
+it gets one evaluates it and sends it back. A {{{comint}}} shell
+collects the input to send to the browser.
+
+It works quite well and shows how you can easily tie Emacs and the
+browser together with Elnode.
+
+
+== Chat ==
+
+Another comet application serves a chat system with Elnode. 
+
+A comet handler hangs waiting for messages to be typed by someone
+else. The clients have to be web browsers right now but could easily
+be Emacs clients as well.
+
+This is actually the basis for [[http://teamchat.net|TeamChat.net]],
+the IRC based ChatOps tool.
+
