@@ -211,7 +211,7 @@ list.  Use it like this:
 
 Once used you can access the variable `my-app-dir' as the dirname
 of your module (which is useful for serving files and such)."
-  (declare (indent 2))
+  (declare (indent 1))
   `(progn
      (setq lexical-binding t)
      (defconst ,dir-var (file-name-directory
