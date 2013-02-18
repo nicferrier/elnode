@@ -1,4 +1,4 @@
-;;; chat example - very simple webchat
+;;; chat example - very simple webchat -*- lexical-binding: t -*-
 
 (elnode-app chat-dir esxml)
 
@@ -13,7 +13,6 @@
   (loop for rec in chat-list
        if (time-less-p since (car rec))
        collect rec))
-
 
 ;; And now the elnode
 
