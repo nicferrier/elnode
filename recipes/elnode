@@ -1,5 +1,5 @@
 (elnode
- :version "0.9.9.6.3"
+ :version "0.9.9.6.4"
  :doc "The Emacs webserver."
  :requires 
  ((web "0.1.4") ;; for rle
