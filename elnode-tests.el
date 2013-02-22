@@ -912,6 +912,15 @@ Content-Type: text/html\r
     (should
      (string-match ".*<div>you are talking to Caroline</div>.*" result))))
 
+(ert-deftest elnode-http-pathinfo ()
+  "Test the pathinfo calling."
+   (fakir-mock-process
+       :httpcon
+       ((:elnode-http-pathinfo "/test/somepath"))
+     (should
+      (equal
+       "/test/somepath"
+       (elnode-http-pathinfo :httpcon)))))
 
 (ert-deftest elnode--mapper-find ()
   "Test the mapper find function."

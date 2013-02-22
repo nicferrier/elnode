@@ -1519,7 +1519,10 @@ If PROPERTY is non-nil, then return that property."
       (process-get httpcon property)))
 
 (defun elnode-http-pathinfo (httpcon)
-  "Get the PATHINFO of the request."
+  "Get the PATHINFO of the request.
+
+The PATHINFO is the CGI term for the part of the path that is not
+the hostname or the query; the part that relates to the path."
   (or
    (process-get httpcon :elnode-http-pathinfo)
    (elnode--http-parse-resource httpcon :elnode-http-pathinfo)))
