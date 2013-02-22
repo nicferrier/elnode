@@ -401,7 +401,7 @@ The text spat out is tested, so is the status."
          "/login/"
          `(("^/a/$" . (lambda (httpcon) (setq result :ha0)))
            ("^/b/$" . (lambda (httpcon) (setq result :ha1))))
-         :auth-scheme :test-scheme1))))
+         :extra-table (elnode--auth-entry->dispatch-table :test-scheme1)))))
     ;; ... as well as stuff in the main table
     (should
      (equal
@@ -414,7 +414,7 @@ The text spat out is tested, so is the status."
          "/b/"
          `(("^/a/$" . (lambda (httpcon) (setq result :ha0)))
            ("^/b/$" . (lambda (httpcon) (setq result :ha1))))
-         :auth-scheme :test-scheme1))))))
+         :extra-table (elnode--auth-entry->dispatch-table :test-scheme1)))))))
 
 (ert-deftest elnode-test-call-simple ()
   "Simple test of calling a handler.
