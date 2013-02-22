@@ -1861,7 +1861,14 @@ DATA must be a string, it's just passed to `elnode-http-send'."
             (elnode-http-send-string httpcon ""))))))
 
 (defun elnode-send-html (httpcon html)
-  "Simple send for HTML."
+  "Simple send for HTML.
+
+Use this for simple sending of a full HTML response:
+
+ (defun my-handler (httpcon)
+   (elnode-send-html httpcon \"<html><h1>Hello!</h1></html>\"))
+
+The data is sent with content type: text/html."
   (elnode-http-start httpcon 200 '("Content-Type" . "text/html"))
   (elnode-http-return httpcon html))
 
