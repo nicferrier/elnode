@@ -595,10 +595,22 @@ The function `elnode-send-status' also uses these."
   :type '(alist :key-type integer
                 :value-type string))
 
+(defconst elnode--default-response-groups
+  '((1 . "Informing you of something.")
+    (2 . "Ok.")
+    (3 . "")
+    (4 . "Bad.")
+    (5 . "Error."))
+  "Response codes for error code / 100.
+
+These are designed to be used when a specific code is not
+available.")
+
 (defun elnode--format-response (status &optional msg)
   "Format the STATUS and optionally MESSAGE as an HTML return."
   (format "<h1>%s</h1>%s\r\n"
           (cdr (or (assoc status elnode-default-response-table)
+                   (assoc (/ status 100) elnode--default-response-groups)
                    (assoc t elnode-default-response-table)))
           (if msg (format "<p>%s</p>" msg) "")))
 

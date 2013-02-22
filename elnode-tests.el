@@ -837,6 +837,23 @@ Content-Type: text/html\r
               (process-get :httpcon :elnode-headers-to-set)))))
 
 
+(ert-deftest elnode--format-response ()
+  "Test response formatting."
+  ;; Test standard 200 response
+  (should
+   (equal
+    "<h1>Ok.</h1>\r\n"
+    (elnode--format-response 200)))
+  ;; Test a response we don't have a mapping for
+  (should
+   (equal
+    "<h1>Error.</h1>\r\n"
+    (elnode--format-response 531)))
+  (let ((elnode-default-response-table '((404 . "We didn't find that!"))))
+    (should
+     (equal
+      "<h1>We didn't find that!</h1>\r\n"
+      (elnode--format-response 404)))))
 
 (ert-deftest elnode-send-json ()
   "Test sending JSON."
