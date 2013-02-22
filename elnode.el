@@ -1610,7 +1610,7 @@ which will be returned."
             (member (car pair) names))
      collect pair))
 
-(defun elnode-http-param (httpcon name)
+(defun elnode-http-param (httpcon name &optional default)
   "Get the named parameter from the request."
   (let* ((params (elnode-http-params httpcon))
          (param-pair
@@ -1618,8 +1618,9 @@ which will be returned."
            (if (symbolp name) (symbol-name name) name)
            params)))
     ;; Should we signal when we don't have a param?
-    (when param-pair
-      (cdr param-pair))))
+    (if param-pair
+        (cdr param-pair)
+        default)))
 
 (defun elnode-http-method (httpcon)
   "Get the PATHINFO of the request."
