@@ -920,7 +920,36 @@ routines."
 
 (defun elnode--alist-to-query (alist)
   "Turn an alist into a formdata/query string."
-  (web--to-query-string alist))
+  (flet ((web--key-value-encode (key value)
+           "Encode a KEY and VALUE for url encoding."
+           (cond
+             ((or
+               (numberp value)
+               (stringp value))
+              (format
+               "%s=%s"
+               (url-hexify-string (format "%s" key))
+               (url-hexify-string (format "%s" value))))
+             (t
+              (format "%s" (url-hexify-string (format "%s" key))))))
+         (web--to-query-string (object)
+           "Convert OBJECT (a hash-table or alist) to an HTTP query string."
+           ;; Stolen from web
+           (mapconcat
+            (lambda (pair)
+              (web--key-value-encode (car pair) (cdr pair)))
+            (cond
+              ((hash-table-p object)
+               (let (result)
+                 (maphash
+                  (lambda (key value)
+                    (setq result (append (list (cons key value)) result)))
+                  object)
+                 (reverse result)))
+              ((listp object)
+               object))
+            "&")))
+    (web--to-query-string alist)))
 
 (defun elnode--make-test-call (path method parameters headers)
   "Construct the HTTP request for a test call.
