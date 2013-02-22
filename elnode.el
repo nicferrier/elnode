@@ -2563,6 +2563,13 @@ certain types of debugging."
   :group 'elnode
   :type '(string))
 
+(defvar elnode-replacements-pattern "<!##E \\(.*?\\) E##!>"
+  "The regex used for replacing things.
+
+The default regex is rather baroque.  This is because it needs to
+be quite unique and there are a lot of different sorts of things
+like this to be unique from.")
+
 (defun elnode--buffer-template (file-buf replacements)
   "Template render a buffer and return a copy.
 
@@ -2592,7 +2599,7 @@ would result in the string:
 being returned."
   (with-current-buffer file-buf
     (replace-regexp-in-string
-     "<!##E \\(.*?\\) E##!>"
+     elnode-replacements-pattern
      (lambda (matched)
        (let ((match-var (match-string-no-properties 1 matched)))
          (cond
@@ -2745,7 +2752,8 @@ Optionally, use the specified TYPE as the status code, eg:
                                 &key
                                 preamble
                                 mime-types
-                                replacements)
+                                replacements
+                                replacements-pattern)
   "Make a handler that will serve a single FILENAME.
 
 If the FILENAME is relative then it is resolved against the
@@ -2758,14 +2766,20 @@ details.
 The REPLACEMENTS parameter can be a function that returns a
 hash-table or alist, this is very useful for this function
 because it allows dynamic variables to be defined.  Again, see
-`elnode-send-file' for full documentation of this feature."
+`elnode-send-file' for full documentation of this feature.
+
+The REPLACEMENTS-PATTERN can be used to set the regex used to
+match replacements.  See `elnode-replacements-pattern'."
   (lambda (httpcon)
-    (elnode-send-file
-     httpcon
-     filename
-     :mime-types mime-types
-     :preamble preamble
-     :replacements replacements)))
+    (let ((elnode-replacements-pattern
+           (or replacements-pattern
+               elnode-replacements-pattern)))
+      (elnode-send-file
+       httpcon
+       filename
+       :mime-types mime-types
+       :preamble preamble
+       :replacements replacements))))
 
 
 ;; Docroot protection
