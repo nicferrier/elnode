@@ -59,6 +59,7 @@
 (require 'json)
 (require 'db)
 (require 'dired) ; needed for the setup
+(require 'tabulated-list)
 (require 'ert) ; we provide some assertions and need 'should'
 (eval-when-compile (require 'cl))
 
