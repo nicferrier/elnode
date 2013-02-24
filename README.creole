@@ -104,6 +104,18 @@ webroot. Both are configurable with Elnode config variables.
 You can also just ignore the built in stuff completely and write your
 own servers.
 
+=== What Elnode servers are running? ===
+
+Elnode tracks the servers an Emacs instance is running and you can see
+the view of that with:
+
+{{{
+M-x list-elnode-servers
+}}}
+
+The list shows TCP ports and handlers and you can press return on a
+handler and move to it's source code definition.
+
 
 == How does it work? ==
 
