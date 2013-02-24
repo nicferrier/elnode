@@ -1218,27 +1218,55 @@ Serves only to connect the server process to the client processes"
   "List of all ports currently in use by elnode."
   (mapcar 'car elnode-server-socket))
 
-;;;###autoload
-(defun elnode-list ()
+(defun elnode--list-servers ()
+  "List the current Elnode servers for `elnode-list-mode'."
+  (loop for (port . socket-proc) in elnode-server-socket
+     collect
+       (list
+        port
+        (let* ((fn (process-get socket-proc :elnode-http-handler))
+               (doc (when (functionp fn)
+                      (documentation fn))))
+          (vector
+           (number-to-string port)
+           (symbol-name fn)
+           (or (if (and doc (string-match "^\\([^\n]+\\)" doc))
+                   (match-string 1 doc)
+                   "no documentation.")))))))
+
+(defun elnode-server-list-find-handler ()
+  "Find the handler mentioned in the handler list."
   (interactive)
-  "List the Elnode servers we have running."
+  (let ((line
+         (buffer-substring-no-properties
+          (line-beginning-position)
+          (line-end-position))))
+    (when (string-match "^[0-9]+ +\\([^ ]+\\) .*" line)
+      (find-file
+       (or (symbol-file (intern (match-string 1 line)))
+           (error "no such file"))))))
+
+(define-derived-mode
+    elnode-list-mode tabulated-list-mode "Elnode server list"
+    "Major mode for listing Elnode servers currently running."
+    (setq tabulated-list-entries 'elnode--list-servers)
+    (define-key elnode-list-mode-map (kbd "\r")
+      'elnode-server-list-find-handler)
+    (setq tabulated-list-format
+          [("Port" 10 nil)
+           ("Handler function" 40 nil)
+           ("Documentation" 80 nil)])
+    (tabulated-list-init-header))
+
+(defun elnode-server-list ()
+  "List the currently running Elnode servers."
+  (interactive)
   (with-current-buffer (get-buffer-create "*elnode servers*")
-    (setq buffer-read-only t)
-    (unwind-protect
-         (let ((inhibit-read-only t))
-           (erase-buffer)
-           (loop for server in elnode-server-socket
-              do
-                (destructuring-bind (port . socket-proc) server
-                  (let ((fn (process-get socket-proc :elnode-http-handler)))
-                    (princ
-                     (format
-                      "%s on %s\n%s\n\n"
-                      port
-                      (process-get socket-proc :elnode-http-handler)
-                      (or (documentation fn) "no documentation."))
-                   (current-buffer)))))
-           (switch-to-buffer (current-buffer))))))
+    (elnode-list-mode)
+    (tabulated-list-print)
+    (switch-to-buffer (current-buffer))))
+
+(defalias 'list-enode-servers 'elnode-server-list)
 
 ;;;###autoload
 (defun* elnode-start (request-handler
