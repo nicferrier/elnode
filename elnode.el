@@ -1242,9 +1242,12 @@ Serves only to connect the server process to the client processes"
           (line-beginning-position)
           (line-end-position))))
     (when (string-match "^[0-9]+ +\\([^ ]+\\) .*" line)
-      (find-file
-       (or (symbol-file (intern (match-string 1 line)))
-           (error "no such file"))))))
+      (let ((handler-name (match-string 1 line)))
+        (with-current-buffer
+            (find-file
+             (or (symbol-file (intern handler-name))
+                 (error "no such file")))
+          (find-function 'elnode-hostpath-default-handler))))))
 
 (define-derived-mode
     elnode-list-mode tabulated-list-mode "Elnode server list"
