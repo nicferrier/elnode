@@ -1270,7 +1270,7 @@ Serves only to connect the server process to the client processes"
     (tabulated-list-print)
     (switch-to-buffer (current-buffer))))
 
-(defalias 'list-enode-servers 'elnode-server-list)
+(defalias 'list-elnode-servers 'elnode-server-list)
 
 ;;;###autoload
 (defun* elnode-start (request-handler
