@@ -472,3 +472,5 @@ If you're playing with elnode but you can't think of anything to do with it...
 * browse-current-buffer
 ** start an elnode server on some random port exposing the current buffer
 ** automatically open a browser on the started server
+
+{{https://raw.github.com/nicferrier/elnode/master/default-wiki-logo.gif}}
