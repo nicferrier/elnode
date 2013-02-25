@@ -1,0 +1,65 @@
+= Testing =
+
+Testing webapps can be hard. Elnode has lots of support but it's quite
+tricky.
+
+This is just some examples right now.
+
+
+=== Using fakir-mock-process ===
+
+* we mock a request using (elnode--http-make-hdr ...)
+* we parse the request directly with elnode--http-parse
+** catching the 'done signal from that
+* we test that stuff has been set on the process
+
+{{{
+(ert-deftest elnode--http-parse-header-complete ()
+  "Test the HTTP parsing."
+  (fakir-mock-process
+    :httpcon
+    ((:buffer
+      (elnode--http-make-hdr
+       'get "/"
+       '(host . "localhost")
+       '(user-agent . "test-agent"))))
+    ;; Parse the header
+    (should
+     (equal 'done
+            (catch 'elnode-parse-http
+              (elnode--http-parse :httpcon))))
+    ;; Now check the side effects
+    (should
+     (equal
+      (process-get :httpcon :elnode-http-header)
+      '(("Host" . "localhost")
+        ("User-Agent" . "test-agent"))))))
+}}}
+
+
+=== Testing the response ===
+
+* we fake the process
+* set some headers
+* start a response
+* test that the output of the response is correct
+
+{{{
+(ert-deftest elnode-http-start ()
+  "Test starting a response.
+
+Especially tests the mix of header setting techniques."
+  (fakir-mock-process :httpcon ()
+    (elnode-http-header-set :httpcon "Content-Type" "text/html")
+    (elnode-http-header-set :httpcon "Accept" "application/javascript")
+    (elnode-http-start :httpcon 200 '("Content-Type" . "text/plain"))
+    ;; Test that we have the correct text in the fake process buffer
+    (with-current-buffer (fakir-get-output-buffer)
+      (goto-char (point-min))
+      (should
+       (re-search-forward "^Content-Type: text/html\r\n" nil t))
+      (goto-char (point-min))
+      (should
+       (re-search-forward "^Accept: application/javascript\r\n" nil t)))))
+}}}
+
