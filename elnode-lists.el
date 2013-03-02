@@ -50,13 +50,18 @@
     (tabulated-list-init-header))
 
 ;;;###autoload
-(defun elnode-deferred-list ()
+(defun elnode-deferred-list (&optional prefix)
   "List the currently deferred Elnode handlers."
-  (interactive)
+  (interactive "P")
   (with-current-buffer (get-buffer-create "*elnode deferreds*")
     (elnode-deferred-list-mode)
     (tabulated-list-print)
-    (switch-to-buffer (current-buffer))))
+    (if prefix
+        (switch-to-buffer-other-window (current-buffer))
+        (switch-to-buffer (current-buffer)))))
+
+;;;###autoload
+(defalias 'list-elnode-deferreds 'elnode-deferred-list)
 
 ;;; Server list
 
@@ -104,13 +109,15 @@
     (tabulated-list-init-header))
 
 ;;;###autoload
-(defun elnode-server-list ()
+(defun elnode-server-list (&optional prefix)
   "List the currently running Elnode servers."
-  (interactive)
+  (interactive "P")
   (with-current-buffer (get-buffer-create "*elnode servers*")
     (elnode-list-mode)
     (tabulated-list-print)
-    (switch-to-buffer (current-buffer))))
+    (if prefix
+        (switch-to-buffer-other-window (current-buffer))
+        (switch-to-buffer (current-buffer)))))
 
 ;;;###autoload
 (defalias 'list-elnode-servers 'elnode-server-list)
