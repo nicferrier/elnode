@@ -546,17 +546,6 @@ Necessary for running comet apps."
   (setq elnode--defer-timer
         (run-at-time "2 sec" 2 'elnode--deferred-processor)))
 
-(defun elnode-deferred-queue (arg)
-  "Message the length of the deferred queue."
-  (interactive "P")
-  (if (not arg)
-      (message
-       "elnode deferred queue: %d %s"
-       (length elnode--deferred)
-       elnode--defer-timer)
-    (setq elnode--deferred (list))
-    (message "elnode deferred queue reset!")))
-
 (defun elnode-deferred-queue-start ()
   "Start the deferred queue, unless it's running."
   (interactive)
@@ -1219,58 +1208,6 @@ Serves only to connect the server process to the client processes"
   "List of all ports currently in use by elnode."
   (mapcar 'car elnode-server-socket))
 
-(defun elnode--list-servers ()
-  "List the current Elnode servers for `elnode-list-mode'."
-  (loop for (port . socket-proc) in elnode-server-socket
-     collect
-       (list
-        port
-        (let* ((fn (process-get socket-proc :elnode-http-handler))
-               (doc (when (functionp fn)
-                      (documentation fn))))
-          (vector
-           (number-to-string port)
-           (symbol-name fn)
-           (or (if (and doc (string-match "^\\([^\n]+\\)" doc))
-                   (match-string 1 doc)
-                   "no documentation.")))))))
-
-(defun elnode-server-list-find-handler ()
-  "Find the handler mentioned in the handler list."
-  (interactive)
-  (let ((line
-         (buffer-substring-no-properties
-          (line-beginning-position)
-          (line-end-position))))
-    (when (string-match "^[0-9]+ +\\([^ ]+\\) .*" line)
-      (let ((handler-name (intern (match-string 1 line))))
-        (with-current-buffer
-            (find-file
-             (or (symbol-file handler-name)
-                 (error "no such file")))
-          (find-function handler-name))))))
-
-(define-derived-mode
-    elnode-list-mode tabulated-list-mode "Elnode server list"
-    "Major mode for listing Elnode servers currently running."
-    (setq tabulated-list-entries 'elnode--list-servers)
-    (define-key elnode-list-mode-map (kbd "\r")
-      'elnode-server-list-find-handler)
-    (setq tabulated-list-format
-          [("Port" 10 nil)
-           ("Handler function" 40 nil)
-           ("Documentation" 80 nil)])
-    (tabulated-list-init-header))
-
-(defun elnode-server-list ()
-  "List the currently running Elnode servers."
-  (interactive)
-  (with-current-buffer (get-buffer-create "*elnode servers*")
-    (elnode-list-mode)
-    (tabulated-list-print)
-    (switch-to-buffer (current-buffer))))
-
-(defalias 'list-elnode-servers 'elnode-server-list)
 
 ;;;###autoload
 (defun* elnode-start (request-handler
