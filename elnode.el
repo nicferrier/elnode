@@ -2648,6 +2648,23 @@ It should not be used otherwise.")
 
 It should not be used otherwise.")
 
+(defun elnode--rfc1123-date (time)
+  (let* ((day-names '("Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat"))
+	 (month-names '("Jan" "Feb" "Mar" "Apr" "May" "Jun"
+			"Jul" "Aug" "Sep" "Oct" "Nov" "Dec"))
+	 (decoded-time (decode-time time))
+	 (day (nth (nth 6 decoded-time) day-names))
+	 (month (nth (- (nth 4 decoded-time) 1) month-names)))
+    (format "%s, %s %s %s"
+	    day 
+	    (format-time-string "%m" time t)
+	    month
+	    (format-time-string "%Y %H:%M:%S GMT" time t))))
+
+(defun elnode--file-modified-time (file)
+  "Get modification time for FILE."
+  (nth 5 (file-attributes file)))
+
 (defun* elnode-send-file (httpcon targetfile
                                   &key
                                   preamble
@@ -2707,7 +2724,10 @@ delivered."
                          mime-types)))
                  (mm-default-file-encoding targetfile)
                   "application/octet-stream")))
-        (elnode-http-start httpcon 200 `("Content-type" . ,mimetype))
+	(elnode-http-start httpcon 200 
+			   `("Content-type" . ,mimetype)
+			   `("Last-Modified" . ,(elnode--rfc1123-date 
+						 (elnode--file-modified-time targetfile))))
         (when preamble (elnode-http-send-string httpcon preamble))
         (if (or elnode-webserver-visit-file replacements)
             (let ((file-buf (find-file-noselect filename)))
@@ -2831,7 +2851,7 @@ default it just calls `elnode-send-404'."
     (and
      modified-since
      (time-less-p
-      (elt (file-attributes target-file) 5)
+      (elnode--file-modified-time target-file)
       modified-since))))
 
 (defun elnode-cached (httpcon)
