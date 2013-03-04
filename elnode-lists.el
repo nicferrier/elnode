@@ -67,19 +67,23 @@
 
 (defun elnode--list-servers ()
   "List the current Elnode servers for `elnode-list-mode'."
-  (loop for (port . socket-proc) in elnode-server-socket
-     collect
-       (list
-        port
-        (let* ((fn (process-get socket-proc :elnode-http-handler))
-               (doc (when (functionp fn)
-                      (documentation fn))))
-          (vector
-           (number-to-string port)
-           (symbol-name fn)
-           (or (if (and doc (string-match "^\\([^\n]+\\)" doc))
-                   (match-string 1 doc)
-                   "no documentation.")))))))
+  (flet ((closurep (v)
+           (and (functionp v) (listp v) (eq (car v) 'closure))))
+    (loop for (port . socket-proc) in elnode-server-socket
+       collect
+         (list
+          port
+          (let* ((fn (process-get socket-proc :elnode-http-handler))
+                 (doc (when (functionp fn)
+                        (documentation fn))))
+            (vector
+             (number-to-string port)
+             (cond
+               ((closurep fn) (format "%S" fn))
+               (t (symbol-name fn)))
+             (or (if (and doc (string-match "^\\([^\n]+\\)" doc))
+                     (match-string 1 doc)
+                     "no documentation."))))))))
 
 (defun elnode-lists-server-find-handler ()
   "Find the handler mentioned in the handler list."
