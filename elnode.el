@@ -481,6 +481,9 @@ The hook function is called with the http connection and the
 failure state which either the symbol `closed' or the symbol
 `failed'.")
 
+(defconst elnode--debug-with-backtraces nil
+  "Feature switch to include backtrace debugging support.")
+
 (defun elnode--deferred-processor ()
   "Process the deferred queue."
   (let ((run (random 5000)) ; use this to disambiguate runs in the logs
@@ -501,8 +504,12 @@ failure state which either the symbol `closed' or the symbol
                   (cons httpcon (cdr signal-value))
                   new-deferred))
                 (error
-                 (elnode--deferred-log elnode-log-critical
-                                       "error %s - %s" httpcon signal-value))))
+                 (elnode--deferred-log
+                  elnode-log-critical
+                  "error %s - %s %S" httpcon signal-value
+                  (if elnode--debug-with-backtraces
+                      debugger-previous-backtrace
+                      "")))))
              ('closed
               (elnode--deferred-log elnode-log-info
                                     "closed %s %s" httpcon handler)
