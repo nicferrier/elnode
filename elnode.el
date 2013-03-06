@@ -423,7 +423,7 @@ only be expanded where there is an inscope `httpcon'.
 
 Inside the macro the symbol `elnode-defer-guard-it' is bound to
 the value of the GUARD."
-  (declare (indent defun))
+  (declare (indent 1))
   (let ((bv (make-symbol "bv"))
         (gv (make-symbol "gv"))
         (fv (make-symbol "fv")))
