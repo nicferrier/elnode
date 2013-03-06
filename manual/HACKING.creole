@@ -37,3 +37,11 @@ With an external daemon:
 
 (elpakit-start-server elnode-elpakit 'elnode-tests "elnode")
 }}}
+
+== Hacking defers ==
+
+If things go wrong with defers:
+
+* turn off the defer queue processor - M-x elnode-defer-queue-stop
+* run the defer queue manually elnode-defer-queue-process
+* maybe debug the defer queue processor elnode--deferred-processor
