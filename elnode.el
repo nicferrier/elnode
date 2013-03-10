@@ -1312,7 +1312,7 @@ elnode servers on the same port on different hosts."
                       (string-to-number
                        (completing-read
                         "Port: "
-                        (mapcar (lambda (n) (format "%d" n))
+                        (mapcar (lambda (n) (format "%s" n))
                                 (elnode-ports))))))
                  (list prt)))
   (let ((server (assoc port elnode-server-socket)))
@@ -3130,12 +3130,18 @@ request does not go above the DOCROOT."
 Stored as `docroot' . `webserver'.")
 
 ;;;###autoload
-(defun elnode-make-webserver (docroot port)
+(defun elnode-make-webserver (docroot port &optional host)
   "Make a webserver interactively, for DOCROOT on PORT.
 
 An easy way for a user to make a webserver for a particular
 directory."
-  (interactive "DServe files from: \nnTCP Port (try something over 8000):")
+  (interactive
+   (let ((docroot (read-directory-name "Docroot: " nil nil t))
+         (port (read-from-minibuffer "Port: "))
+         (host (if current-prefix-arg
+                   (read-from-minibuffer "Host: ")
+                   elnode-init-host)))
+     (list docroot port host)))
   (let ((webserver-proc (elnode-webserver-handler-maker docroot)))
     (add-to-list
      'elnode--make-webserver-store
