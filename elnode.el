@@ -3149,7 +3149,10 @@ directory."
     (add-to-list
      'elnode--make-webserver-store
      (cons docroot webserver-proc))
-    (elnode-start webserver-proc :port port)))
+    (elnode-start
+     webserver-proc
+     :port (string-to-number (format "%d" port))
+     :host host)))
 
 ;;;###autoload
 (defun elnode-webserver (httpcon)
