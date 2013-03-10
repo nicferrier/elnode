@@ -97,6 +97,20 @@ This is an alist of proc->server-process:
 
   (port . process)")
 
+
+(defcustom elnode-init-port 8000
+  "The port that `elnode-init' starts the default server on."
+  :group 'elnode)
+
+(defcustom elnode-init-host "localhost"
+  "The default host for the default webserver.
+
+Also used as the default host for `elnode-make-webserver'.
+
+See `elnode-init' for more details."
+  :group 'elnode)
+
+
 ;;;###autoload
 (defconst elnode-config-directory
   (expand-file-name (concat user-emacs-directory "elnode/"))
@@ -3625,16 +3639,6 @@ SCHEME is the authentication scheme to use as defined by
    :method "POST"
    :parameters (list (cons "username" username)
                      (cons "password" password))))
-
-;;; Main customization stuff
-
-(defcustom elnode-init-port 8000
-  "The port that `elnode-init' starts the default server on."
-  :group 'elnode)
-
-(defcustom elnode-init-host "localhost"
-  "The host that `elnode-init' starts the default server listening on."
-  :group 'elnode)
 
 ;;;###autoload
 (defun elnode-init ()
