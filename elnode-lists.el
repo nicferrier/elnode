@@ -76,9 +76,10 @@
                  (doc (when (functionp fn)
                         (documentation fn))))
             (vector
-             (number-to-string port)
+             (format "%s" port)
              (cond
                ((closurep fn) (format "%S" fn))
+               ((byte-code-function-p fn) (format "byte-code"))
                (t (symbol-name fn)))
              (or (if (and doc (string-match "^\\([^\n]+\\)" doc))
                      (match-string 1 doc)
@@ -99,12 +100,24 @@
                  (error "no such file")))
           (find-function handler-name))))))
 
+(defun elnode-lists-kill-server ()
+  (interactive)
+  (goto-char (line-beginning-position))
+  (re-search-forward "^\\([0-9]+\\)" (line-end-position) t)
+  (let ((port (string-to-number (match-string 1))))
+    (elnode-stop port)
+    (let ((buffer-read-only nil))
+      (erase-buffer)
+      (tabulated-list-print))))
+
 (define-derived-mode
     elnode-list-mode tabulated-list-mode "Elnode server list"
     "Major mode for listing Elnode servers currently running."
     (setq tabulated-list-entries 'elnode--list-servers)
     (define-key elnode-list-mode-map (kbd "\r")
       'elnode-lists-server-find-handler)
+    (define-key elnode-list-mode-map (kbd "k")
+      'elnode-lists-kill-server)
     (setq tabulated-list-format
           [("Port" 10 nil)
            ("Handler function" 40 nil)
