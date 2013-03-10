@@ -35,8 +35,7 @@
                    'format "%s.%s.%s.%s.:%s"
                    (mapcar 'identity (process-contact proc :local)))
                   (symbol-name (plist-get pl :elnode-http-handler))
-                  (plist-get pl :elnode-http-resource))
-                  ))))
+                  (plist-get pl :elnode-http-resource))))))
 
 (define-derived-mode
     elnode-deferred-list-mode tabulated-list-mode "Elnode defered queue list"
