@@ -116,6 +116,8 @@ M-x list-elnode-servers
 The list shows TCP ports and handlers and you can press return on a
 handler and move to it's source code definition.
 
+You can kill a server by hitting "k" on it.
+
 
 == How does it work? ==
 
