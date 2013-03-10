@@ -3686,8 +3686,7 @@ hostpath regexs to handler functions. By default elnode ships
 with this customization setup to serve the document root defined
 in `elnode-webserver-docroot', which by default is ~/public_html."
   :group 'elnode
-  :type '(boolean)
-  )
+  :type '(boolean))
 
 (defvar elnode--inited nil
   "Records when elnode is initialized.
