@@ -2653,11 +2653,13 @@ being returned."
              "")))))
      (buffer-substring-no-properties (point-min)(point-max)))))
 
-(defvar elnode-webserver-visit-file nil
+(defcustom elnode-webserver-visit-file (eq system-type 'windows-nt)
   "Whether the webserver reads files by visiting buffers or not.
 
 When set to `t' files to be sent with the `elnode-send-file' are
-read into Emacs using `find-file'.")
+read into Emacs using `find-file'."
+  :group 'elnode
+  :type 'boolean)
 
 (defvar elnode-replacements-httpcon nil
   "This is bound by `elnode-send-file' when doing replacements.
