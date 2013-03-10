@@ -3675,7 +3675,6 @@ the handler and listening on `elnode-init-host'"
       (if (not elnode--defer-timer)
           (elnode--init-deferring))))
 
-;;;###autoload
 (defcustom elnode-do-init 't
   "Should elnode start a server on load?
 
