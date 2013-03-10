@@ -119,7 +119,8 @@ handler and move to it's source code definition.
 
 == How does it work? ==
 
-The simplest thing that Elnode does is let you start a webserver on a directory:
+The simplest thing that Elnode does is let you start a webserver on a
+directory:
 
 {{{
 M-x elnode-make-webserver [RET] 
@@ -129,6 +130,29 @@ TCP Port (try something over 8000): 8009 [RET]
 
 and there will be a webserver started on port 8009 serving files from
 whatever directory you specified.
+
+By default Elnode starts that server on the host specified by
+{{{elnode-init-host}}} which is a variable you can customize:
+
+{{{
+M-x customize-variable [RET] elnode-init-host [RET]
+}}}
+
+Take care though, you don't want to expose your Emacs session to the
+Internet.
+
+You can also use the prefix key to specify the host for just this one
+server:
+
+{{{
+C-u M-x elnode-make-webserver [RET] 
+Docroot: [enter directory] [RET]
+Port: 8009 [RET]
+Host: 0.0.0.0
+}}}
+
+
+=== Basic Elnode for programmers ===
 
 Elnode's power is most visible to programmers though.
 
