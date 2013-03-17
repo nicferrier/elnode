@@ -1695,7 +1695,6 @@ which will be returned."
               (cdr p)))
   "HTTP codes with string keys and integer keys.")
 
-
 (defun* elnode-http-cookie-make (name data &key expiry path)
   "Make a set-cookie header pair from NAME and DATA.
 
@@ -1759,6 +1758,14 @@ See `elnode-http-start'."
                  (list (if (consp header)
                            header
                            (cons header value))))))))
+
+(defun* elnode-http-cookie-set (httpcon name data &key expiry path)
+  "Make a cookie and set it on the HTTPCON.
+
+See `elnode-http-cookie-make' for details about cookie making."
+  (let ((cookie-cons (elnode-http-cookie-make
+                      name data :expiry expiry :path path)))
+    (elnode-http-header-set httpcon (car cookie-cons) (cdr cookie-cons))))
 
 (defun elnode--http-result-header (hdr-alist)
   "Turn the HDR-ALIST into a result header string.
