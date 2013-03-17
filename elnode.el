@@ -3158,7 +3158,7 @@ directory."
      (cons docroot webserver-proc))
     (elnode-start
      webserver-proc
-     :port (string-to-number (format "%d" port))
+     :port (string-to-number (format "%s" port))
      :host host)))
 
 ;;;###autoload
