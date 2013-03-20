@@ -131,7 +131,7 @@ Add this Lisp:
 {{{
 (defconst my-elnode-webserver-handler
    (elnode-webserver-handler-maker "~/myspecialdocroot"))
-(elnode-start 'my-elnode-webserver-handler :port 8001 :host "localhost")
+(elnode-start my-elnode-webserver-handler :port 8001 :host "localhost")
 }}}
 
 Now evaluate that with: {{{M-x eval-buffer}}}
@@ -285,8 +285,8 @@ somehow. Let's map one to the root ({{{/}}}) and one to
 
 {{{
 (defconst my-elnode-editor-urls
-  `(("$" . my-elnode-editor-handler)
-    ("update/.*$" . my-elnode-editor-update-handler)))
+  `(("^/$" . my-elnode-editor-handler)
+    ("^/update/.*$" . my-elnode-editor-update-handler)))
 }}}
 
 And now we need to add a handler to do the dispatching for these URLs,
@@ -337,9 +337,9 @@ root url, so let's alter that binding to {{{/text/}}} as well:
    "The webserver handler.")
 
 (defconst my-elnode-editor-urls
-  '(("text/$" . my-elnode-editor-handler)
-    ("update/.*$" . my-elnode-editor-update-handler)
-    ("[^/]+/.*" . my-elnode-editor-webserver-handler)))
+  '(("^/text/$" . my-elnode-editor-handler)
+    ("^/update/.*$" . my-elnode-editor-update-handler)
+    ("^/[^/]+/.*$" . my-elnode-editor-webserver-handler)))
 }}}
 
 Obviously {{{~/my-directory}}} needs to be the place where you are
