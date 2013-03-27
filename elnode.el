@@ -1657,7 +1657,7 @@ which will be returned."
         default)))
 
 (defun elnode-http-method (httpcon)
-  "Get the PATHINFO of the request."
+  "Get the HTTP request method (GET, PUT, etc...) as a string."
   (or
    (process-get httpcon :elnode-http-method)
    (elnode--http-parse-status httpcon :elnode-http-method)))
