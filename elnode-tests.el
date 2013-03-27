@@ -935,9 +935,14 @@ Content-Type: text/html\r
       '(("[^/]+//wiki/\\(.*\\)" . elnode-wikiserver)
         ("[^/]+//.*" . elnode-webserver)))
      'elnode-wikiserver))
+   (should (equal (elnode-http-mapping :httpcon t) 2))
    (should
     (equal
      (elnode-http-mapping :httpcon)
+     "localhost//wiki/somefile.creole"))
+   (should
+    (equal
+     (elnode-http-mapping :httpcon 0)
      "localhost//wiki/somefile.creole"))
    (should
     (equal

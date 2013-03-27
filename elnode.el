@@ -2041,8 +2041,9 @@ inside your handler with `elnode-http-mapping'."
 (defun elnode-http-mapping (httpcon &optional part)
   "Return the match on the HTTPCON that resulted in the current handler.
 
-With PART it returns a specific part of the match , by default
-PART is 0.
+With PART it returns a specific part of the match, by default
+PART is 0.  If PART is specified as `t' then the count of parts
+is returned.
 
 This results only from a call via `elnode-dispatcher'.
 
@@ -2062,9 +2063,12 @@ The following is true inside the handler:
 
 The function `elnode-test-path' uses this facility to work out a
 target path."
-  (elt
-   (process-get httpcon :elnode-http-mapping)
-   (if part part 0)))
+  (if (eq part t)
+      (length (process-get httpcon :elnode-http-mapping))
+      ;; Else it's a specific part
+      (elt
+       (process-get httpcon :elnode-http-mapping)
+       (if part part 0))))
 
 (defun elnode--strip-leading-slash (str)
   "Strip any leading slash from STR.
