@@ -7,6 +7,7 @@
 (require 'elnode)
 (require 'elnode-wiki)
 (require 'kv)
+(require 'mail-parse)
 
 (ert-deftest elnode-join ()
   "Test the path joining."
@@ -211,6 +212,58 @@ is just a test helper."
         (elnode--deferred-processor))
       (should (equal 0 (length elnode--deferred))))))
 
+(ert-deftest elnode--http-parse-header ()
+  "Pass an HTTP header."
+  (let ((content "some content"))
+    (with-temp-buffer
+      (insert
+       (format "POST /blah HTTP/1.1\r
+Content-type: application/form-www-data\r
+Content-length: %s\r
+User-Agent: ert-test\r
+X-test-Header: somevalue\r
+\r
+%s" (length content) content))
+      (destructuring-bind (status header-alist)
+          (save-excursion
+            (goto-char (point-min))
+            (elnode--http-parse-header (current-buffer) (point-min)))
+        (should
+         (equal
+          (aget header-alist "Content-type")
+          "application/form-www-data"))
+        (should (equal "POST /blah HTTP/1.1" status))))))
+
+(ert-deftest elnode--http-parse-header-non-main ()
+  "Pass a non-main HTTP header, eg: multipart."
+  (let ((content "some content"))
+    (with-temp-buffer
+      (insert
+       (format "POST /blah HTTP/1.1\r
+Content-length: %s\r
+User-Agent: ert-test\r
+X-test-Header: somevalue\r
+Content-Type: multipart/form-data; boundary=----------------------------96a411d2bf2a\r
+\r
+------------------------------96a411d2bf2a\r
+Content-Disposition: form-data; name=\"file\"; filename=\"chat.css\"\r
+Content-Type: application/octet-stream\r
+\r
+%s
+----------------------------96a411d2bf2a--\r" (length content) content))
+      (save-excursion
+        (goto-char (point-min))
+        (elnode--http-parse-header (current-buffer) (point-min))
+        (destructuring-bind (status header-alist)
+            (elnode--http-parse-header (current-buffer) (point) t)
+          (should
+           (equal
+            (aget header-alist "Content-Type")
+            "application/octet-stream"))
+          (should
+           (equal
+            status
+            "------------------------------96a411d2bf2a")))))))
 
 (ert-deftest elnode--make-http-hdr ()
   "Test the construction of headers"
@@ -697,7 +750,7 @@ testing code so we specifically test that they work."
     (should
      (equal
       (elnode--cookie-store-to-header-value)
-      "a=10; b=hello%20world!; mycookie=101")))
+      "a=10; b=hello%20world%21; mycookie=101")))
   (let ((elnode--cookie-store (make-hash-table :test 'equal)))
     (should-not
      (elnode--cookie-store-to-header-value))))
@@ -802,6 +855,86 @@ Does a full http parse of a dummy buffer."
       ;; Now test some params
       (should-not (elnode-http-param :httpcon "a")))))
 
+(defun elnode--test-multipart-example (&optional boundary)
+  "Get an example Multipart body in BUFFER."
+  ;; This is from the W3C example -
+  ;;   http://www.w3.org/TR/html401/interact/forms.html#h-17.13.4.2
+  (let ((bound (or boundary "AaB03x")))
+    (format 
+     "Content-Type: multipart/form-data; boundary=%s\r
+\r
+--%s\r
+Content-Disposition: form-data; name=\"submit-name\"\r
+\r
+Larry\r
+--%s\r
+Content-Disposition: form-data; name=\"files\"; filename=\"file1.txt\"\r
+Content-Type: text/plain\r
+\r
+... contents of file1.txt ...\r
+--%s--\r
+" bound bound bound bound)))
+
+(ert-deftest elnode-test-multipart-parser ()
+  "Simple test of multipart parsing."
+  (with-temp-buffer
+    (insert "TEST\r\n")
+    (insert (elnode--test-multipart-example))
+    ;; Now read the buffer as a header
+    (goto-char (point-min))
+    ;; And then test
+    (let* ((buffer (current-buffer))
+           (hdr (elnode--http-parse-header (current-buffer) (point)))
+           (hdr-end-pt (with-current-buffer buffer (point)))
+           (parsed-cont-type
+            (mail-header-parse-content-type
+             (aget (cadr hdr) "Content-Type")))
+           (boundary (aget (cdr parsed-cont-type) 'boundary))
+           (params
+            (elnode--http-mp-decode buffer hdr-end-pt boundary)))
+      (should (equal (aget params "submit-name") "Larry"))
+      (should (equal (aget params "files") "... contents of file1.txt ..."))
+      (should (equal (get-text-property
+                      0 :elnode-filename (aget params "files"))
+                     "file1.txt")))))
+
+(ert-deftest elnode-test-http-multipart-post ()
+  "Test that a multipart POST params are ok."
+  (let* ((boundary "96a411d2bf2a")
+         (post-body (elnode--test-multipart-example boundary)))
+    (fakir-mock-process
+      :httpcon
+      ((:buffer
+        (elnode--http-make-hdr
+         'post "/"
+         '(host . "localhost")
+         '(user-agent . "test-agent")
+         `(content-type .
+           ,(format
+             "multipart/form-data; boundary=%s"
+             boundary))
+         `(content-length . ,(format "%d" (length post-body)))
+         `(body . ,post-body))))
+      ;; Now parse
+      (should
+       (equal 'done
+              (catch 'elnode-parse-http
+                (elnode--http-parse :httpcon))))
+      ;; Now test some params
+      (should
+       (equal
+        (elnode-http-param :httpcon "submit-name")
+        "Larry"))
+      (should
+       (equal
+        (elnode-http-param :httpcon "files")
+        "... contents of file1.txt ..."))
+      (should
+       (equal
+        (get-text-property
+         0 :elnode-filename
+         (elnode-http-param :httpcon "files"))
+        "file1.txt")))))
 
 (ert-deftest elnode--http-result-header ()
   "Test that we can make result headers."
@@ -1416,50 +1549,50 @@ the wrapping of a specified handler with the login sender."
       :sender auth-reqd-handler)
      ;; Test that we are redirected to login when we don't have cookie
      (with-elnode-mock-server 'auth-reqd-handler t
-       (should-elnode-response
-        (elnode-test-call "/")
-        :status-code 302
-        :header-name "Location"
-        :header-value "/my-login/?redirect=/")
-       ;; Test that we get the login page - this tests that the main
-       ;; handler was wrapped
-        (should-elnode-response
-         (elnode-test-call "/my-login/")
-         :status-code 200
-         :body-match "<input type='hidden' name='redirect' value='/'/>")
-        ;; Do it all again with a different 'to'
-        (should-elnode-response
-         (elnode-test-call "/somepage/test/")
-         :status-code 302
-         :header-name "Location"
-         :header-value "/my-login/?redirect=/somepage/test/")
-        ;; Test that we get the login page - this tests that the main
-        ;; handler was wrapped
-        (should-elnode-response
-         (elnode-test-call "/my-login/")
-         :status-code 200
-         :body-match "<input type='hidden' name='redirect' value='/'/>")))))
+                              (should-elnode-response
+                               (elnode-test-call "/")
+                               :status-code 302
+                               :header-name "Location"
+                               :header-value "/my-login/?redirect=/")
+                              ;; Test that we get the login page - this tests that the main
+                              ;; handler was wrapped
+                              (should-elnode-response
+                               (elnode-test-call "/my-login/")
+                               :status-code 200
+                               :body-match "<input type='hidden' name='redirect' value='/'/>")
+                              ;; Do it all again with a different 'to'
+                              (should-elnode-response
+                               (elnode-test-call "/somepage/test/")
+                               :status-code 302
+                               :header-name "Location"
+                               :header-value "/my-login/?redirect=/somepage/test/")
+                              ;; Test that we get the login page - this tests that the main
+                              ;; handler was wrapped
+                              (should-elnode-response
+                               (elnode-test-call "/my-login/")
+                               :status-code 200
+                               :body-match "<input type='hidden' name='redirect' value='/'/>"))))
 
-(ert-deftest elnode-with-auth-bad-auth ()
-  "Test bad auth causes login page again."
-  :expected-result :failed
-  ;; Setup the user db
-  (let ((elnode-auth-db (db-make '(db-hash))))
-    ;; The only time we really need clear text passwords is when
-    ;; faking records for test
-    (elnode--auth-init-user-db '(("nferrier" . "password")
-                                 ("someuser" . "secret")))
-    ;; Setup handlers to wrap
-    (elnode-auth-flets
-     (elnode-auth-define-scheme
-      'test-auth
-      :test :cookie
-      :cookie-name "secret"
-      :redirect (elnode-auth-make-login-wrapper
-                 'auth-reqd-handler
-                 :target "/my-login/"))
-     ;; Test that we are redirected to login when we don't have cookie
-     (with-elnode-mock-server 'auth-reqd-handler
+  (ert-deftest elnode-with-auth-bad-auth ()
+    "Test bad auth causes login page again."
+    :expected-result :failed
+    ;; Setup the user db
+    (let ((elnode-auth-db (db-make '(db-hash))))
+      ;; The only time we really need clear text passwords is when
+      ;; faking records for test
+      (elnode--auth-init-user-db '(("nferrier" . "password")
+                                   ("someuser" . "secret")))
+      ;; Setup handlers to wrap
+      (elnode-auth-flets
+       (elnode-auth-define-scheme
+        'test-auth
+        :test :cookie
+        :cookie-name "secret"
+        :redirect (elnode-auth-make-login-wrapper
+                   'auth-reqd-handler
+                   :target "/my-login/"))
+       ;; Test that we are redirected to login when we don't have cookie
+       (with-elnode-mock-server 'auth-reqd-handler
          ;; Test a bad auth
          (should-elnode-response
           (elnode-test-call

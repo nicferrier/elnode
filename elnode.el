@@ -53,8 +53,10 @@
 (require 'fakir)
 (require 'mm-encode)
 (require 'mailcap)
+(require 'mail-parse) ; for mail-header-parse-content-type
 (require 'url-util)
 (require 'kv)
+(require 'rx)
 (require 'web)
 (require 'json)
 (require 'db)
@@ -688,6 +690,41 @@ sending data through an elnode connection transparently."
   ;;(process-send-string proc "\r\n")
   (elnode--http-end proc))
 
+(defun elnode--http-parse-header (buffer start &optional non-header)
+  "Parse a header from the BUFFER at point START.
+
+The initial header may be parsed with this or if NON-HEADER is
+sent then another header, such as a multipart header, may be read.
+
+If the complete header has not been read then we throw to
+`elnode-parse-http' with either `header' or `non-header'.
+
+We return a list of the leader, which is the first line of the
+header (which is not the header) followed by an alist of
+headers."
+  (with-current-buffer buffer
+    (let ((hdrend (re-search-forward "\r\n\r\n" nil 't)))
+      (when (not hdrend)
+        (throw 'elnode-parse-http (or (and non-header 'non-header) 'header)))
+      (let* ((lines
+              (split-string
+               (buffer-substring start hdrend)
+               "\r\n"
+               't))
+             (status (car lines)) ;; the first line is the status line
+             (header (cdr lines)) ;; the rest of the lines are the header
+             (header-alist-strings
+              (mapcar
+               (lambda (hdrline)
+                 (when (string-match
+                        "\\([A-Za-z0-9_-]+\\):[ ]*\\(.*\\)"
+                        hdrline)
+                   (cons
+                    (match-string 1 hdrline)
+                    (match-string 2 hdrline))))
+               header)))
+        (list status header-alist-strings)))))
+
 (defun elnode--http-parse (httpcon)
   "Parse the HTTP header for the process.
 
@@ -704,35 +741,12 @@ of succesful parsing."
   (with-current-buffer (process-buffer httpcon)
     (save-excursion
       (goto-char (point-min))
-      (let ((hdrend (re-search-forward "\r\n\r\n" nil 't)))
-        (when (not hdrend)
-          (throw 'elnode-parse-http 'header))
-        ;; FIXME: we don't handle continuation lines of anything like
-        ;; that
-        (let* ((lines
-                (split-string
-                 (buffer-substring (point-min) hdrend)
-                 "\r\n"
-                 't))
-               (status (car lines)) ;; the first line is the status line
-               (header (cdr lines)) ;; the rest of the lines are the header
-               (header-alist-strings
-                (mapcar
-                 (lambda (hdrline)
-                   (when (string-match
-                          "\\([A-Za-z0-9_-]+\\):[ ]*\\(.*\\)"
-                          hdrline)
-                     (cons
-                      (match-string 1 hdrline)
-                      (match-string 2 hdrline))))
-                 header))
-               (header-alist-syms
-                (mapcar
-                 (lambda (hdr)
-                   (cons (intern (downcase (car hdr)))
-                         (cdr hdr)))
-                 header-alist-strings))
-               (content-len (assq 'content-length header-alist-syms)))
+      (destructuring-bind (leader alist-strings)
+          (elnode--http-parse-header (current-buffer) (point-min))
+        (let* ((hdrend (point))
+               (alist-syms
+                (kvalist-keys->symbols alist-strings :first-fn 'downcase))
+               (content-len (assq 'content-length alist-syms)))
           ;; Check the content if we have it.
           (when content-len
             (let* ((available-content (- (point-max) hdrend)))
@@ -740,14 +754,14 @@ of succesful parsing."
                        available-content)
                 (throw 'elnode-parse-http 'content))))
           (process-put httpcon :elnode-header-end hdrend)
-          (process-put httpcon :elnode-http-status status)
-          (process-put httpcon :elnode-http-header-syms header-alist-syms)
-          (process-put httpcon :elnode-http-header header-alist-strings)))))
+          (process-put httpcon :elnode-http-status leader)
+          (process-put httpcon :elnode-http-header-syms alist-syms)
+          (process-put httpcon :elnode-http-header alist-strings)))))
   ;; Return a symbol to indicate done-ness
   'done)
 
 (defun elnode--http-make-hdr (method resource &rest headers)
-  "Convenience function to make an HTTP header.
+    "Convenience function to make an HTTP header.
 
 METHOD is the method to use.  RESOURCE is the path to use.
 HEADERS should be pairs of strings indicating the header values:
@@ -767,26 +781,25 @@ A header pair with the key `body' can be used to make a content body:
 
 No other transformations are done on the body, no content type
 added or content length computed."
-  (let (body)
-    (flet ((header-name (hdr)
-             (if (symbolp (car hdr))
-                 (symbol-name (car hdr))
-                 (car hdr))))
-      (format
-       "%s %s HTTP/1.1\r\n%s\r\n%s"
-       (upcase (if (symbolp method) (symbol-name method) method))
-       resource
-       (loop for header in headers
-          if (equal (header-name header) "body")
-          do (setq body (cdr header))
-          else
-          concat (format
-                  "%s: %s\r\n"
-                  (capitalize (header-name header))
-                  (cdr header)))
-       ;; If we have a body then add that as well
-       (or body "")))))
-
+    (let (body)
+      (flet ((header-name (hdr)
+               (if (symbolp (car hdr))
+                   (symbol-name (car hdr))
+                   (car hdr))))
+        (format
+         "%s %s HTTP/1.1\r\n%s\r\n%s"
+         (upcase (if (symbolp method) (symbol-name method) method))
+         resource
+         (loop for header in headers
+            if (equal (header-name header) "body")
+            do (setq body (cdr header))
+            else
+            concat (format
+                    "%s: %s\r\n"
+                    (capitalize (header-name header))
+                    (cdr header)))
+         ;; If we have a body then add that as well
+         (or body "")))))
 
 (defun elnode--get-server-prop (process key)
   "Get the value of the KEY from the server attached to PROCESS.
@@ -794,16 +807,16 @@ added or content length computed."
 Server properties are bound with `elnode-start' which sets up
 `elnode--log-fn' to ensure that all sockets created have a link
 back to the server."
-  (let* ((server (process-get process :server))
-         (value (process-get server key)))
-    value))
+    (let* ((server (process-get process :server))
+           (value (process-get server key)))
+      value))
 
 (defun elnode--make-send-string ()
-  "Make a function to send a string to an HTTP connection."
-  (lambda (httpcon str)
-    "Send STR to the HTTPCON.
+    "Make a function to send a string to an HTTP connection."
+    (lambda (httpcon str)
+      "Send STR to the HTTPCON.
 Does any necessary encoding."
-    (elnode--process-send-string httpcon str)))
+      (elnode--process-send-string httpcon str)))
 
 (defun elnode--make-send-eof ()
   "Make a function to send EOF to an HTTP connection."
@@ -1590,18 +1603,72 @@ A is considered the priority (it's elements go in first)."
                            res))))))
         res)))
 
+(defun elnode--http-mp-find-boundary (boundary)
+  "Find the boundary string from point."
+  (let ((boundary-rx
+         (rx-to-string `(seq "\r\n--" ,boundary))))
+    (save-match-data
+      (when (re-search-forward boundary-rx nil t)
+        (let ((mpt (match-beginning 0)))
+          ;; Return status indicator and the start match point
+          (list
+           (if (save-excursion
+                 (goto-char (line-beginning-position))
+                 (looking-at (rx-to-string `(seq bol "--" ,boundary "--"))))
+               :done :continue)
+           (goto-char mpt)
+           mpt))))))
+
+(defun elnode--http-mp-decode (buffer header-end-pt boundary)
+  "Decode a multipart/form-data upload with BOUNDARY in BUFFER."
+  (with-current-buffer buffer
+    (goto-char (- header-end-pt 2)) ; moves back over the \r\n
+    (loop while (eq (car next-boundary) :continue)
+       with next-boundary = (elnode--http-mp-find-boundary boundary)
+       collect
+         (destructuring-bind (leader alist)
+             (elnode--http-parse-header (current-buffer) (point) t)
+           (let* ((cde
+                   (mail-header-parse-content-disposition
+                    (aget alist "Content-Disposition")))
+                  (name (aget (cdr cde) 'name))
+                  (filename (aget (cdr cde) 'filename)))
+             ;; Find the next end point
+             (setq next-boundary
+                   (elnode--http-mp-find-boundary boundary))
+             (let* ((lbp (line-beginning-position))
+                    (content (buffer-substring lbp (cadr next-boundary)))
+                    (content-data
+                     (cond
+                       ((not filename) content)
+                       (t (propertize content :elnode-filename filename)))))
+               (cons name content-data)))))))
+
+(defun elnode--http-post-mp-decode (httpcon parsed-content-type)
+  "Decode the HTTP POST multipart thing on HTTPCON."
+  (let ((boundary (aget (cdr parsed-content-type) 'boundary))
+        (buf (process-buffer httpcon))
+        (hdr-end-pt (process-get httpcon :elnode-header-end)))
+    (elnode--http-mp-decode buf hdr-end-pt boundary)))
+
 (defun elnode--http-post-to-alist (httpcon)
   "Parse the POST body."
-  ;; FIXME: this is ONLY a content length header parser it should also
-  ;; cope with transfer encodings.
-  (let ((postdata
+  ;; FIXME: this is ONLY a content length header parser -- it should
+  ;; also cope with transfer encodings.
+  (let* ((content-type (elnode-http-header httpcon 'content-type))
+         (parsed-type
+          (when content-type
+            (mail-header-parse-content-type content-type))))
+    (if (equal "multipart/form-data" (car parsed-type))
+        (elnode--http-post-mp-decode httpcon parsed-type)
+        ;; Else it's a non-multipart request
+        (elnode--http-query-to-alist
          (with-current-buffer (process-buffer httpcon)
            ;; (buffer-substring (point-min) (point-max)) ;debug
            (buffer-substring
             ;; we might have to add 2 to this because of trailing \r\n
             (process-get httpcon :elnode-header-end)
-            (point-max)))))
-    (elnode--http-query-to-alist postdata)))
+            (point-max)))))))
 
 (defun elnode-http-params (httpcon &rest names)
   "Get an alist of the parameters in the request.
