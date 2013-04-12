@@ -1616,8 +1616,7 @@ A is considered the priority (it's elements go in first)."
                  (goto-char (line-beginning-position))
                  (looking-at (rx-to-string `(seq bol "--" ,boundary "--"))))
                :done :continue)
-           (goto-char mpt)
-           mpt))))))
+           (progn (goto-char mpt) mpt)))))))
 
 (defun elnode--http-mp-decode (buffer header-end-pt boundary)
   "Decode a multipart/form-data upload with BOUNDARY in BUFFER."
