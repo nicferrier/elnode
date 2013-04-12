@@ -1673,7 +1673,7 @@ A is considered the priority (it's elements go in first)."
 (defun elnode-http-params (httpcon &rest names)
   "Get an alist of the parameters in the request.
 
-If the method is a GET then the parameters are from the url. If
+If the method is a GET then the parameters are from the url.  If
 the method is a POST then the parameters may come from either the
 url or the POST body or both:
 
@@ -1682,10 +1682,19 @@ url or the POST body or both:
 
 would result in:
 
- '(('a' 'b' 'c')('x' . 'y'))
+ '((\"a\" \"b\" \"c\")(\"x\" . \"y\"))
 
 If NAMES are specified it is a filter list of symbols or strings
-which will be returned."
+which will be returned.
+
+File upload with Multipart/form-data is supported by Elnode.
+Uploaded files are present in the params the same as any other
+param except for the fact that uploaded file params have a text
+property :elnode-filename on them:
+
+  (get-text-property 0 :elnode-filename
+    (elnode-http-param httpcon \"myfile\")) => '/somefile.txt'
+"
   (loop for pair in
        (or
         (process-get httpcon :elnode-http-params)
@@ -1712,7 +1721,16 @@ which will be returned."
      collect pair))
 
 (defun elnode-http-param (httpcon name &optional default)
-  "Get the named parameter from the request."
+  "Get the parameter named NAME from the request.
+
+If the parameter came from a file upload it has a text property
+indicating the filename:
+
+  (get-text-property 0 :elnode-filename
+    (elnode-http-param httpcon \"myfile\")) => '/somefile.txt'
+
+If the parameter is not present and DEFAULT is present then
+return DEFAULT instead of `nil'."
   (let* ((params (elnode-http-params httpcon))
          (param-pair
           (assoc
