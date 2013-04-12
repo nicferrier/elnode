@@ -2123,6 +2123,18 @@ inside your handler with `elnode-http-mapping'."
        ((functionp (symbol-value (cdr m)))
         (symbol-value (cdr m)))))))
 
+(defun elnode--http-mapping-impl (httpcon &optional part)
+  "The actual implementation of `elnode-http-mapping.'
+
+This is here so that you flet `elnode-http-mapping' and still get
+at the real functionality."
+  (if (eq part t)
+      (length (process-get httpcon :elnode-http-mapping))
+      ;; Else it's a specific part
+      (elt
+       (process-get httpcon :elnode-http-mapping)
+       (if part part 0))))
+
 (defun elnode-http-mapping (httpcon &optional part)
   "Return the match on the HTTPCON that resulted in the current handler.
 
@@ -2148,12 +2160,7 @@ The following is true inside the handler:
 
 The function `elnode-test-path' uses this facility to work out a
 target path."
-  (if (eq part t)
-      (length (process-get httpcon :elnode-http-mapping))
-      ;; Else it's a specific part
-      (elt
-       (process-get httpcon :elnode-http-mapping)
-       (if part part 0))))
+  (elnode--http-mapping-implementation httpcon part))
 
 (defun elnode--strip-leading-slash (str)
   "Strip any leading slash from STR.
