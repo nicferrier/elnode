@@ -1631,12 +1631,13 @@ A is considered the priority (it's elements go in first)."
                    (mail-header-parse-content-disposition
                     (aget alist "Content-Disposition")))
                   (name (aget (cdr cde) 'name))
-                  (filename (aget (cdr cde) 'filename)))
+                  (filename (aget (cdr cde) 'filename))
+                  (pt (point)))
              ;; Find the next end point
              (setq next-boundary
                    (elnode--http-mp-find-boundary boundary))
              (let* ((lbp (line-beginning-position))
-                    (content (buffer-substring lbp (cadr next-boundary)))
+                    (content (buffer-substring pt (cadr next-boundary)))
                     (content-data
                      (cond
                        ((not filename) content)
