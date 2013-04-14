@@ -1,0 +1,39 @@
+body {
+    font-family: sans-serif;
+}
+
+div#page {
+    background-color: LightGrey;
+    margin-left: 3em;
+    margin-right: 3em;
+    padding-left: 1em;
+    height: 100%;
+}
+
+.hidden {
+    display: none;
+}
+
+label {
+    width: 20%;
+}
+
+table {
+    width: 80%;
+}
+
+tr td {
+    border-bottom: solid thin;
+}
+
+td.username {
+    width: 20%;
+}
+
+td.message {
+    width: 80%;
+}
+
+form {
+    width: 100%;
+}
