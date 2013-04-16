@@ -2123,7 +2123,7 @@ inside your handler with `elnode-http-mapping'."
        ((functionp (symbol-value (cdr m)))
         (symbol-value (cdr m)))))))
 
-(defun elnode--http-mapping-impl (httpcon &optional part)
+(defun elnode--http-mapping-implementation (httpcon &optional part)
   "The actual implementation of `elnode-http-mapping.'
 
 This is here so that you flet `elnode-http-mapping' and still get
