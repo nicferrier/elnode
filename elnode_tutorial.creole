@@ -333,7 +333,7 @@ root url, so let's alter that binding to {{{/text/}}} as well:
 
 {{{
 (defconst my-elnode-editor-webserver-handler
-   (elnode-webserver-handler-maker "~/my-directory"))
+   (elnode-webserver-handler-maker "~/my-directory")
    "The webserver handler.")
 
 (defconst my-elnode-editor-urls
