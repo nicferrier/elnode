@@ -1488,7 +1488,7 @@ cons is returned."
 If PROPERTY is non-nil, then return that property."
   (let ((http-line (process-get httpcon :elnode-http-status)))
     (string-match
-     "\\(GET\\|POST\\|HEAD\\) \\(.*\\) HTTP/\\(1.[01]\\)"
+     "\\([A-Z]+\\) \\(.*\\) HTTP/\\(1.[01]\\)"
      http-line)
     (process-put httpcon :elnode-http-method (match-string 1 http-line))
     (process-put httpcon :elnode-http-resource (match-string 2 http-line))
