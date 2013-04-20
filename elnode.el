@@ -2907,13 +2907,15 @@ Write code like this:
        (cond
         ,@(loop
            for d in method-mappings
+           unless (eq (car d) t)
            collect `((eq ,var (quote ,(car d)))
                      ,@(cdr d)))
         ;; If we don't map then send an error
         ;;
         ;; probably should be 405
         (t
-         (elnode-send-500 ,conv))))))
+         ,@(or (cdr (assoc t method-mappings))
+               `((elnode-send-500 ,conv))))))))
 
 
 ;; Make simple handlers automatically
