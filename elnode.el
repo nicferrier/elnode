@@ -216,6 +216,15 @@ filenames to copy to the DIR."
                     (concat dir (file-name-nondirectory file))
                     nil)))))))))
 
+(defun elnode--protected-load (feature dir)
+  "Try and require FEATURE, if it fails try and load."
+  (condition-case err
+      (require feature)
+    (file-error (progn
+                  (load
+                   (concat dir (symbol-name feature) ".el"))
+                  (require feature)))))
+
 ;;;###autoload
 (defmacro elnode-app (dir-var &rest features)
   "A macro that sets up the boring boilerplate for Elnode apps.
@@ -229,16 +238,19 @@ list.  Use it like this:
 Once used you can access the variable `my-app-dir' as the dirname
 of your module (which is useful for serving files and such)."
   (declare (indent 1))
-  `(progn
-     (setq lexical-binding t)
-     (defconst ,dir-var (file-name-directory
-                         (or (buffer-file-name)
-                             load-file-name
-                             default-directory)))
-     (require 'cl)
-     (require 'elnode)
-     ,@(loop for f in features
-            collect `(require (quote ,f)))))
+  (let ((dir-var-v (make-symbol "dv")))
+    `(let ((,dir-var-v (file-name-directory
+                        (or (buffer-file-name)
+                            load-file-name
+                            default-directory))))
+       (setq lexical-binding t)
+       (defconst ,dir-var ,dir-var-v)
+       (require 'cl)
+       (require 'elnode)
+       ,@(loop for f in features
+            collect
+              `(elnode--protected-load
+                (quote ,f) ,dir-var-v)))))
 
 (defcustom elnode-log-files-directory nil
   "The directory to store any Elnode log files.
