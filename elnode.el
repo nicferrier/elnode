@@ -43,7 +43,7 @@
 ;;
 ;; You can define HTTP request handlers and start an HTTP server
 ;; attached to the handler.  Many HTTP servers can be started, each
-;; must have it's own TCP port.  Handlers can defer processing with a
+;; must have its own TCP port.  Handlers can defer processing with a
 ;; signal (which allows comet style resource management)
 ;;
 ;; See elnode-start for how to start an HTTP server.
@@ -230,7 +230,7 @@ filenames to copy to the DIR."
   "A macro that sets up the boring boilerplate for Elnode apps.
 
 This sets up lexical binding, captures the module's parent
-directory in DIR-VAR, require's `cl' and any other features you
+directory in DIR-VAR, requires `cl' and any other features you
 list.  Use it like this:
 
  (elnode-app my-app-dir esxml mongo-elnode)
@@ -271,7 +271,7 @@ so far.")
 (defvar elnode-log-buffer-max-size 1000
   "Maximum number of lines of log.")
 
-(defvar elnode-log-buffer-datetime-format "%Y%m%d%H%M%S"
+(defvar elnode-log-buffer-datetime-format "%Y-%m-%dT%H:%M:%S"
   "The date time format used by `elnode-log-buffer-log'.")
 
 (defun elnode-log-buffer-log (text buffer-or-name &optional filename)
@@ -282,7 +282,7 @@ FILENAME is a filename to save the buffer into.  If the FILENAME
 is not specified then we try to use the filename of the
 BUFFER-OR-NAME.
 
-If nether a buffer filename nor FILENAME is specified then an
+If neither a buffer filename nor FILENAME is specified then an
 error is generated.
 
 The TEXT is logged with the current date and time formatted with
@@ -319,7 +319,7 @@ The TEXT is logged with the current date and time formatted with
           (delete-region (point-min) (point)))))))
 
 (defcustom elnode-error-log-to-messages t
-  "Wether to send elnode logging through the messaging system."
+  "Whether to send elnode logging through the messaging system."
   :group 'elnode
   :type '(boolean))
 
@@ -694,7 +694,7 @@ sending data through an elnode connection transparently."
   "Elnode adapter for `process-send-eof'.
 
 Sends EOF to the HTTP connection PROC (which is an HTTP
-connection) in a way that chunked encoding is endeed properly.
+connection) in a way that chunked encoding is ended properly.
 
 This is used by `elnode-worker-elisp' to implement a protocol for
 sending data through an elnode connection transparently."
@@ -748,7 +748,7 @@ waited for is indicated.
 
 Important side effects of this function are to add certain
 process properties to the HTTP connection.  These are the result
-of succesful parsing."
+of successful parsing."
   ;; FIXME - we don't need to do this - we should check for
   ;; header-parsed and avoid it we we can
   (with-current-buffer (process-buffer httpcon)
@@ -1176,7 +1176,7 @@ If STATUS-CODE is not nil we assert that the RESPONSE status-code
 is equal to the STATUS-CODE.
 
 If HEADER-NAME is present then we assert that the RESPONSE has
-the header and that it's value is the same as the HEADER-VALUE.
+the header and that its value is the same as the HEADER-VALUE.
 If HEADER-VALUE is `nil' then we assert that the HEADER-NAME is
 NOT present.
 
@@ -1595,7 +1595,7 @@ Returns an association list."
 (defun elnode--alist-merge (a b &optional operator)
   "Merge two association lists non-destructively.
 
-A is considered the priority (it's elements go in first)."
+A is considered the priority (its elements go in first)."
   (if (not operator)
       (setq operator 'assq))
   (let* ((res '()))
@@ -2104,7 +2104,7 @@ Otherwise it calls HANDLER."
 (defun elnode--mapper-find (httpcon path mapping-table)
   "Try and find the PATH inside the MAPPING-TABLE.
 
-This function exposes it's `match-data' on the 'path' variable so
+This function exposes its `match-data' on the 'path' variable so
 that you can access that in your handler with something like:
 
  (match-string 1 (elnode-http-pathinfo httpcon))
@@ -2184,13 +2184,13 @@ If there is no leading slash then just return STR."
       str))
 
 (defun elnode-get-targetfile (httpcon docroot)
-  "Get the targetted file from the HTTPCON.
+  "Get the targeted file from the HTTPCON.
 
 Attempts to resolve the matched path of the HTTPCON against the
 DOCROOT.  If that doesn't work then it attempts to use just the
 pathinfo of the request.
 
-The resulting file is NOT checked for existance or safety."
+The resulting file is NOT checked for existence or safety."
   (let* ((pathinfo (elnode-http-pathinfo httpcon))
          (path (elnode-http-mapping httpcon 1))
          (targetfile
@@ -2237,7 +2237,7 @@ The handler for PATH is matched in the URL-MAPPING-TABLE via
 `elnode--mapper-find'.
 
 If no handler is found then a 404 is attempted via FUNCTION-404,
-it it's found to be a function, or as a last resort
+if it's found to be a function, or as a last resort
 `elnode-send-404'.
 
 The function also supports the searching of the map provided by
@@ -3524,7 +3524,7 @@ password: <input type='password' name='password'/><br/>
 (defun elnode-auth-login-sender (httpcon target redirect)
   "Send the login page for auth to HTTPCON.
 
-The login page will send it's authentication request to TARGET.
+The login page will send its authentication request to TARGET.
 
 The authentication will include username, password AND REDIRECT,
 which is the URL to redirect to when login is successful.
