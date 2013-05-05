@@ -271,7 +271,7 @@ so far.")
 (defvar elnode-log-buffer-max-size 1000
   "Maximum number of lines of log.")
 
-(defvar elnode-log-buffer-datetime-format "%Y%m%d%H%M%S"
+(defvar elnode-log-buffer-datetime-format "%Y-%m-%dT%H:%M:%S"
   "The date time format used by `elnode-log-buffer-log'.")
 
 (defun elnode-log-buffer-log (text buffer-or-name &optional filename)
