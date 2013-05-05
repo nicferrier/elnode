@@ -289,33 +289,34 @@ The TEXT is logged with the current date and time formatted with
 `elnode-log-buffer-datetime-format'."
   (let ((name (or filename (buffer-file-name (get-buffer buffer-or-name)))))
     (with-current-buffer (get-buffer-create buffer-or-name)
-      (unless (assq
-               'elnode-log-buffer-position-written
-               (buffer-local-variables))
-        (make-local-variable 'elnode-log-buffer-position-written)
-        (setq elnode-log-buffer-position-written (make-marker))
-        (set-marker elnode-log-buffer-position-written (point-min)))
-      ;; To test this stuff we could rip these functions out into
-      ;; separate pieces?
-      (save-excursion
-        (goto-char (point-max))
-        (insert
-         (format
-          "%s: %s\n"
-          (format-time-string elnode-log-buffer-datetime-format)
-          text))
-        ;; Save the file if we have a filename
-        (when name
-          (if (not (file-exists-p (file-name-directory name)))
-              (make-directory (file-name-directory name) t))
-          ;; could be switched to write-region - probably better
-          (append-to-file elnode-log-buffer-position-written (point-max) name)
-          (set-marker elnode-log-buffer-position-written (point-max)))
-        ;; Truncate the file if it's grown too large
-        (goto-char (point-max))
-        (forward-line (- elnode-log-buffer-max-size))
-        (beginning-of-line)
-        (delete-region (point-min) (point))))))
+      (let ((buffer-read-only nil))
+        (unless (assq
+                 'elnode-log-buffer-position-written
+                 (buffer-local-variables))
+          (make-local-variable 'elnode-log-buffer-position-written)
+          (setq elnode-log-buffer-position-written (make-marker))
+          (set-marker elnode-log-buffer-position-written (point-min)))
+        ;; To test this stuff we could rip these functions out into
+        ;; separate pieces?
+        (save-excursion
+          (goto-char (point-max))
+          (insert
+           (format
+            "%s: %s\n"
+            (format-time-string elnode-log-buffer-datetime-format)
+            text))
+          ;; Save the file if we have a filename
+          (when name
+            (if (not (file-exists-p (file-name-directory name)))
+                (make-directory (file-name-directory name) t))
+            ;; could be switched to write-region - probably better
+            (append-to-file elnode-log-buffer-position-written (point-max) name)
+            (set-marker elnode-log-buffer-position-written (point-max)))
+          ;; Truncate the file if it's grown too large
+          (goto-char (point-max))
+          (forward-line (- elnode-log-buffer-max-size))
+          (beginning-of-line)
+          (delete-region (point-min) (point)))))))
 
 (defcustom elnode-error-log-to-messages t
   "Wether to send elnode logging through the messaging system."
