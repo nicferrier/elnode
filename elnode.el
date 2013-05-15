@@ -3330,6 +3330,12 @@ implementations.")
                 username
                 password)))
 
+(defvar elnode--auth-user-add-databases-history nil
+  "The history of symbols used for auth databases.")
+
+(defvar elnode--auth-user-add-username-history nil
+  "The history of usernames used for auth databases.")
+
 (defun elnode-auth-user-add (username password &optional auth-db)
   "Command to add a user to the internal authentication database.
 
@@ -3337,16 +3343,18 @@ With prefix-arg also request the authentication database variable
 name.  The authentication database must exist.  By default the
 main `elnode-auth-db' is used."
   (interactive
-   (list (read-from-minibuffer "username: ")
+   (list (read-from-minibuffer
+          "username: " nil nil nil
+          'elnode--auth-user-add-username-history)
          (read-passwd "password: ")
          (when current-prefix-arg
-             (read-from-minibuffer
-              "auth database variable: "
-              "elnode-auth-db"
-              ;; FIXME - would be great to have completion of variable
-              ;; names here
-              nil
-              t))))
+           (intern
+            (completing-read
+             "auth database variable (elnode-auth-user-db): "
+             obarray
+             nil t nil
+             'elnode--auth-user-add-databases-history
+             'elnode-auth-db)))))
   (unless auth-db
     (setq auth-db 'elnode-auth-db))
   (db-put
