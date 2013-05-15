@@ -3359,10 +3359,11 @@ main `elnode-auth-db' is used."
     (setq auth-db 'elnode-auth-db))
   (db-put
    username
-   (elnode--auth-make-hash username password)
+   `(("token" . ,(elnode--auth-make-hash
+                  username password))
+     ("username" . ,username))
    (symbol-value auth-db))
   (message "username is %s" username))
-
 
 (defun* elnode-auth-user-p (username
                             password
@@ -3594,9 +3595,22 @@ path (the path to call this handler)."
              "elnode-auth--login-handler: unexpected error: %S"
              err)))))))
 
-(defun elnode-auth-default-test (username database)
-  "The default test function used for Elnode auth."
+(defun elnode-auth-default-test-v001 (username database)
+  "The first test function used for Elnode auth.
+
+This uses just the keyed value of the username as the token.  We
+no longer store databases like that by default."
   (db-get username database))
+
+(defun elnode-auth-default-test (username database)
+  "The default test function used for Elnode auth.
+
+Is uses a stored alist against USERNAME, the alist should contain
+the key \"token\" with a user's token.  Whatever else the alist
+contains is irrelevant."
+  (let ((user (db-get username database)))
+    (when user
+      (aget user "token"))))
 
 (defun* elnode-auth--make-login-handler
     (&key
