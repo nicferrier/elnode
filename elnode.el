@@ -3472,7 +3472,8 @@ default is is \"elnode-auth\".
 
 LOGGEDIN-DB can be a loggedin state database which is expected to
 be a `db'.  By default it is `elnode-loggedin-db'."
-  (let ((cookie-cons (elnode-auth-get-cookie-value httpcon cookie-name)))
+  (let ((cookie-cons (elnode-auth-get-cookie-value
+                      httpcon :cookie-name cookie-name)))
     (if (not cookie-cons)
         (signal 'elnode-auth-token cookie-value)
         (destructuring-bind (username . token) cookie-cons
