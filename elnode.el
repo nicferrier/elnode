@@ -3449,7 +3449,17 @@ Optionally use the LOGGEDIN-DB supplied.  By default this is
 (defun elnode-auth-cookie-decode (cookie-value)
   "Decode an encoded elnode auth COOKIE-VALUE."
   (when (string-match "\\(.*\\)::\\(.*\\)" cookie-value)
-    (cons (match-string 1 cookie-value) (match-string 2 cookie-value))))
+    (cons (match-string 1 cookie-value)
+          (match-string 2 cookie-value))))
+
+(defun* elnode-auth-get-cookie-value (httpcon &key (cookie-name "elnode-auth"))
+  "Return the decoded value for COOKIE-NAME.
+
+By default it's \"elnode-auth\" but you should use whatever
+cookie-name you're using for your app."
+  (let* ((cookie-value (elnode-http-cookie httpcon cookie-name t))
+         (decoded-cons (elnode-auth-cookie-decode (or cookie-value ""))))
+    decoded-cons))
 
 (defun* elnode-auth-cookie-check-p (httpcon
                                     &key
@@ -3462,12 +3472,12 @@ default is is \"elnode-auth\".
 
 LOGGEDIN-DB can be a loggedin state database which is expected to
 be a `db'.  By default it is `elnode-loggedin-db'."
-  (let ((cookie-value (elnode-http-cookie httpcon cookie-name t)))
-    (if (not (elnode-auth-cookie-decode (or cookie-value "")))
+  (let ((cookie-cons (elnode-auth-get-cookie-value httpcon cookie-name)))
+    (if (not cookie-cons)
         (signal 'elnode-auth-token cookie-value)
-        (let ((username (match-string 1 cookie-value))
-              (token (match-string 2 cookie-value)))
-          (elnode-auth-check-p username token :loggedin-db loggedin-db)))))
+        (destructuring-bind (username . token) cookie-cons
+          (elnode-auth-check-p
+           username token :loggedin-db loggedin-db)))))
 
 (defun* elnode-auth-cookie-check (httpcon
                                   &key
