@@ -1380,9 +1380,10 @@ default is `elnode-auth-db')."
        do
        (db-put
         (car pair)
-        (elnode--auth-make-hash
-         (car pair)
-         (cdr pair))
+        `(("username" . ,(car pair))
+          ("token" . ,(elnode--auth-make-hash
+                       (car pair)
+                       (cdr pair))))
         (or db elnode-auth-db))))
 
 (ert-deftest elnode-auth-user-p ()
