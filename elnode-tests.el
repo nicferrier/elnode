@@ -1200,33 +1200,37 @@ That sounds more fun than it is."
 
 (ert-deftest elnode--under-docroot-p ()
   "Test that the docroot protection works."
-  (fakir-mock-file (fakir-file
-                    :filename "index.creole"
-                    :directory "/home/elnode/wiki")
-    (should
-     (elnode--under-docroot-p
-      "/home/elnode/wiki/index.creole"
-      "/home/elnode/wiki"))
-    (should
-     (elnode--under-docroot-p
-      "/home/elnode/wiki/index.creole"
-      "~/wiki"))
-    (should-not
-     (elnode--under-docroot-p
-      "/home/elnode/wiki/blah/index.creole"
-      "/home/elnode/wiki"))
-    (should-not
-     (elnode--under-docroot-p
-      "/home/elnode/wiki/blah.creole"
-      "/home/elnode/wiki"))
-    (should-not
-     (elnode--under-docroot-p
-      "/home/elnode/wikiroot/blah.creole"
-      "/home/elnode/wiki"))
-    (should-not
-     (elnode--under-docroot-p
-      "/home/elnode/wiki/blah.creole"
-      "/home/elnode/wikiroot"))))
+  (let ((fakir--home-root "/home/elnode"))
+    (fakir-mock-file (fakir-file
+                      :filename "index.creole"
+                      :directory "/home/elnode/wiki")
+
+      (should
+       (elnode--under-docroot-p
+        "/home/elnode/wiki/index.creole"
+        "~/wiki"))
+
+      (should
+       (elnode--under-docroot-p
+        "/home/elnode/wiki/index.creole"
+        "/home/elnode/wiki"))
+      
+      (should-not
+       (elnode--under-docroot-p
+        "/home/elnode/wiki/blah/index.creole"
+        "/home/elnode/wiki"))
+      (should-not
+       (elnode--under-docroot-p
+        "/home/elnode/wiki/blah.creole"
+        "/home/elnode/wiki"))
+      (should-not
+       (elnode--under-docroot-p
+        "/home/elnode/wikiroot/blah.creole"
+        "/home/elnode/wiki"))
+      (should-not
+       (elnode--under-docroot-p
+        "/home/elnode/wiki/blah.creole"
+        "/home/elnode/wikiroot")))))
 
 (ert-deftest elnode-cached-p ()
   "Is a resource cached?"
