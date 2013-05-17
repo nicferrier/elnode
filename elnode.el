@@ -1779,18 +1779,20 @@ return DEFAULT instead of `nil'."
     ;; would be nice to trap them and report and then re-raise them.
     (process-send-string httpcon (format "%x\r\n%s\r\n" len (or str "")))))
 
-(defvar elnode-http-codes-alist
+(defconst elnode-http-codes-alist
   (loop for p in '((200 . "Ok")
+                   (201 . "Created")
                    (302 . "Redirect")
                    (400 . "Bad Request")
                    (401 . "Authenticate")
                    (404 . "Not Found")
                    (500 . "Server Error"))
-        collect
-        p
-        collect
-        (cons (number-to-string (car p))
-              (cdr p)))
+     ;; add an alist entry with an integer key
+     collect p
+     ;; add an alist entry with a string key
+     collect
+       (cons (number-to-string (car p))
+             (cdr p)))
   "HTTP codes with string keys and integer keys.")
 
 (defun* elnode-http-cookie-make (name data &key expiry path)
