@@ -1457,10 +1457,12 @@ authenticated."
       (fakir-mock-process :httpcon
           ((:elnode-http-header
             `(("Referer" . "http://somehost.example.com"))))
-        (should-not
+        ;; The error should signal the cookie name
+        (should-equal
          (condition-case token
              (elnode-auth-cookie-check-p :httpcon)
-           (elnode-auth-token (cdr token))))))))
+           (elnode-auth-token (cdr token)))
+         "elnode-auth")))))
 
 (ert-deftest elnode-auth-login-sender ()
   "Low levelish test of the login page sender."
