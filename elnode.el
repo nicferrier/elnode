@@ -56,6 +56,8 @@
 (require 'mail-parse) ; for mail-header-parse-content-type
 (require 'url-util)
 (require 'kv)
+(require 's)
+(require 'dash)
 (require 'rx)
 (require 'web)
 (require 'json)
@@ -2005,6 +2007,45 @@ The data is sent with content type: text/html."
                             'not-alist)))
                 (null list)))
            (json-encode data)))) json-to-send))
+
+(defun elnode-send-report (httpcon)
+  "Send back an HTML report on the request.
+
+This is often useful for debugging."
+  (flet ((alist->html
+             (alist)
+           (mapconcat
+            (lambda (hdr-pair)
+              (format
+               "%s %s"
+               (car hdr-pair)
+               (let ((v (cdr hdr-pair)))
+                 (if (and v (not (equal v "")))
+                     (format "%S" v) ""))))
+            alist
+            "\n")))
+    (let* ((method (elnode-http-method httpcon))
+           (paramters (alist->html
+                       (or (elnode-http-params httpcon)
+                           '(("None". "")))))
+           (headers (alist->html (elnode-http-headers httpcon)))
+           (page (s-lex-format "<html>
+<style>
+body { font-family: sans-serif;}
+td {
+vertical-align: top;
+}
+</style>
+<body>
+<table>
+<tr><td>method:</td><td>${method}</td></tr>
+<tr><td>parameters:</td><td><pre>${paramters}</pre></td><tr>
+<tr><td>headers:</td><td><pre>${headers}</pre></td><tr>
+</table>
+</body>
+</html>")))
+      (elnode-send-html httpcon page))))
+
 
 (defun* elnode-send-json (httpcon data &key content-type jsonp)
   "Send a 200 OK to the HTTPCON along with DATA as JSON.
