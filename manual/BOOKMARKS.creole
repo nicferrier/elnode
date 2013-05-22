@@ -1,0 +1,48 @@
+= Elnode bookmarking =
+
+[[https://github.com/nicferrier/elnode/blob/master/elnode-bm.el|This is a simple Elnode app]]
+to allow bookmarking to Emacs.
+
+The idea is you start the elnode app:
+
+{{{
+M-x elnode-start [RET] elnode-bm-handler [RET]
+Port: 8004[RET]
+Host: localhost[RET]
+}}}
+
+And then you can visit the page in your browser:
+
+{{{
+http://localhost:8004
+}}}
+
+and you will be presented with the option of the Chrome extension or
+the bookmarklet which you can install.
+
+You can then either, click on the bookmarklet or use Ctrl+Shift+I with
+the Chrome extension, to send the current tab's url and title to Emacs
+where it is stored in an org-mode file: {{{~/bookmarks.org}}}
+
+Here's an example org-mode file:
+
+{{{
+* [[https://github.com/abicky/nodejs-repl.el/issues/1#issuecomment-15665393][how about uploading to marmalade?  Issue #1  abicky/nodejs-repl.el]] <2013-05-22 Wed 23:41>
+* [[https://github.com/bumptech/stud][bumptech/stud  GitHub]] <2013-05-22 Wed 23:40>
+* [[http://www.emacswiki.org/emacs/NicFerrier][EmacsWiki: Nic Ferrier]] <2013-05-22 Wed 23:40>
+* [[http://www.w3.org/TR/CSP/#processing-model][Content Security Policy 1.0]] <2013-05-22 Wed 20:58>
+* [[https://twitter.com/i/connect][Twitter / Interactions]] <2013-05-22 Wed 20:50>
+* [[http://www.gnu.org/software/emacs/manual/html_node/elisp/Time-Parsing.html][Time Parsing - GNU Emacs Lisp Reference Manual]] <2013-05-22 Wed 19:13>
+}}}
+
+== Problems ==
+
+There are some problems with this right now:
+
+* [[https://support.google.com/chrome_webstore/answer/2664769?p=crx_warning&rd=1|Google lock down Chrome]] so you can't install code.
+** this is annoying because I only want to talk to localhost, if I have my extension on localhost surely I can download it?
+* [[https://github.com/blog/1477-content-security-policy|the new CSP stuff]] is breaking bookmarklets
+* also bookmarklets will always require SSL?
+** I started work on making a [[https://github.com/bumptech/stud|stud]] spawning system for Elnode
+** I got it working ok but...
+** self signed certificates still don't work very well and are relatively hard to make for the average user
