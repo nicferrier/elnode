@@ -1,5 +1,6 @@
 ;;; elnode-log-mode.el - view elnode log files nicely
 
+;;;###autoload
 (define-generic-mode 'elnode-log-mode
   nil ; comments
   nil; keywords
