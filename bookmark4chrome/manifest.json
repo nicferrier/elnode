@@ -1,0 +1,24 @@
+{
+  "manifest_version": 2,
+  "name": "Elnode Bookmarker",
+  "description": "Bookmark your pages into Emacs.",
+  "icons": {
+    "128": "icon.png"
+  },
+  "version": "0.1",
+  "permissions": [
+    "http://localhost:8004/",
+    "tabs"
+  ],
+  "background": {
+    "scripts": ["bookmark-background.js"]
+  },
+  "commands": {
+    "elnode-bookmark-page": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+I"
+      },
+      "description": "Bookmark the current page with Emacs."
+    }
+  }
+}
