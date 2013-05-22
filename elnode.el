@@ -2048,7 +2048,9 @@ vertical-align: top;
 
 
 (defun* elnode-send-json (httpcon data &key content-type jsonp)
-  "Send a 200 OK to the HTTPCON along with DATA as JSON.
+  "Convert DATA to JSON and send to the HTTPCON with a 200 \"Ok\".
+
+DATA is some lisp object.
 
 If CONTENT-TYPE is specified then it is used as the HTTP Content
 Type of the response.
