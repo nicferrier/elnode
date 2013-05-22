@@ -1416,6 +1416,10 @@ The status-line and the header alist."
    (process-get httpcon :elnode-http-status)
    (process-get httpcon :elnode-http-header)))
 
+(defun elnode-http-headers (httpcon)
+  "Return the alist of headers from HTTPCON."
+  (process-get httpcon :elnode-http-header))
+
 (defun elnode-http-header (httpcon name &optional convert)
   "Get the header specified by NAME from the HTTPCON.
 
