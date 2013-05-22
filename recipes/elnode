@@ -14,6 +14,7 @@
   "elnode-lists.el"
   "elnode-rle.el"
   "elnode-wiki.el"
+  "elnode-log-mode.el"
   "default-wiki-index.creole"
   "default-webserver-test.html"
   "default-webserver-image.png"
