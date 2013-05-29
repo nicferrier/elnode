@@ -660,7 +660,7 @@ available.")
     (if (equal
 	 (process-buffer
 	  ;; Get the server process
-	  (cdr (assoc 
+	  (cdr (assoc
 		(process-contact process :service)
 		elnode-server-socket)))
 	 (process-buffer process))
@@ -674,7 +674,7 @@ available.")
     (when (process-buffer process)
       (kill-buffer (process-buffer process))
       (elnode-error "Elnode connection dropped %s" process)))
-   
+
    ((equal status "open\n") ;; this says "open from ..."
     (elnode-error "Elnode opened new connection"))
 
@@ -1263,7 +1263,8 @@ Serves only to connect the server process to the client processes"
                       &key
                       port
                       (host "localhost")
-                      (defer-mode :managed))
+                      (defer-mode :managed)
+                      allowed-methods-regex)
   "Start a server using REQUEST-HANDLER.
 
 REQUEST-HANDLER will handle requests on PORT on HOST (which is
@@ -1330,7 +1331,8 @@ elnode servers on the same port on different hosts."
                       :log 'elnode--log-fn
                       :plist (list
                               :elnode-http-handler request-handler
-                              :elnode-defer-mode defer-mode))))
+                              :elnode-defer-mode defer-mode
+                              :elnode-allowed-methods-regex allowed-methods-regex))))
              elnode-server-socket)))))
 
 ;; TODO: make this take an argument for the
@@ -1505,10 +1507,15 @@ cons is returned."
   "Parse the status line of HTTPCON.
 
 If PROPERTY is non-nil, then return that property."
-  (let ((http-line (process-get httpcon :elnode-http-status)))
-    (string-match
-     "\\(GET\\|POST\\|HEAD\\) \\(.*\\) HTTP/\\(1.[01]\\)"
-     http-line)
+  (let ((http-line (process-get httpcon :elnode-http-status))
+        (method-regex (or (process-get httpcon :elnode-allowed-methods-regex)
+                          (mapconcat
+                           'identity
+                           (list "GET" "POST" "HEAD" "DELETE" "PUT")
+                           "\\|"))))
+    (string-match (format "\\(%s\\) \\(.*\\) HTTP/\\(1.[01]\\)"
+                          method-regex)
+                  http-line)
     (process-put httpcon :elnode-http-method (match-string 1 http-line))
     (process-put httpcon :elnode-http-resource (match-string 2 http-line))
     (process-put httpcon :elnode-http-version (match-string 3 http-line))
@@ -2844,7 +2851,7 @@ It should not be used otherwise.")
 	 (day (nth (nth 6 decoded-time) day-names))
 	 (month (nth (- (nth 4 decoded-time) 1) month-names)))
     (format "%s, %s %s %s"
-	    day 
+	    day
 	    (format-time-string "%m" time t)
 	    month
 	    (format-time-string "%Y %H:%M:%S GMT" time t))))
