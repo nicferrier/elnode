@@ -1248,7 +1248,8 @@ Serves only to connect the server process to the client processes"
                       &key
                       port
                       (host "localhost")
-                      (defer-mode :managed))
+                      (defer-mode :managed)
+                      allowed-methods-regex)
   "Start a server using REQUEST-HANDLER.
 
 REQUEST-HANDLER will handle requests on PORT on HOST (which is
@@ -1315,7 +1316,8 @@ elnode servers on the same port on different hosts."
                       :log 'elnode--log-fn
                       :plist (list
                               :elnode-http-handler request-handler
-                              :elnode-defer-mode defer-mode))))
+                              :elnode-defer-mode defer-mode
+                              :elnode-allowed-methods-regex allowed-methods-regex))))
              elnode-server-socket)))))
 
 ;; TODO: make this take an argument for the
@@ -1487,10 +1489,11 @@ cons is returned."
 
 If PROPERTY is non-nil, then return that property."
   (let* ((http-line (process-get httpcon :elnode-http-status))
-         (method-regex (mapconcat
-                        'identity
-                        (list "GET" "POST" "HEAD" "DELETE" "PUT")
-                        "\\|")))
+         (method-regex (or (process-get httpcon :elnode-allowed-methods-regex)
+                           (mapconcat
+                            'identity
+                            (list "GET" "POST" "HEAD" "DELETE" "PUT")
+                            "\\|"))))
     (string-match (format "\\(%s\\) \\(.*\\) HTTP/\\(1.[01]\\)"
                           method-regex)
                   http-line)
