@@ -1488,12 +1488,12 @@ cons is returned."
   "Parse the status line of HTTPCON.
 
 If PROPERTY is non-nil, then return that property."
-  (let* ((http-line (process-get httpcon :elnode-http-status))
-         (method-regex (or (process-get httpcon :elnode-allowed-methods-regex)
-                           (mapconcat
-                            'identity
-                            (list "GET" "POST" "HEAD" "DELETE" "PUT")
-                            "\\|"))))
+  (let ((http-line (process-get httpcon :elnode-http-status))
+        (method-regex (or (process-get httpcon :elnode-allowed-methods-regex)
+                          (mapconcat
+                           'identity
+                           (list "GET" "POST" "HEAD" "DELETE" "PUT")
+                           "\\|"))))
     (string-match (format "\\(%s\\) \\(.*\\) HTTP/\\(1.[01]\\)"
                           method-regex)
                   http-line)
