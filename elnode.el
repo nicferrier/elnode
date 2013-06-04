@@ -2742,11 +2742,12 @@ ARGS is a list of arguments to pass to the program.
 
 It is NOT POSSIBLE to run more than one process at a time
 directed at the same http connection."
-  (let* ((args `(,(format "%s-%s" (process-name httpcon) program)
-                 ,(format " %s-%s" (process-name httpcon) program)
-                 ,program
-                 ,@args
-                ))
+  (let* ((args
+          (append
+           (list
+            (format "%s-%s" (process-name httpcon) program)
+            (format " %s-%s" (process-name httpcon) program)
+            program) args))
          (p (let ((process-connection-type nil))
               (apply 'start-process args))))
     (set-process-coding-system p 'raw-text-unix)
