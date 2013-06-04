@@ -1343,14 +1343,17 @@ elnode servers on the same port on different hosts."
                         (mapcar (lambda (n) (format "%s" n))
                                 (elnode-ports))))))
                  (list prt)))
-  (let ((server (assoc port elnode-server-socket)))
+  (let* ((server
+          (or (assoc port elnode-server-socket)
+              (assoc (format "%d" port) elnode-server-socket)))
+         (port-to-kill (car-safe server)))
     (when server
       (message "deleting server process")
       (delete-process (cdr server))
       (setq elnode-server-socket
             ;; remove-if
             (let ((test (lambda (elem)
-                          (= (car elem) port)))
+                          (equal (car elem) port-to-kill)))
                   (l elnode-server-socket)
                   result)
               (while (car l)
