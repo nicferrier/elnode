@@ -1506,37 +1506,41 @@ cons is returned."
 
 If PROPERTY is non-nil, then return that property."
   (let ((http-line (process-get httpcon :elnode-http-status)))
-    (string-match
-     "\\(GET\\|POST\\|HEAD\\) \\(.*\\) HTTP/\\(1.[01]\\)"
-     http-line)
-    (process-put httpcon :elnode-http-method (match-string 1 http-line))
-    (process-put httpcon :elnode-http-resource (match-string 2 http-line))
-    (process-put httpcon :elnode-http-version (match-string 3 http-line))
+    (save-match-data
+      (string-match
+       "\\(GET\\|POST\\|HEAD\\) \\([^ ]*\\) HTTP/\\(1.[01]\\)"
+       http-line)
+      (process-put httpcon :elnode-http-method (match-string 1 http-line))
+      (process-put httpcon :elnode-http-resource (match-string 2 http-line))
+      (process-put httpcon :elnode-http-version (match-string 3 http-line)))
     (if property
         (process-get httpcon property))))
 
 (defun elnode--http-parse-resource (httpcon &optional property)
   "Convert the specified resource to a path and a query."
-  (save-match-data
-    (let ((resource
-           (or
-            (process-get httpcon :elnode-http-resource)
-            (elnode--http-parse-status httpcon :elnode-http-resource))))
-      (or
-       ;; root pattern
-       (string-match "^\\(/\\)\\(\\?.*\\)*$" resource)
-       ;; /somepath or /somepath/somepath
-       (string-match "^\\(/[^?]+\\)\\(\\?.*\\)*$" resource))
-      (let ((path (url-unhex-string (match-string 1 resource))))
-        (process-put httpcon :elnode-http-pathinfo path))
-      (if (match-string 2 resource)
-          (let ((query (match-string 2 resource)))
-            (string-match "\\?\\(.+\\)" query)
-            (if (match-string 1 query)
-                (process-put
-                 httpcon
-                 :elnode-http-query
-                 (match-string 1 query)))))))
+  (let ((resource
+         (or
+          (process-get httpcon :elnode-http-resource)
+          (elnode--http-parse-status
+           httpcon :elnode-http-resource))))
+    (save-match-data
+      (if (or
+           ;; root pattern with 
+           (string-match "^\\(/\\)\\(\\?.*\\)*$" resource)
+           ;; /somepath or /somepath/somepath
+           (string-match "^\\(/[^?]+\\)\\(\\?.*\\)*$" resource))
+          (let ((path (url-unhex-string (match-string 1 resource))))
+            (process-put httpcon :elnode-http-pathinfo path)
+            (when (match-string 2 resource)
+              (let ((query (match-string 2 resource)))
+                (string-match "\\?\\(.+\\)" query)
+                (if (match-string 1 query)
+                    (process-put
+                     httpcon
+                     :elnode-http-query
+                     (match-string 1 query))))))
+          ;; Else it might be a more exotic path
+          (process-put httpcon :elnode-http-pathinfo resource))))
   (if property
       (process-get httpcon property)))
 
