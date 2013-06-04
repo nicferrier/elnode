@@ -3899,7 +3899,9 @@ in `elnode-webserver-docroot', which by default is ~/public_html."
 
 (defvar elnode--inited nil
   "Records when elnode is initialized.
-This is autoloading mechanics, see the eval-after-load for doing init.")
+
+This is autoloading mechanics, see the eval-after-load for doing
+init.")
 
 ;; Auto start elnode if we're ever loaded
 ;;;###autoload
