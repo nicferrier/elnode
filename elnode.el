@@ -1967,7 +1967,7 @@ of a buffer."
            "processing the access log"))))))
   (condition-case nil
       (process-send-eof httpcon)
-    (error (message "elnode--http-endL could not send EOF")))
+    (error (message "elnode--http-end could not send EOF")))
   (delete-process httpcon)
   (kill-buffer (process-buffer httpcon)))
 
