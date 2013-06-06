@@ -2850,6 +2850,7 @@ It should not be used otherwise.")
 It should not be used otherwise.")
 
 (defun elnode--rfc1123-date (time)
+  "Return TIME in RFC1123 format, suitable for HTTP dates."
   (let* ((day-names '("Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat"))
 	 (month-names '("Jan" "Feb" "Mar" "Apr" "May" "Jun"
 			"Jul" "Aug" "Sep" "Oct" "Nov" "Dec"))
@@ -2862,9 +2863,13 @@ It should not be used otherwise.")
 	    month
 	    (format-time-string "%Y %H:%M:%S GMT" time t))))
 
+(defalias 'elnode-rfc1123-date 'elnode--rfc1123-date)
+
 (defun elnode--file-modified-time (file)
   "Get modification time for FILE."
   (nth 5 (file-attributes file)))
+
+(defalias 'elnode-file-modified-time 'elnode--file-modified-time)
 
 (defun* elnode-send-file (httpcon targetfile
                                   &key
