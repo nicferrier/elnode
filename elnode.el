@@ -3053,15 +3053,24 @@ You can override this in tests to have interesting effects.  By
 default it just calls `elnode-send-404'."
   (elnode-send-404 httpcon))
 
-(defun elnode-cached-p (httpcon target-file)
-  "Is the specified TARGET-FILE older than the HTTPCON?"
-  (let ((modified-since
-         (elnode-http-header httpcon 'if-modified-since :time)))
+(defun elnode-modified-since (httpcon modified-time)
+  "Implement the HTTP If-Modified-Since test.
+
+MODIFIED-TIME is the time the resource was modified, for example
+a file modification time."
+  (let* ((modified-since
+          (elnode-http-header
+           httpcon 'if-modified-since :time)))
     (and
      modified-since
-     (time-less-p
-      (elnode--file-modified-time target-file)
-      modified-since))))
+     (time-less-p modified-time modified-since))))
+
+(defun elnode-cached-p (httpcon target-file)
+  "Is the specified TARGET-FILE older than the HTTPCON?
+
+This uses `elnode-modified-since'."
+  (elnode-modified-since
+   httpcon (elnode--file-modified-time target-file)))
 
 (defun elnode-cached (httpcon)
   "`elnode-docroot-for' calls this when the resources was cached.
