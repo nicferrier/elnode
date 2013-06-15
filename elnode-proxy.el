@@ -107,4 +107,6 @@ Interactively use C-u to specify the URL."
          (elnode-make-proxy (or url "${path}${query}"))))
     (elnode-start proxy-handler :port port)))
 
+(provide 'elnode-proxy)
+
 ;;; elnode-proxy.el ends here
