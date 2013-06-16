@@ -39,6 +39,7 @@
         (concat hdr (format ", %s" ipaddr))
         ipaddr)))
 
+;;;###autoload
 (defun elnode-make-proxy (url)
   "Make a proxy handler sending requests to URL.
 
@@ -104,6 +105,7 @@ Reverse proxying is a simpler and perhaps more useful."
 (defvar elnode--proxy-server-goto-url-history nil
   "History variable used for proxy goto urls.")
 
+;;;###autoload
 (defun elnode-make-proxy-server (port &optional url)
   "Make a proxy server on the specified PORT.
 
