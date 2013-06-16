@@ -39,6 +39,22 @@
         (concat hdr (format ", %s" ipaddr))
         ipaddr)))
 
+(defun elnode-send-proxy-redirect (httpcon location)
+  "Send back a proxy redirect to LOCATION.
+
+A proxy redirect is setting \"X-Accel-Redirect\" to a location,
+proxies can interpret the header with some kind of internal only
+URL resolution mechanism and do dispatch to another backend
+without sending the redirect back to the origin UA."
+  (elnode-http-header-set
+   httpcon "X-Accel-Redirect" locattion)
+  ;; This is an nginx specific hack because it seems nginx kills the
+  ;; socket once the accel header arrives
+  (condition-case err
+      (elnode-send-redirect httpcon location)
+    (error (unless (string-match "SIGPIPE" (cdr err))
+             (signal (car err) (cdr err))))))
+
 ;;;###autoload
 (defun elnode-make-proxy (url)
   "Make a proxy handler sending requests to URL.
