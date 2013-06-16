@@ -1245,6 +1245,13 @@ whole body of the RESPONSE."
 Serves only to connect the server process to the client processes"
   (process-put con :server server))
 
+(defun elnode-server-info (httpcon)
+  "Returns a list of the server host and port for HTTPCON.
+
+The list is returned so that it can be destructured
+with `(hostname port)'.  The `hostname' is a symbol."
+  (process-contact (process-get httpcon :server)))
+
 (defvar elnode-handler-history '()
   "The history of handlers bound to servers.")
 
