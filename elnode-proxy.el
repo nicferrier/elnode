@@ -22,6 +22,23 @@
             (cdr hdr-pair)))
     (kvhash->alist hdr))))
 
+(defun elnode/get-remote-ipaddr (httpcon)
+  "Return the remote IP address from the HTTPCON."
+  (let* ((remote (plist-get
+                  (process-contact httpcon t)
+                  :remote))
+         (ip-addr (mapcar 'identity remote)))
+    (destructuring-bind (a b c d port) ip-addr
+      (format "%s.%s.%s.%s:%s" a b c d port))))
+
+(defun elnode/proxy-x-forwarded-for (httpcon)
+  "Return an X-Forwaded-For header."
+  (let ((ipaddr (elnode/get-remote-ipaddr httpcon))
+        (hdr (elnode-http-header httpcon "X-Forwarded-For")))
+    (if hdr
+        (concat hdr (format ", %s" ipaddr))
+        ipaddr)))
+
 (defun elnode-make-proxy (url)
   "Make a proxy handler sending requests to URL.
 
@@ -76,8 +93,10 @@ Reverse proxying is a simpler and perhaps more useful."
               (elnode-http-return httpcon)
               (elnode-http-send-string httpcon data)))
         :mode 'stream
-        :url web-url)))))
-
+        :url web-url
+        :extra-headers
+        `(("X-Forwarded-For"
+           . ,(elnode/proxy-x-forwarded-for httpcon))))))))
 
 (defvar elnode--proxy-server-port-history nil
   "History variable used for proxy server port reading.")
