@@ -6,8 +6,10 @@
 (require 'fakir)
 (require 'elnode)
 (require 'elnode-wiki)
+(require 'elnode-proxy)
 (require 'kv)
 (require 'mail-parse)
+(require 'noflet)
 
 (ert-deftest elnode-join ()
   "Test the path joining."
@@ -113,8 +115,8 @@ is just a test helper."
     (with-temp-buffer
       (let ((test-log-buf (current-buffer)))
         ;; Setup a fake server log buffer
-        (flet ((elnode--get-error-log-buffer ()
-                 test-log-buf))
+        (noflet ((elnode--get-error-log-buffer ()
+                   test-log-buf))
           (elnode-error err-message err-include))
         ;; Assert the message sent to the log buffer is correctly formatted.
         (should (string-match
@@ -129,7 +131,7 @@ is just a test helper."
     (with-temp-buffer
       (let ((test-log-buf (current-buffer)))
         ;; Setup a fake server log buffer
-        (flet ((elnode--get-error-log-buffer ()
+        (noflet ((elnode--get-error-log-buffer ()
                  test-log-buf))
           (elnode-error
            err-message
@@ -159,9 +161,8 @@ is just a test helper."
         (elnode--http-parse :httpcon))))
     (let* ((logname "ert-test")
            (buffername (format "*%s-elnode-access*" logname)))
-      (flet ((elnode--log-filename
-              (log-name)
-              (make-temp-file "elnode-access")))
+      (noflet ((elnode--log-filename (log-name)
+                 (make-temp-file "elnode-access")))
         (unwind-protect
             (progn
               (elnode-log-access logname :httpcon)
@@ -996,8 +997,8 @@ Content-Type: text/html\r
      (equal
       ["a string in a list"]
       (json-read-from-string
-       (flet ((elnode-http-return (con data)
-                (setq sent-data data)))
+       (noflet ((elnode-http-return (con data)
+                  (setq sent-data data)))
          (fakir-mock-process
 	  httpcon
           ()
@@ -1188,8 +1189,7 @@ That sounds more fun than it is."
   "A quick test for `elnode-method'."
   (let ((httpcon :fake)
         method)
-    (flet ((elnode-http-method (http-con)
-             "GET"))
+    (noflet ((elnode-http-method (http-con) "GET"))
       (elnode-method httpcon
         (GET
          (setq method "GET"))
@@ -1255,12 +1255,12 @@ That sounds more fun than it is."
 (ert-deftest elnode-docroot-for ()
   "Test the docroot protection macro."
   (let ((httpcon :fake))
-    (flet ((elnode-send-404 (httpcon)
-             (throw :test 404))
-           (elnode-send-status (httpcon status &optional msg)
-             (throw :test status))
-           (send-200 (httpcon)
-             (throw :test 200)))
+    (noflet ((elnode-send-404 (httpcon)
+               (throw :test 404))
+             (elnode-send-status (httpcon status &optional msg)
+               (throw :test status))
+             (send-200 (httpcon)
+               (throw :test 200)))
       ;; Test straight through
       (should
        (equal
@@ -1515,7 +1515,7 @@ authenticated."
 (defmacro elnode-auth-flets (&rest body)
   "Wrap the BODY with some standard handler flets."
   (declare (debug (&rest form)))
-  `(flet
+  `(noflet
        ((auth-reqd-handler (httpcon)
           (with-elnode-auth httpcon 'test-auth
             (elnode-dispatcher
@@ -1672,12 +1672,12 @@ the wrapping of a specified handler with the login sender."
     "Test the wiki setup function."
     ;; Test that it's not called if we can't find the source file
     (let (called)
-      (flet ((make-directory (dirname &optional parents)
-               (setq called t))
-             ;; We fake buffer-file-name so that the wiki-index-source
-             ;; will not be found
-             (buffer-file-name ()
-               "/tmp/elnode/elnode-wiki.el"))
+      (noflet ((make-directory (dirname &optional parents)
+                 (setq called t))
+               ;; We fake buffer-file-name so that the wiki-index-source
+               ;; will not be found
+               (buffer-file-name ()
+                 "/tmp/elnode/elnode-wiki.el"))
         (elnode-wiki--setup)
         (should-not called)))
     ;; Test that when called we're going to copy things right
@@ -1685,17 +1685,17 @@ the wrapping of a specified handler with the login sender."
           copy-file
           ;; Ensure the configurable wikiroot is set to the default
           (elnode-wikiserver-wikiroot elnode-wikiserver-wikiroot-default))
-      (flet ((make-directory (dirname &optional parents)
-               (setq make-dir (list dirname parents)))
-             (dired-copy-file (from to ok-flag)
-               (setq copy-file (list from to ok-flag)))
-             ;; Mock the source filename environment
-             (buffer-file-name ()
-               "/tmp/elnode--wiki-setup-test/elnode-wiki.el")
-             (file-exists-p (filename)
-               (equal
-                filename
-                "/tmp/elnode--wiki-setup-test/default-wiki-index.creole")))
+      (noflet ((make-directory (dirname &optional parents)
+                 (setq make-dir (list dirname parents)))
+               (dired-copy-file (from to ok-flag)
+                 (setq copy-file (list from to ok-flag)))
+               ;; Mock the source filename environment
+               (buffer-file-name ()
+                 "/tmp/elnode--wiki-setup-test/elnode-wiki.el")
+               (file-exists-p (filename)
+                 (equal
+                  filename
+                  "/tmp/elnode--wiki-setup-test/default-wiki-index.creole")))
         (elnode-wiki--setup)
         (should
          (equal
