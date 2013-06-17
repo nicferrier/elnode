@@ -39,22 +39,6 @@
         (concat hdr (format ", %s" ipaddr))
         ipaddr)))
 
-(defun elnode-send-proxy-redirect (httpcon location)
-  "Send back a proxy redirect to LOCATION.
-
-A proxy redirect is setting \"X-Accel-Redirect\" to a location,
-proxies can interpret the header with some kind of internal only
-URL resolution mechanism and do dispatch to another backend
-without sending the redirect back to the origin UA."
-  (elnode-http-header-set
-   httpcon "X-Accel-Redirect" locattion)
-  ;; This is an nginx specific hack because it seems nginx kills the
-  ;; socket once the accel header arrives
-  (condition-case err
-      (elnode-send-redirect httpcon location)
-    (error (unless (string-match "SIGPIPE" (cdr err))
-             (signal (car err) (cdr err))))))
-
 ;;;###autoload
 (defun elnode-make-proxy (url)
   "Make a proxy handler sending requests to URL.
@@ -143,6 +127,40 @@ Interactively use C-u to specify the URL."
   (let ((proxy-handler
          (elnode-make-proxy (or url "${path}${query}"))))
     (elnode-start proxy-handler :port port)))
+
+
+(defun elnode-send-proxy-redirect (httpcon location)
+  "Send back a proxy redirect to LOCATION.
+
+A proxy redirect is setting \"X-Accel-Redirect\" to a location,
+proxies can interpret the header with some kind of internal only
+URL resolution mechanism and do dispatch to another backend
+without sending the redirect back to the origin UA."
+  (elnode-http-header-set
+   httpcon "X-Accel-Redirect" locattion)
+  ;; This is an nginx specific hack because it seems nginx kills the
+  ;; socket once the accel header arrives
+  (condition-case err
+      (elnode-send-redirect httpcon location)
+    (error (unless (string-match "SIGPIPE" (cdr err))
+             (signal (car err) (cdr err))))))
+
+(defun elnode-send-proxy-location (httpcon location)
+  "Send LOCATION with proxying techniques.
+
+If the HTTPCON comes from a proxy (detected by checking the
+\"X-Forwarded-For\") then an `elnode-send-proxy-redirect' to
+location is sent.
+
+Alternately it sets up a direct proxy call to the current server
+for the location."
+  (if (elnode-http-header httpcon "X-Forwarded-For")
+      (elnode-send-proxy-redirect httpcon location)
+      ;; Else we're not behind a proxy, send a proxy version
+      (destructuring-bind
+            (host port) (elnode-server-info httpcon)
+        (let ((url (format "http://%s:%s%s" host port location)))
+          (funcall (elnode-make-proxy url) httpcon)))))
 
 (provide 'elnode-proxy)
 
