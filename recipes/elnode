@@ -6,9 +6,9 @@
   (dash "1.1.0")
   (s "1.5.0")
   (creole "0.8.14") ;; for wiki
-  (fakir "0.1.1") ;; we provide the test-call with fakir 
+  (fakir "0.1.6") ;; we provide the test-call with fakir 
   (db "0.0.5")
-  (kv "0.0.15"))
+  (kv "0.0.17"))
  :files 
  ("elnode.el" 
   "elnode-lists.el"
