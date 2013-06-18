@@ -942,6 +942,18 @@ port number of the connection."
                     (elnode--format-response 500))
                    (delete-process process)))))))))))
 
+(defun elnode-get-remote-ipaddr (httpcon)
+  "Return the remote IP address from the HTTPCON."
+  (let* ((remote (plist-get
+                  (process-contact httpcon t)
+                  :remote))
+         (ip-addr (mapcar 'identity remote)))
+    (destructuring-bind (a b c d port) ip-addr
+      (format "%s.%s.%s.%s:%s" a b c d port))))
+
+
+;;; Testing stuff
+
 (defvar elnode--cookie-store nil
   "Cookie store for test servers.
 
