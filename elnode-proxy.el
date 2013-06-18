@@ -148,10 +148,9 @@ for the location."
   (if (elnode-http-header httpcon "X-Forwarded-For")
       (elnode-send-proxy-redirect httpcon location)
       ;; Else we're not behind a proxy, send a proxy version
-      (destructuring-bind
-            (host port) (elnode-server-info httpcon)
-        (let ((url (format "http://%s:%s%s" host port location)))
-          (funcall (elnode-make-proxy url) httpcon)))))
+      (let* ((server (elnode-server-info httpcon))
+             (url (format "http://%s%s" server location)))
+        (funcall (elnode-make-proxy url) httpcon))))
 
 (provide 'elnode-proxy)
 
