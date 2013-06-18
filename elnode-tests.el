@@ -1703,32 +1703,101 @@ the wrapping of a specified handler with the login sender."
          ;; This is the dir we should make
          '("/home/nferrier/.emacs.d/elnode/wiki/" t)
            ;; This is the copy file spec
-           '("/tmp/elnode--wiki-setup-test/default-wiki-index.creole"
-             "/home/nferrier/.emacs.d/elnode/wiki/index.creole"
-             nil))
-          ;; So this is the directory that make-directory will create
-          ;; and the copy-file spec
-          (list make-dir copy-file))))))
+         '("/tmp/elnode--wiki-setup-test/default-wiki-index.creole"
+           "/home/nferrier/.emacs.d/elnode/wiki/index.creole"
+           nil))
+        ;; So this is the directory that make-directory will create
+        ;; and the copy-file spec
+        (list make-dir copy-file))))))
 
-  (ert-deftest elnode-wiki-page ()
-    "Full stack Wiki test."
-    (with-elnode-mock-server
-        ;; The dispatcher function
-        (lambda (httpcon)
-          (let ((elnode-wikiserver-wikiroot "/home/elnode/wiki"))
-            (elnode-hostpath-dispatcher
-             httpcon
-             '(("[^/]*//wiki/\\(.*\\)" . elnode-wikiserver))))) t
-             (fakir-mock-file (fakir-file
-                               :filename "test.creole"
-                               :directory "/home/elnode/wiki"
-                               :content "= Hello World =\nthis is a creole wiki file!\n")
-                 (let* ((elnode--do-error-logging nil)
-                        (elnode--do-access-logging-on-dispatch nil))
-                   (should-elnode-response
-                    (elnode-test-call "/wiki/test.creole")
-                    :status-code 200
-                    :body-match ".*<h1>Hello World</h1>.*"))))))
+(ert-deftest elnode-wiki-page ()
+  "Full stack Wiki test."
+  (with-elnode-mock-server
+      ;; The dispatcher function
+      (lambda (httpcon)
+        (let ((elnode-wikiserver-wikiroot "/home/elnode/wiki"))
+          (elnode-hostpath-dispatcher
+           httpcon
+           '(("[^/]*//wiki/\\(.*\\)" . elnode-wikiserver))))) t
+           (fakir-mock-file
+            (fakir-file
+             :filename "test.creole"
+             :directory "/home/elnode/wiki"
+             :content "= Hello World =\nthis is a creole wiki file!\n")
+            (let* ((elnode--do-error-logging nil)
+                   (elnode--do-access-logging-on-dispatch nil))
+              (should-elnode-response
+               (elnode-test-call "/wiki/test.creole")
+               :status-code 200
+               :body-match ".*<h1>Hello World</h1>.*")))))
+
+
+;;; Some new testing constructs
+
+(defmacro elnode-sink (httpcon &rest body)
+  "Sink the HTTP response from BODY.
+
+Output to `elnode-http-start', `elnode-http-send-string' and
+`elnode-http-return' is collected and stored internallly.
+
+When `elnode-http-return' is called the form ends with a string
+result of whatever was sent as the response.  The string is
+propertized with the header sent to `elnode-http-start'."
+  (declare (indent 1)(debug (sexp &rest form)))
+  `(let (res reshdr)
+     (catch :elnode-sink-ret
+       (noflet ((elnode-http-start (httpcon status &rest header)
+                  (setq reshdr 
+                        (kvalist->plist header)))
+                (elnode-http-header-set (httpcon header &optional value)
+                  (setq reshdr
+                        (plist-put (intern (concat ":" reshdr))
+                                   header value)))
+                (elnode-http-send-string (httpcon data)
+                  (setq res (apply 'propertize
+                                   (concat res data) reshdr)))
+                (elnode-http-return (httpcon &optional data)
+                  (when data
+                    (setq res (apply 'propertize
+                                     (concat res data) reshdr)))
+                  (throw :elnode-sink-ret :end)))
+         ,@body))
+     res))
+
+(ert-deftest elnode-make-proxy ()
+  "Test the proxy stuff."
+  (let* ((html '("<html><h1>hello!</h1>"
+                 "<a id=\"100\"><h2>world!</h2>"
+                 "</html>"))
+         (doc (s-join "" html))
+         (hdr (kvacons :status-code "200"
+                       :status "Ok"
+                       :content-type "text/html"
+                       :content-length (format "%d" (length doc)))))))
+    (noflet ((web-http-call (method callback
+                                    :mode mode
+                                    :url url
+                                    :extra-headers headers)
+               (let-while (data (pop html))
+                 (funcall callback :httpcon hdr data))
+               (funcall callback :httpcon hdr :done))
+             (elnode-http-method (httpcon) "GET")
+             (elnode-http-pathinfo (httpcon) "/test/one")
+             (elnode-http-params (httpcon) '(("x" . "1")))
+             (elnode-get-remote-ipaddr (httpcon) "127.0.0.1:8000")
+             (elnode-http-header (httpcon name) nil))
+      (let* ((proxy-handler (elnode-make-proxy "http://some/place"))
+             (result
+              (elnode-sink :httpcon
+                (fakir-mock-proc-properties :httpcon
+                  (funcall proxy-handler :httpcon)))))
+        (should (equal result doc))
+        ;; FIXME - we should probably also check that the
+        ;; :elnode-child-process property has been added to the
+        ;; :httpcon
+        (should (equal
+                 (get-text-property 0 :content-type result)
+                 "text/html"))))))
 
 (provide 'elnode-tests)
 
