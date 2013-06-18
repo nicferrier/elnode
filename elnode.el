@@ -942,14 +942,32 @@ port number of the connection."
                     (elnode--format-response 500))
                    (delete-process process)))))))))))
 
+
+(defun elnode--ip-addr->string (ip-addr)
+  "Turn a vector IP-ADDR into a string form.
+
+The vector form is produced by `process-contact' and includes the
+port number."
+  (destructuring-bind (a b c d port)
+      (mapcar 'identity ip-addr)
+    (format "%s.%s.%s.%s:%s" a b c d port)))
+
 (defun elnode-get-remote-ipaddr (httpcon)
   "Return the remote IP address from the HTTPCON."
   (let* ((remote (plist-get
                   (process-contact httpcon t)
-                  :remote))
-         (ip-addr (mapcar 'identity remote)))
-    (destructuring-bind (a b c d port) ip-addr
-      (format "%s.%s.%s.%s:%s" a b c d port))))
+                  :remote)))
+    (elnode--ip-addr->string remote)))
+
+(defun elnode-server-info (httpcon)
+  "Returns a list of the server host and port for HTTPCON.
+
+The list is returned so that it can be destructured
+with `(hostname port)'.  The `hostname' is a symbol."
+  (elnode--ip-addr->string
+   (plist-get
+    (process-contact (process-get httpcon :server) t)
+    :local)))
 
 
 ;;; Testing stuff
@@ -1256,13 +1274,6 @@ whole body of the RESPONSE."
 
 Serves only to connect the server process to the client processes"
   (process-put con :server server))
-
-(defun elnode-server-info (httpcon)
-  "Returns a list of the server host and port for HTTPCON.
-
-The list is returned so that it can be destructured
-with `(hostname port)'.  The `hostname' is a symbol."
-  (process-contact (process-get httpcon :server)))
 
 (defvar elnode-handler-history '()
   "The history of handlers bound to servers.")
