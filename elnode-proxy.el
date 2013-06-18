@@ -11,7 +11,7 @@
 (require 'web)
 (require 'elnode)
 
-(defun elnode/web->elnode-hdr (hdr httpcon)
+(defun elnode--web->elnode-hdr (hdr httpcon)
   "Send the HDR from the web HTTP request to Elnode's HTTPCON."
   (apply
    'elnode-http-start
@@ -22,18 +22,9 @@
             (cdr hdr-pair)))
     (kvhash->alist hdr))))
 
-(defun elnode/get-remote-ipaddr (httpcon)
-  "Return the remote IP address from the HTTPCON."
-  (let* ((remote (plist-get
-                  (process-contact httpcon t)
-                  :remote))
-         (ip-addr (mapcar 'identity remote)))
-    (destructuring-bind (a b c d port) ip-addr
-      (format "%s.%s.%s.%s:%s" a b c d port))))
-
-(defun elnode/proxy-x-forwarded-for (httpcon)
+(defun elnode--proxy-x-forwarded-for (httpcon)
   "Return an X-Forwaded-For header."
-  (let ((ipaddr (elnode/get-remote-ipaddr httpcon))
+  (let ((ipaddr (elnode-get-remote-ipaddr httpcon))
         (hdr (elnode-http-header httpcon "X-Forwarded-For")))
     (if hdr
         (concat hdr (format ", %s" ipaddr))
@@ -88,7 +79,7 @@ Reverse proxying is a simpler and perhaps more useful."
         method
         (lambda (httpc hdr data)
           (unless hdr-sent
-            (elnode/web->elnode-hdr hdr httpcon)
+            (elnode--web->elnode-hdr hdr httpcon)
             (setq hdr/sent t))
           (if (eq data :done)
               (elnode-http-return httpcon)
@@ -97,7 +88,7 @@ Reverse proxying is a simpler and perhaps more useful."
         :url web-url
         :extra-headers
         `(("X-Forwarded-For"
-           . ,(elnode/proxy-x-forwarded-for httpcon))))))))
+           . ,(elnode--proxy-x-forwarded-for httpcon))))))))
 
 (defvar elnode--proxy-server-port-history nil
   "History variable used for proxy server port reading.")
