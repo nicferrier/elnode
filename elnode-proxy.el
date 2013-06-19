@@ -128,12 +128,14 @@ proxies can interpret the header with some kind of internal only
 URL resolution mechanism and do dispatch to another backend
 without sending the redirect back to the origin UA."
   (elnode-http-header-set
-   httpcon "X-Accel-Redirect" locattion)
+   httpcon "X-Accel-Redirect" location)
   ;; This is an nginx specific hack because it seems nginx kills the
   ;; socket once the accel header arrives
   (condition-case err
       (elnode-send-redirect httpcon location)
-    (error (unless (string-match "SIGPIPE" (cdr err))
+    (error (unless (string-match
+                    "\\(SIGPIPE\\|no longer connected\\)"
+                    (format "%s" (cdr err)))
              (signal (car err) (cdr err))))))
 
 (defun elnode-send-proxy-location (httpcon location)
