@@ -415,7 +415,7 @@ by elnode iteslf."
          (filename (elnode--log-filename logname))
          (formatter
           (or
-           (aget elnode-log-access-alist "elnode")
+           (kva logname elnode-log-access-alist)
            elnode-log-access-default-formatter-function))
          (formatted
           (when formatter
