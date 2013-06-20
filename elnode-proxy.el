@@ -13,14 +13,16 @@
 
 (defun elnode--web->elnode-hdr (hdr httpcon)
   "Send the HDR from the web HTTP request to Elnode's HTTPCON."
-  (apply
-   'elnode-http-start
-   httpcon 200
-   (mapcar
-    (lambda (hdr-pair)
-      (cons (symbol-name (car hdr-pair))
-            (cdr hdr-pair)))
-    (kvhash->alist hdr))))
+  (let ((headers
+         (-filter
+          (lambda (hdr-pair)
+            (unless (member
+                     (downcase (symbol-name (car hdr-pair)))
+                     '("status-code" "status-string" "status-version"))
+              (cons (symbol-name (car hdr-pair))
+                    (cdr hdr-pair))))
+          (kvhash->alist hdr))))
+    (apply 'elnode-http-start  httpcon 200 headers)))
 
 (defun elnode--proxy-x-forwarded-for (httpcon)
   "Return an X-Forwaded-For header."
