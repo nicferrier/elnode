@@ -80,7 +80,7 @@ Reverse proxying is a simpler and perhaps more useful."
         (lambda (httpc hdr data)
           (unless hdr-sent
             (elnode--web->elnode-hdr hdr httpcon)
-            (setq hdr/sent t))
+            (setq hdr-sent t))
           (if (eq data :done)
               (elnode-http-return httpcon)
               (elnode-http-send-string httpcon data)))
