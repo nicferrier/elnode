@@ -2,6 +2,7 @@
 
 (require 'elnode)
 (require 'tabulated-list)
+(require 'noflet)
 
 ;;; Deferred queue list
 
@@ -66,7 +67,7 @@
 
 (defun elnode--list-servers ()
   "List the current Elnode servers for `elnode-list-mode'."
-  (flet ((closurep (v)
+  (noflet ((closurep (v)
            (and (functionp v) (listp v) (eq (car v) 'closure))))
     (loop for (port . socket-proc) in elnode-server-socket
        collect
