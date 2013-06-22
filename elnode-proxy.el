@@ -156,6 +156,25 @@ for the location."
              (url (format "http://%s%s" server location)))
         (funcall (elnode-make-proxy url) httpcon))))
 
+(defun* elnode-proxy-post (httpcon path
+                                   &key (mode 'batch)
+                                   callback data extra-headers)
+  "Make an HTTP call to localhost or the first upstream proxy."
+  
+  (let* ((hp-pair
+          (if (elnode-http-header httpcon "X-Forwarded-For")
+              (elnode-get-remote-ipaddr httpcon)
+              (elnode-server-info httpcon)))
+         (url (format "http://%s%s" hp-pair path)))
+    (web-http-post
+     (or callback
+         (lambda (httpc hdr data)
+           (elnode-error
+            "%s post response %S %s"
+            httpcon hdr data)))
+     :url url :mode mode :data data
+     :extra-headers extra-headers)))
+
 (provide 'elnode-proxy)
 
 ;;; elnode-proxy.el ends here

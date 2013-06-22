@@ -1764,6 +1764,47 @@ propertized with the header sent to `elnode-http-start'."
          ,@body))
      res))
 
+(ert-deftest elnode-server-info ()
+  "Test the server info stuff."
+  (noflet ((fake-server-ip ()
+             (let (remote)
+               (elnode-start
+                (lambda (httpcon)
+                  (setq
+                   remote (elnode-server-info httpcon))
+                  (elnode-send-400 httpcon))
+                :port 5999)
+               (web-http-get
+                (lambda (httpc hdr data) (elnode-stop 5999))
+                :url "http://localhost:5999")
+               (sleep-for 1)
+               remote)))
+    (should (equal (fake-server-ip) "127.0.0.1:5999"))))
+
+(ert-deftest elnode-proxy-post ()
+  "Test making a proxy-call back to the server."
+  (noflet ((proxy-post ()
+             (let (remote)
+               (elnode-start
+                (lambda (httpcon)
+                  (if (equal
+                       (elnode-http-pathinfo httpcon)
+                       "/ping/")
+                      (elnode-send-status httpcon 201)
+                      ;; Else send the internal call
+                      (elnode-proxy-post
+                       httpcon "/ping/"
+                       :callback (lambda (httpc hdr data)
+                                   (setq remote data)))
+                      (elnode-send-status httpcon 200)))
+                :port 5999)
+               (web-http-get
+                (lambda (httpc hdr data) (elnode-stop 5999))
+                :url "http://localhost:5999")
+               (sleep-for 1)
+               remote)))
+    (should (equal (proxy-post) "<h1>Created</h1>\r\n"))))
+
 (ert-deftest elnode-make-proxy ()
   "Test the proxy stuff."
   (let* ((html '("<html><h1>hello!</h1>"
