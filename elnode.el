@@ -954,7 +954,10 @@ port number."
     (format "%s.%s.%s.%s:%s" a b c d port)))
 
 (defun elnode-get-remote-ipaddr (httpcon)
-  "Return the remote IP address from the HTTPCON."
+  "Return the remote IP address from the HTTPCON.
+
+Returned as a dotted ip address followed by a colon separated
+port number.  For example: \"127.0.0.1:8080\"."
   (let* ((remote (plist-get
                   (process-contact httpcon t)
                   :remote)))
