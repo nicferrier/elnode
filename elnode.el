@@ -960,6 +960,8 @@ port number."
                   :remote)))
     (elnode--ip-addr->string remote)))
 
+(defalias 'elnode-remote-ipaddr 'elnode-get-remote-ipaddr)
+
 (defun elnode-server-info (httpcon)
   "Returns a list of the server host and port for HTTPCON.
 
