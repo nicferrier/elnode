@@ -1764,6 +1764,46 @@ propertized with the header sent to `elnode-http-start'."
          ,@body))
      res))
 
+(defmacro elnode-fake-params (httpcon params-list &rest body)
+  "Fake the PARAM-BINDINGS and evaluate BODY.
+
+PARAM-BINDINGS is an ALIST with string cars for parameter names
+and string cdrs for values.  A cdr of a list can be used to
+provide a string value with a property list, for example:
+
+  ((\"param1\" . \"value\" )
+   (\"param2\" \"value\" :elnode-filename \"somefile.txt\"))
+
+Note the first parameter is an improper list."
+  (declare (indent 2) (debug (sexp sexp &rest body)))
+  `(let ((,httpcon (quote ,params-list)))
+     (noflet ((elnode-http-param (httpc param-name)
+                (if (eq httpc ,httpcon)
+                    (let ((v (kva param-name ,httpcon)))
+                      (cond
+                        ((listp v)
+                         (apply 'propertize (car v) (cdr v)))
+                        (t v)))
+                    (funcall this-fn httpcon param-name))))
+       ,@body)))
+
+(ert-deftest elnode-fake-params ()
+  "Testing faking the parameters."
+  (should
+   (equal
+    (elnode-fake-params :httpcon (("a" . "10"))
+      (elnode-http-param :httpcon "a"))
+    "10"))
+  ;; And with a file property
+  (should
+   (equal
+    (elnode-fake-params
+        :httpcon (("a" "10" :elnode-filename "file"))
+      (get-text-property
+       0 :elnode-filename
+       (elnode-http-param :httpcon "a")))
+    "file")))
+
 (ert-deftest elnode-server-info ()
   "Test the server info stuff."
   (noflet ((fake-server-ip ()
