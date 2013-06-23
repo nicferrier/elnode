@@ -1777,7 +1777,8 @@ provide a string value with a property list, for example:
 Note the first parameter is an improper list.
 
 PARAM-BINDINGS should be quoted."
-  (declare (indent 2) (debug (sexp sexp &rest body)))
+  (declare (indent 2)
+           (debug (sexp sexp &rest form)))
   `(let ((,httpcon ,params-list))
      (noflet ((elnode-http-param (httpc param-name)
                 (if (eq httpc ,httpcon)
