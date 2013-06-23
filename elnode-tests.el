@@ -1771,12 +1771,14 @@ PARAM-BINDINGS is an ALIST with string cars for parameter names
 and string cdrs for values.  A cdr of a list can be used to
 provide a string value with a property list, for example:
 
-  ((\"param1\" . \"value\" )
-   (\"param2\" \"value\" :elnode-filename \"somefile.txt\"))
+  '((\"param1\" . \"value\" )
+    (\"param2\" \"value\" :elnode-filename \"somefile.txt\"))
 
-Note the first parameter is an improper list."
+Note the first parameter is an improper list.
+
+PARAM-BINDINGS should be quoted."
   (declare (indent 2) (debug (sexp sexp &rest body)))
-  `(let ((,httpcon (quote ,params-list)))
+  `(let ((,httpcon ,params-list))
      (noflet ((elnode-http-param (httpc param-name)
                 (if (eq httpc ,httpcon)
                     (let ((v (kva param-name ,httpcon)))
@@ -1791,14 +1793,14 @@ Note the first parameter is an improper list."
   "Testing faking the parameters."
   (should
    (equal
-    (elnode-fake-params :httpcon (("a" . "10"))
+    (elnode-fake-params :httpcon '(("a" . "10"))
       (elnode-http-param :httpcon "a"))
     "10"))
   ;; And with a file property
   (should
    (equal
     (elnode-fake-params
-        :httpcon (("a" "10" :elnode-filename "file"))
+        :httpcon '(("a" "10" :elnode-filename "file"))
       (get-text-property
        0 :elnode-filename
        (elnode-http-param :httpcon "a")))
