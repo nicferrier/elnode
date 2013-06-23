@@ -1759,7 +1759,9 @@ property :elnode-filename on them:
 
   (get-text-property 0 :elnode-filename
     (elnode-http-param httpcon \"myfile\")) => '/somefile.txt'
-"
+
+The value comes from the \"Content-Disposition\" header in the
+multipart upload."
   (loop for pair in
        (or
         (process-get httpcon :elnode-http-params)
