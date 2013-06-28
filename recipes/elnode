@@ -17,6 +17,7 @@
   "elnode-wiki.el"
   "elnode-proxy.el"
   "elnode-log-mode.el"
+  "elnode-testsupport.el"
   "default-wiki-index.creole"
   "default-webserver-test.html"
   "default-webserver-image.png"
