@@ -2893,7 +2893,7 @@ It should not be used otherwise.")
 	 (month (nth (- (nth 4 decoded-time) 1) month-names)))
     (format "%s, %s %s %s"
 	    day
-	    (format-time-string "%m" time t)
+	    (format-time-string "%d" time t)
 	    month
 	    (format-time-string "%Y %H:%M:%S GMT" time t))))
 
