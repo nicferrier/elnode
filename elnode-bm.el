@@ -24,7 +24,7 @@ stored in."
 
 (defun elnode-bm-time->org (time)
   "Format the specified time in org-mode format."
-  (format-time-string "<%Y-%m-%d %a %H:%M>" time))
+  (format-time-string "[%Y-%m-%d %a %H:%M]" time))
 
 (defun elnode-bm-save (httpcon)
   "Take a bookmarklet and save it."
