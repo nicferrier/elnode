@@ -35,7 +35,7 @@ stored in."
          (title (or
                  (decode-coding-string
                   (elnode-http-param httpcon "i")
-                  'utf8)
+                  'utf-8)
                  page))
          (time (seconds-to-time
                 (/ (string-to-int
