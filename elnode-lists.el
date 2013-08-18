@@ -81,6 +81,7 @@
              (cond
                ((closurep fn) (format "%S" fn))
                ((byte-code-function-p fn) (format "byte-code"))
+               ((and (listp fn)(eq (car fn) 'lambda)) (format "lambda"))
                (t (symbol-name fn)))
              (or (if (and doc (string-match "^\\([^\n]+\\)" doc))
                      (match-string 1 doc)
