@@ -165,7 +165,6 @@ for the location."
                                    &key (mode 'batch)
                                    callback data extra-headers)
   "Make an HTTP call to localhost or the first upstream proxy."
-  
   (let* ((hp-pair
           (if (elnode-http-header httpcon "X-Forwarded-For")
               (elnode-get-remote-ipaddr httpcon)
