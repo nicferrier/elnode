@@ -1802,15 +1802,15 @@ the wrapping of a specified handler with the login sender."
          (hdr (kvacons :status-code "200"
                        :status "Ok"
                        :content-type "text/html"
-                       :content-length (format "%d" (length doc)))))
+                       :content-length (format "%d" (length doc))))
+         (hdr-hash (kvalist->hash hdr)))
     (noflet ((web-http-call (method callback
                                     :mode mode
                                     :url url
                                     :extra-headers headers)
                (let-while (data (pop html))
-                 ;; web sends hashes
-                 (funcall callback :httpcon (kvalist->hash hdr) data))
-               (funcall callback :httpcon hdr :done))
+                 (funcall callback :httpcon hdr-hash data))
+               (funcall callback :httpcon hdr-hash :done))
              (elnode-http-method (httpcon) "GET")
              (elnode-http-pathinfo (httpcon) "/test/one")
              (elnode-http-params (httpcon) '(("x" . "1")))
