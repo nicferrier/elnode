@@ -1808,7 +1808,8 @@ the wrapping of a specified handler with the login sender."
                                     :url url
                                     :extra-headers headers)
                (let-while (data (pop html))
-                 (funcall callback :httpcon hdr data))
+                 ;; web sends hashes
+                 (funcall callback :httpcon (kvalist->hash hdr) data))
                (funcall callback :httpcon hdr :done))
              (elnode-http-method (httpcon) "GET")
              (elnode-http-pathinfo (httpcon) "/test/one")
