@@ -1798,7 +1798,6 @@ the wrapping of a specified handler with the login sender."
   (let* ((html '("<html><h1>hello!</h1>"
                  "<a id=\"100\"><h2>world!</h2>"
                  "</html>"))
-         (doc (s-join "" html))
          (hdr (kvacons :status-code "200"
                        :status "Ok"
                        :content-type "text/html"
@@ -1808,7 +1807,8 @@ the wrapping of a specified handler with the login sender."
                                     :mode mode
                                     :url url
                                     :extra-headers headers)
-               (let-while (data (pop html))
+               ;; Serve element after element of the html list
+               (dolist (data html)
                  (funcall callback :httpcon hdr-hash data))
                (funcall callback :httpcon hdr-hash :done))
              (elnode-http-method (httpcon) "GET")
@@ -1821,13 +1821,15 @@ the wrapping of a specified handler with the login sender."
               (elnode-sink :httpcon
                 (fakir-mock-proc-properties :httpcon
                   (funcall proxy-handler :httpcon)))))
-        (should (equal result doc))
+        ;; Test that the result is the same as the doc that the web call served
+        (should (equal result (s-join "" html)))
         ;; FIXME - we should probably also check that the
         ;; :elnode-child-process property has been added to the
         ;; :httpcon
-        (should (equal
-                 (get-text-property 0 :content-type result)
-                 "text/html"))))))
+        (should
+         (equal
+          (get-text-property 0 :content-type result)
+          "text/html"))))))
 
 (provide 'elnode-tests)
 
