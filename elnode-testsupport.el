@@ -58,4 +58,7 @@ PARAM-BINDINGS should be quoted."
                     (funcall this-fn httpcon param-name))))
        ,@body)))
 
+
+(provide 'elnode-testsupport)
+
 ;;; elnode-testsupport.el ends here
