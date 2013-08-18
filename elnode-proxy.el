@@ -33,6 +33,37 @@
         (concat hdr (format ", %s" ipaddr))
         ipaddr)))
 
+(defun elnode-proxy-do (httpcon url)
+  "Do proxying to URL on HTTPCON."
+  (let* ((method (elnode-http-method httpcon))
+         (path (elnode-http-pathinfo httpcon))
+         (params (web-to-query-string
+                  (elnode-http-params httpcon)))
+         (params-alist
+          (list
+           (cons "path" path)
+           (cons "query" (concat "?" params))
+           (cons "params" params)))
+         (web-url (s-format url 'aget params-alist))
+         hdr-sent)
+      (process-put
+       httpcon
+       :elnode-child-process
+       (web-http-call
+        method
+        (lambda (httpc hdr data)
+          (unless hdr-sent
+            (elnode--web->elnode-hdr hdr httpcon)
+            (setq hdr-sent t))
+          (if (eq data :done)
+              (elnode-http-return httpcon)
+              (elnode-http-send-string httpcon data)))
+        :mode 'stream
+        :url web-url
+        :extra-headers
+        `(("X-Forwarded-For"
+           . ,(elnode--proxy-x-forwarded-for httpcon)))))))
+
 ;;;###autoload
 (defun elnode-make-proxy (url)
   "Make a proxy handler sending requests to URL.
@@ -64,34 +95,7 @@ not do however.
 
 Reverse proxying is a simpler and perhaps more useful."
   (lambda (httpcon)
-    (let* ((method (elnode-http-method httpcon))
-           (path (elnode-http-pathinfo httpcon))
-           (params (web-to-query-string
-                    (elnode-http-params httpcon)))
-           (params-alist
-            (list
-             (cons "path" path)
-             (cons "query" (concat "?" params))
-             (cons "params" params)))
-           (web-url (s-format url 'aget params-alist))
-           hdr-sent)
-      (process-put
-       httpcon
-       :elnode-child-process
-       (web-http-call
-        method
-        (lambda (httpc hdr data)
-          (unless hdr-sent
-            (elnode--web->elnode-hdr hdr httpcon)
-            (setq hdr-sent t))
-          (if (eq data :done)
-              (elnode-http-return httpcon)
-              (elnode-http-send-string httpcon data)))
-        :mode 'stream
-        :url web-url
-        :extra-headers
-        `(("X-Forwarded-For"
-           . ,(elnode--proxy-x-forwarded-for httpcon))))))))
+    (elnode-proxy-do httpcon url)))
 
 (defvar elnode--proxy-server-port-history nil
   "History variable used for proxy server port reading.")
