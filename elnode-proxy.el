@@ -8,6 +8,7 @@
 ;;; Code:
 
 (require 's)
+(require 'dash)
 (require 'web)
 (require 'elnode)
 
