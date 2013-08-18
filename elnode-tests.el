@@ -1667,6 +1667,25 @@ the wrapping of a specified handler with the login sender."
                                :header-name "Location"
                                :header-value "/somepage/test/")))))
 
+(ert-deftest elnode-server-info ()
+  "Test server meta data."
+  (let* ((port (elnode-find-free-service))
+         (server-info
+          (unwind-protect
+               (let (the-end)
+                 (elnode-start
+                  (lambda (httpcon)
+                    (elnode-send-json httpcon (elnode-server-info httpcon)))
+                  :port port)
+                 (web-http-get
+                  (lambda (con header data)
+                    (setq the-end (json-read-from-string data)))
+                  :port port)
+                 (while (not the-end) (sit-for 1))
+                 the-end)
+            (elnode-stop port))))
+    (should (equal server-info (format "127.0.0.1:%s" port)))))
+
 ;; Wiki tests
 
 (ert-deftest elnode-wiki--setup ()

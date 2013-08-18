@@ -966,10 +966,9 @@ port number.  For example: \"127.0.0.1:8080\"."
 (defalias 'elnode-remote-ipaddr 'elnode-get-remote-ipaddr)
 
 (defun elnode-server-info (httpcon)
-  "Returns a list of the server host and port for HTTPCON.
+  "Returns a string adress of the server host and port for HTTPCON.
 
-The list is returned so that it can be destructured
-with `(hostname port)'.  The `hostname' is a symbol."
+For example: \"127.0.0.1:8000\" - localhost on port 8000."
   (elnode--ip-addr->string
    (plist-get
     (process-contact (process-get httpcon :server) t)
