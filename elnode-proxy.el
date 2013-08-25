@@ -11,6 +11,7 @@
 (require 'dash)
 (require 'web)
 (require 'elnode)
+(require 'cl) ; for destructuring-bind
 
 (defun elnode--web->elnode-hdr (hdr httpcon)
   "Send the HDR from the web HTTP request to Elnode's HTTPCON."
@@ -34,7 +35,19 @@
         ipaddr)))
 
 (defun elnode-proxy-do (httpcon url)
-  "Do proxying to URL on HTTPCON."
+  "Do proxying to URL on HTTPCON.
+
+A request is made to the specified URL.  The URL may include
+`s-format' patterns for interpolation with any of these
+variables:
+
+ path - the path from the HTTPCON
+ params - the params from the HTTPCON
+ query - the params from the HTTPCON as a query
+
+For example, \"http://myserver:8000${path}${query}\" would cause
+\"myserver\" on port 8000 to get the query from the user with the
+specified path and query."
   (let* ((method (elnode-http-method httpcon))
          (path (elnode-http-pathinfo httpcon))
          (params (web-to-query-string
@@ -64,24 +77,37 @@
         `(("X-Forwarded-For"
            . ,(elnode--proxy-x-forwarded-for httpcon)))))))
 
+(defun elnode-proxy-bounce (httpcon handler host-port)
+  "Bounce this request.
+
+If HTTPCON is not a request for port HOST-PORT then bounce to
+HOST-PORT else, it is a request on HOST-PORT so pass to HANDLER."
+  (destructuring-bind (hostname this-port)
+      (split-string (elnode-server-info httpcon) ":")
+    (if (equal this-port host-port)
+        (funcall handler httpcon)
+        (elnode-proxy-do
+         httpcon
+         (format "http://%s%s${path}${query}" hostname host-port)))))
+
+(defun elnode-proxy-make-bouncer (handler host-port)
+  "Make a proxy bouncer handler for HANDLER proc on OTHER-PORT.
+
+This is for managing proxy calls.  If the resulting handler
+receives a call on anything than HOST-PORT then it proxies the
+request to the HOST-PORT.  Otherwise it just handles the
+request."
+  (lambda (httpcon)
+    (elnode-proxy-bounce httpcon handler host-port)))
+
 ;;;###autoload
 (defun elnode-make-proxy (url)
   "Make a proxy handler sending requests to URL.
 
-What is returned is an elnode handler to send requests to the
-specified URL.  The URL may include `s-format' patterns for
-interpolation with any of these variables:
+See `elnode-proxy-do' for how URL is handled.
 
- path - the path from the HTTP request
- params - the params from the HTTP request
- query - the params from the HTTP request as a query
-
-For example, \"http://myserver:8000${path}${query}\" would cause
-\"myserver\" on port 8000 to get the query from the user with the
-specified path and query.
-
-A client with a specified HTTP proxy sends the full request as
-the path, eg:
+An HTTP user-agent with a specified HTTP proxy sends the full
+request as the path, eg:
 
   GET http://somehost:port/path?query HTTP/1.1
 
