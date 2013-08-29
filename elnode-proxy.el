@@ -55,7 +55,8 @@ specified path and query."
          (params-alist
           (list
            (cons "path" path)
-           (cons "query" (concat "?" params))
+           (cons "query" (if (s-blank? params) ""
+                             (concat "?" params)))
            (cons "params" params)))
          (web-url (s-format url 'aget params-alist))
          hdr-sent)
