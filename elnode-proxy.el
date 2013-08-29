@@ -86,11 +86,12 @@ If HTTPCON is not a request for port HOST-PORT then bounce to
 HOST-PORT else, it is a request on HOST-PORT so pass to HANDLER."
   (destructuring-bind (hostname this-port)
       (split-string (elnode-server-info httpcon) ":")
-    (if (equal this-port host-port)
+    (if (equal (format "%s" this-port)
+               (format "%s" host-port))
         (funcall handler httpcon)
         (elnode-proxy-do
          httpcon
-         (format "http://%s%s${path}${query}" hostname host-port)))))
+         (format "http://%s:%s${path}${query}" hostname host-port)))))
 
 (defun elnode-proxy-make-bouncer (handler host-port)
   "Make a proxy bouncer handler for HANDLER proc on OTHER-PORT.
