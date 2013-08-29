@@ -183,7 +183,10 @@ location is sent.
 
 Alternately it sets up a direct proxy call to the current server
 for the location."
-  (if (elnode-http-header httpcon "X-Forwarded-For")
+  (if (and (elnode-http-header httpcon "X-Forwarded-For")
+           (not (equal
+                 "elnode/web"
+                 (elnode-http-header httpcon "X-Proxy-Client"))))
       (elnode-send-proxy-redirect httpcon location)
       ;; Else we're not behind a proxy, send a proxy version
       (let* ((server (elnode-server-info httpcon))
