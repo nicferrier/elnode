@@ -2228,7 +2228,7 @@ Otherwise it calls HANDLER."
   "Funtion to test MATCH-PATH against MATCH-PAIR."
   (let ((m (string-match (car match-pair) match-path)))
     (and m
-          (numberp m)
+         (numberp m)
          (>= m 0)
          match-pair)))
 
