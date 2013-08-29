@@ -76,7 +76,8 @@ specified path and query."
         :url web-url
         :extra-headers
         `(("X-Forwarded-For"
-           . ,(elnode--proxy-x-forwarded-for httpcon)))))))
+           . ,(elnode--proxy-x-forwarded-for httpcon))
+          ("X-Proxy-Client" . "elnode/web"))))))
 
 (defun elnode-proxy-bounce (httpcon handler host-port)
   "Bounce this request.
