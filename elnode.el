@@ -2252,26 +2252,23 @@ This function also establishes the `:elnode-http-mapping'
 property, adding it to the HTTPCON so it can be accessed from
 inside your handler with `elnode-http-mapping'."
   ;; First find the mapping in the mapping table
-  (let ((m (elnode--mapper-find-mapping path mapping-table)))
+  (let* ((pair (elnode--mapper-find-mapping path mapping-table))
+         (func-item (and pair
+                         (let* ((v (cdr pair)))
+                           (or (and (atom v) v) (car v))))))
     ;; Now work out if we found one and what it was mapped to
-    (when (and m
-               (or (functionp (cdr m))
-                   (functionp (and (symbolp (cdr m))
-                                   (symbol-value (cdr m))))))
+    (when (or (functionp func-item)
+              (functionp (and (symbolp func-item)
+                              (symbol-value func-item))))
       ;; Make the match parts accessible
       (process-put
        httpcon
        :elnode-http-mapping
-       (when (string-match (car m) path)
+       (when (string-match (car pair) path)
          (loop for i from 0 to (- (/ (length (match-data path)) 2) 1)
                collect (match-string i path))))
-      ;; Check if it's a function or a variable pointing to a
-      ;; function
-      (cond
-       ((functionp (cdr m))
-        (cdr m))
-       ((functionp (symbol-value (cdr m)))
-        (symbol-value (cdr m)))))))
+      ;; Return the function
+      func-item)))
 
 (defun elnode--http-mapping-implementation (httpcon &optional part)
   "The actual implementation of `elnode-http-mapping.'
