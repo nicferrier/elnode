@@ -1297,7 +1297,8 @@ Serves only to connect the server process to the client processes"
                       &key
                       port
                       (host "localhost")
-                      (defer-mode :managed))
+                      (defer-mode :managed)
+                      service-mappings)
   "Start a server using REQUEST-HANDLER.
 
 REQUEST-HANDLER will handle requests on PORT on HOST (which is
@@ -1332,7 +1333,19 @@ Additionally, you may specifiy an IP address, e.g \"1.2.3.4\"
 
 Note that although HOST may be specified, elnode does not
 disambiguate on running servers by HOST.  So you cannot start two
-elnode servers on the same port on different hosts."
+elnode servers on the same port on different hosts.
+
+DEFER-MODE may be used to control how deferred handlers are
+managed for this server.
+
+SERVICE-MAPPINGS is an alist of service resource symbols mapped
+to integer port numbers.  This can be supplied to elnode-start to
+allow it to map service resources defined by handlers to
+different TCP ports and therefore different Emacs instances.
+
+The list of SERVICE-MAPPINGS is also used to start ancilliary
+port servers.  Ancilliary port servers should be automatically
+stopped when the main server is stopped."
   (interactive
    (let ((handler (completing-read "Handler function: "
                                    obarray 'fboundp t nil nil))
@@ -1346,7 +1359,31 @@ elnode servers on the same port on different hosts."
       (setq elnode-server-socket
             (cons
              (cons port
-                   (let ((buf (get-buffer-create "*elnode-webserver*")))
+                   (let ((buf (get-buffer-create "*elnode-webserver*"))
+                         (ancilliarys
+                          (loop for (resource . port) in service-mappings
+                             collect
+                               (let ((an-buf
+                                      (get-buffer-create "*elnode-webserver*")))
+                                 (make-network-process
+                                  :name "*elnode-webserver-proc*"
+                                  :buffer an-buf
+                                  :server t
+                                  :nowait 't
+                                  :host (cond
+                                          ((equal host "localhost") 'local)
+                                          ((equal host "*") nil)
+                                          (t host))
+                                  :service port
+                                  :coding '(raw-text-unix . raw-text-unix)
+                                  :family 'ipv4
+                                  :filter 'elnode--filter
+                                  :sentinel 'elnode--sentinel
+                                  :log 'elnode--log-fn
+                                  :plist (list
+                                          :elnode-service-map service-mappings
+                                          :elnode-http-handler request-handler
+                                          :elnode-defer-mode defer-mode))))))
                      (make-network-process
                       :name "*elnode-webserver-proc*"
                       :buffer buf
@@ -1363,6 +1400,8 @@ elnode servers on the same port on different hosts."
                       :sentinel 'elnode--sentinel
                       :log 'elnode--log-fn
                       :plist (list
+                              :elnode-service-map service-mappings
+                              :elnode-ancilliarys ancilliarys
                               :elnode-http-handler request-handler
                               :elnode-defer-mode defer-mode))))
              elnode-server-socket)))))
@@ -1383,6 +1422,10 @@ elnode servers on the same port on different hosts."
          (port-to-kill (car-safe server)))
     (when server
       (message "deleting server process")
+      (loop for ancilliary
+         in (process-get (cdr server) :elnode-ancilliarys)
+         do (delete-process ancilliary))
+      ;; Now the main one
       (delete-process (cdr server))
       (setq elnode-server-socket
             ;; remove-if
