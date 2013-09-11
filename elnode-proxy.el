@@ -83,7 +83,7 @@ specified path and query."
   "Bounce this request.
 
 If HTTPCON is not a request for port HOST-PORT then bounce to
-HOST-PORT else, it is a request on HOST-PORT so pass to HANDLER."
+HOST-PORT, else it is a request on HOST-PORT so pass to HANDLER."
   (destructuring-bind (hostname this-port)
       (split-string (elnode-server-info httpcon) ":")
     (if (equal (format "%s" this-port)
