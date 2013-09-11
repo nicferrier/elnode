@@ -1292,6 +1292,52 @@ Serves only to connect the server process to the client processes"
   (mapcar 'car elnode-server-socket))
 
 
+(make-network-process
+                      :name "*elnode-webserver-proc*"
+                      :buffer buf
+                      :server t
+                      :nowait 't
+                      :host (cond
+                             ((equal host "localhost") 'local)
+                             ((equal host "*") nil)
+                             (t host))
+                      :service port
+                      :coding '(raw-text-unix . raw-text-unix)
+                      :family 'ipv4
+                      :filter 'elnode--filter
+                      :sentinel 'elnode--sentinel
+                      :log 'elnode--log-fn
+                      :plist (list
+                              :elnode-service-map service-mappings
+                              :elnode-ancilliarys ancilliarys
+                              :elnode-http-handler request-handler
+                              :elnode-defer-mode defer-mode))
+
+
+
+(defun elnode/make-service (host port service-mappings request-handler defer-mode)
+  "Make an actual TCP server."
+  (let ((an-buf (get-buffer-create "*elnode-webserver*")))
+    (make-network-process
+     :name "*elnode-webserver-proc*"
+     :buffer an-buf
+     :server t
+     :nowait 't
+     :host (cond
+             ((equal host "localhost") 'local)
+             ((equal host "*") nil)
+             (t host))
+     :service port
+     :coding '(raw-text-unix . raw-text-unix)
+     :family 'ipv4
+     :filter 'elnode--filter
+     :sentinel 'elnode--sentinel
+     :log 'elnode--log-fn
+     :plist (list
+             :elnode-service-map service-mappings
+             :elnode-http-handler request-handler
+             :elnode-defer-mode defer-mode))))
+
 ;;;###autoload
 (defun* elnode-start (request-handler
                       &key
@@ -1363,59 +1409,28 @@ stopped when the main server is stopped."
                          (ancilliarys
                           (loop for (resource . port) in service-mappings
                              collect
-                               (let ((an-buf
-                                      (get-buffer-create "*elnode-webserver*")))
-                                 (make-network-process
-                                  :name "*elnode-webserver-proc*"
-                                  :buffer an-buf
-                                  :server t
-                                  :nowait 't
-                                  :host (cond
-                                          ((equal host "localhost") 'local)
-                                          ((equal host "*") nil)
-                                          (t host))
-                                  :service port
-                                  :coding '(raw-text-unix . raw-text-unix)
-                                  :family 'ipv4
-                                  :filter 'elnode--filter
-                                  :sentinel 'elnode--sentinel
-                                  :log 'elnode--log-fn
-                                  :plist (list
-                                          :elnode-service-map service-mappings
-                                          :elnode-http-handler request-handler
-                                          :elnode-defer-mode defer-mode))))))
-                     (make-network-process
-                      :name "*elnode-webserver-proc*"
-                      :buffer buf
-                      :server t
-                      :nowait 't
-                      :host (cond
-                             ((equal host "localhost") 'local)
-                             ((equal host "*") nil)
-                             (t host))
-                      :service port
-                      :coding '(raw-text-unix . raw-text-unix)
-                      :family 'ipv4
-                      :filter 'elnode--filter
-                      :sentinel 'elnode--sentinel
-                      :log 'elnode--log-fn
-                      :plist (list
-                              :elnode-service-map service-mappings
-                              :elnode-ancilliarys ancilliarys
-                              :elnode-http-handler request-handler
-                              :elnode-defer-mode defer-mode))))
+                               (elnode/make-service
+                                host port service-mappings
+                                request-handler defer-mode)))
+                         (main (elnode/make-service
+                                host port service-mappings
+                                request-handler defer-mode)))
+                     ;; Add the link between the main and the ancilliarys
+                     (process-put main :elnode-ancilliarys ancilliarys)
+                     main))
              elnode-server-socket)))))
 
 ;; TODO: make this take an argument for the
 (defun elnode-stop (port)
   "Stop the elnode server attached to PORT."
-  (interactive (let ((prt
-                      (string-to-number
-                       (completing-read
-                        "Port: "
-                        (mapcar (lambda (n) (format "%s" n))
-                                (elnode-ports))))))
-                 (list prt)))
+  (interactive
+   (let ((prt
+          (string-to-number
+           (completing-read
+            "Port: "
+            (mapcar (lambda (n) (format "%s" n))
+                    (elnode-ports))))))
+     (list prt)))
   (let* ((server
           (or (assoc port elnode-server-socket)
               (assoc (format "%d" port) elnode-server-socket)))
