@@ -4001,7 +4001,7 @@ init.")
 ;; Auto start elnode if we're ever loaded
 ;;;###autoload
 (eval-after-load 'elnode
-  (if (and (boundp 'elnode-do-init)
+  '(if (and (boundp 'elnode-do-init)
            elnode-do-init
 	   (or (not (boundp 'elnode--inited))
 	       (not elnode--inited)))
