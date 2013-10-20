@@ -3955,11 +3955,7 @@ SCHEME is the authentication scheme to use as defined by
 
 ;;;###autoload
 (defun elnode-init ()
-  "Bootstraps the elnode environment when the Lisp is loaded.
-
-It's useful to have elnode start automatically... on Lisp
-load.  If the variable `elnode-init-port' is set then this
-function will launch a server on it.
+  "Bootstraps the elnode environment and start the default server.
 
 The server is started with `elnode-hostpath-default-handler' as
 the handler and listening on `elnode-init-host'"
@@ -3978,36 +3974,6 @@ the handler and listening on `elnode-init-host'"
   (if elnode-defer-on
       (if (not elnode--defer-timer)
           (elnode--init-deferring))))
-
-(defcustom elnode-do-init 't
-  "Should elnode start a server on load?
-
-The server that is started is controlled by more elnode
-customizations.
-
-`elnode-hostpath-default-table' defines the mappings from
-hostpath regexs to handler functions. By default elnode ships
-with this customization setup to serve the document root defined
-in `elnode-webserver-docroot', which by default is ~/public_html."
-  :group 'elnode
-  :type '(boolean))
-
-(defvar elnode--inited nil
-  "Records when elnode is initialized.
-
-This is autoloading mechanics, see the eval-after-load for doing
-init.")
-
-;; Auto start elnode if we're ever loaded
-;;;###autoload
-(eval-after-load 'elnode
-  (if (and (boundp 'elnode-do-init)
-           elnode-do-init
-	   (or (not (boundp 'elnode--inited))
-	       (not elnode--inited)))
-      (progn
-        (elnode-init)
-        (setq elnode--inited nil))))
 
 (provide 'elnode)
 
