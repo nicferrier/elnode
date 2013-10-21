@@ -1313,8 +1313,6 @@ Serves only to connect the server process to the client processes"
                               :elnode-http-handler request-handler
                               :elnode-defer-mode defer-mode))
 
-
-
 (defun elnode/make-service (host port service-mappings request-handler defer-mode)
   "Make an actual TCP server."
   (let ((an-buf (get-buffer-create "*elnode-webserver*")))
