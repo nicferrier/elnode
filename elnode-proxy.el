@@ -249,9 +249,10 @@ Mapping service names is done by `elnode-start'."
            collect
              (if (atom resource)
                  (list path resource)
-                 ;; Else it's a more complex resource
+                 ;; Else it's a more complex resource description
                  (let* ((handler (car resource))
                         (service (plist-get (cdr resource) :service))
+                        ;; Make the function from the resource description
                         (func
                          (lambda (httpcon)
                            (elnode/proxy-route
