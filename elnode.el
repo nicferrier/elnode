@@ -1292,26 +1292,26 @@ Serves only to connect the server process to the client processes"
   (mapcar 'car elnode-server-socket))
 
 
-(make-network-process
-                      :name "*elnode-webserver-proc*"
-                      :buffer buf
-                      :server t
-                      :nowait 't
-                      :host (cond
-                             ((equal host "localhost") 'local)
-                             ((equal host "*") nil)
-                             (t host))
-                      :service port
-                      :coding '(raw-text-unix . raw-text-unix)
-                      :family 'ipv4
-                      :filter 'elnode--filter
-                      :sentinel 'elnode--sentinel
-                      :log 'elnode--log-fn
-                      :plist (list
-                              :elnode-service-map service-mappings
-                              :elnode-ancilliarys ancilliarys
-                              :elnode-http-handler request-handler
-                              :elnode-defer-mode defer-mode))
+;; (make-network-process
+;;                       :name "*elnode-webserver-proc*"
+;;                       :buffer (get-buffer-create "*elnode-webserver*")
+;;                       :server t
+;;                       :nowait 't
+;;                       :host (cond
+;;                              ((equal host "localhost") 'local)
+;;                              ((equal host "*") nil)
+;;                              (t host))
+;;                       :service port
+;;                       :coding '(raw-text-unix . raw-text-unix)
+;;                       :family 'ipv4
+;;                       :filter 'elnode--filter
+;;                       :sentinel 'elnode--sentinel
+;;                       :log 'elnode--log-fn
+;;                       :plist (list
+;;                               :elnode-service-map service-mappings
+;;                               :elnode-ancilliarys ancilliarys
+;;                               :elnode-http-handler request-handler
+;;                               :elnode-defer-mode defer-mode))
 
 (defun elnode/make-service (host port service-mappings request-handler defer-mode)
   "Make an actual TCP server."
