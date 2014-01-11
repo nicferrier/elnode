@@ -892,7 +892,9 @@ port number of the connection."
         (case parse-status
           ;; If this fails with one of these specific codes it's
           ;; ok... we'll finish it when the data arrives
-          ('(header content)
+          ('header
+           (elnode-error "elnode--filter: partial header data received"))
+          ('content
            (elnode-error "elnode--filter: partial header data received"))
           ;; We were successful so we can call the user handler.
           ('done
