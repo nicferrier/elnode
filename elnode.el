@@ -43,7 +43,7 @@
 ;;
 ;; You can define HTTP request handlers and start an HTTP server
 ;; attached to the handler.  Many HTTP servers can be started, each
-;; must have it's own TCP port.  Handlers can defer processing with a
+;; must have its own TCP port.  Handlers can defer processing with a
 ;; signal (which allows comet style resource management)
 ;;
 ;; See elnode-start for how to start an HTTP server.
@@ -56,12 +56,16 @@
 (require 'mail-parse) ; for mail-header-parse-content-type
 (require 'url-util)
 (require 'kv)
+(require 'assoc) ; for aget - which we could move to kv?
+(require 's)
+(require 'dash)
 (require 'rx)
 (require 'web)
 (require 'json)
 (require 'db)
 (require 'dired) ; needed for the setup
 (require 'tabulated-list)
+(require 'noflet)
 (require 'ert) ; we provide some assertions and need 'should'
 (eval-when-compile (require 'cl))
 
@@ -198,7 +202,7 @@ filenames to copy to the DIR."
           (message "copying %s elnode wiki default page to %s" dir to)
           (dired-copy-file source-default-file to nil)
           (when other-files
-            (flet ((resolve-filename (file)
+            (noflet ((resolve-filename (file)
                      (if (file-name-absolute-p file)
                          file
                          (concat
@@ -216,12 +220,21 @@ filenames to copy to the DIR."
                     (concat dir (file-name-nondirectory file))
                     nil)))))))))
 
+(defun elnode--protected-load (feature dir)
+  "Try and require FEATURE, if it fails try and load."
+  (condition-case err
+      (require feature)
+    (file-error (progn
+                  (load
+                   (concat dir (symbol-name feature) ".el"))
+                  (require feature)))))
+
 ;;;###autoload
 (defmacro elnode-app (dir-var &rest features)
   "A macro that sets up the boring boilerplate for Elnode apps.
 
 This sets up lexical binding, captures the module's parent
-directory in DIR-VAR, require's `cl' and any other features you
+directory in DIR-VAR, requires `cl' and any other features you
 list.  Use it like this:
 
  (elnode-app my-app-dir esxml mongo-elnode)
@@ -229,16 +242,19 @@ list.  Use it like this:
 Once used you can access the variable `my-app-dir' as the dirname
 of your module (which is useful for serving files and such)."
   (declare (indent 1))
-  `(progn
-     (setq lexical-binding t)
-     (defconst ,dir-var (file-name-directory
-                         (or (buffer-file-name)
-                             load-file-name
-                             default-directory)))
-     (require 'cl)
-     (require 'elnode)
-     ,@(loop for f in features
-            collect `(require (quote ,f)))))
+  (let ((dir-var-v (make-symbol "dv")))
+    `(let ((,dir-var-v (file-name-directory
+                        (or (buffer-file-name)
+                            load-file-name
+                            default-directory))))
+       (setq lexical-binding t)
+       (defconst ,dir-var ,dir-var-v)
+       (require 'cl)
+       (require 'elnode)
+       ,@(loop for f in features
+            collect
+              `(elnode--protected-load
+                (quote ,f) ,dir-var-v)))))
 
 (defcustom elnode-log-files-directory nil
   "The directory to store any Elnode log files.
@@ -259,7 +275,7 @@ so far.")
 (defvar elnode-log-buffer-max-size 1000
   "Maximum number of lines of log.")
 
-(defvar elnode-log-buffer-datetime-format "%Y%m%d%H%M%S"
+(defvar elnode-log-buffer-datetime-format "%Y-%m-%dT%H:%M:%S"
   "The date time format used by `elnode-log-buffer-log'.")
 
 (defun elnode-log-buffer-log (text buffer-or-name &optional filename)
@@ -270,43 +286,44 @@ FILENAME is a filename to save the buffer into.  If the FILENAME
 is not specified then we try to use the filename of the
 BUFFER-OR-NAME.
 
-If nether a buffer filename nor FILENAME is specified then an
+If neither a buffer filename nor FILENAME is specified then an
 error is generated.
 
 The TEXT is logged with the current date and time formatted with
 `elnode-log-buffer-datetime-format'."
   (let ((name (or filename (buffer-file-name (get-buffer buffer-or-name)))))
     (with-current-buffer (get-buffer-create buffer-or-name)
-      (unless (assq
-               'elnode-log-buffer-position-written
-               (buffer-local-variables))
-        (make-local-variable 'elnode-log-buffer-position-written)
-        (setq elnode-log-buffer-position-written (make-marker))
-        (set-marker elnode-log-buffer-position-written (point-min)))
-      ;; To test this stuff we could rip these functions out into
-      ;; separate pieces?
-      (save-excursion
-        (goto-char (point-max))
-        (insert
-         (format
-          "%s: %s\n"
-          (format-time-string elnode-log-buffer-datetime-format)
-          text))
-        ;; Save the file if we have a filename
-        (when name
-          (if (not (file-exists-p (file-name-directory name)))
-              (make-directory (file-name-directory name) t))
-          ;; could be switched to write-region - probably better
-          (append-to-file elnode-log-buffer-position-written (point-max) name)
-          (set-marker elnode-log-buffer-position-written (point-max)))
-        ;; Truncate the file if it's grown too large
-        (goto-char (point-max))
-        (forward-line (- elnode-log-buffer-max-size))
-        (beginning-of-line)
-        (delete-region (point-min) (point))))))
+      (let ((buffer-read-only nil))
+        (unless (assq
+                 'elnode-log-buffer-position-written
+                 (buffer-local-variables))
+          (make-local-variable 'elnode-log-buffer-position-written)
+          (setq elnode-log-buffer-position-written (make-marker))
+          (set-marker elnode-log-buffer-position-written (point-min)))
+        ;; To test this stuff we could rip these functions out into
+        ;; separate pieces?
+        (save-excursion
+          (goto-char (point-max))
+          (insert
+           (format
+            "%s: %s\n"
+            (format-time-string elnode-log-buffer-datetime-format)
+            text))
+          ;; Save the file if we have a filename
+          (when name
+            (if (not (file-exists-p (file-name-directory name)))
+                (make-directory (file-name-directory name) t))
+            ;; could be switched to write-region - probably better
+            (append-to-file elnode-log-buffer-position-written (point-max) name)
+            (set-marker elnode-log-buffer-position-written (point-max)))
+          ;; Truncate the file if it's grown too large
+          (goto-char (point-max))
+          (forward-line (- elnode-log-buffer-max-size))
+          (beginning-of-line)
+          (delete-region (point-min) (point)))))))
 
 (defcustom elnode-error-log-to-messages t
-  "Wether to send elnode logging through the messaging system."
+  "Whether to send elnode logging through the messaging system."
   :group 'elnode
   :type '(boolean))
 
@@ -399,7 +416,7 @@ by elnode iteslf."
          (filename (elnode--log-filename logname))
          (formatter
           (or
-           (aget elnode-log-access-alist "elnode")
+           (kva logname elnode-log-access-alist)
            elnode-log-access-default-formatter-function))
          (formatted
           (when formatter
@@ -645,7 +662,7 @@ available.")
     (if (equal
 	 (process-buffer
 	  ;; Get the server process
-	  (cdr (assoc 
+	  (cdr (assoc
 		(process-contact process :service)
 		elnode-server-socket)))
 	 (process-buffer process))
@@ -659,7 +676,7 @@ available.")
     (when (process-buffer process)
       (kill-buffer (process-buffer process))
       (elnode-error "Elnode connection dropped %s" process)))
-   
+
    ((equal status "open\n") ;; this says "open from ..."
     (elnode-error "Elnode opened new connection"))
 
@@ -681,7 +698,7 @@ sending data through an elnode connection transparently."
   "Elnode adapter for `process-send-eof'.
 
 Sends EOF to the HTTP connection PROC (which is an HTTP
-connection) in a way that chunked encoding is endeed properly.
+connection) in a way that chunked encoding is ended properly.
 
 This is used by `elnode-worker-elisp' to implement a protocol for
 sending data through an elnode connection transparently."
@@ -735,7 +752,7 @@ waited for is indicated.
 
 Important side effects of this function are to add certain
 process properties to the HTTP connection.  These are the result
-of succesful parsing."
+of successful parsing."
   ;; FIXME - we don't need to do this - we should check for
   ;; header-parsed and avoid it we we can
   (with-current-buffer (process-buffer httpcon)
@@ -782,7 +799,7 @@ A header pair with the key `body' can be used to make a content body:
 No other transformations are done on the body, no content type
 added or content length computed."
     (let (body)
-      (flet ((header-name (hdr)
+      (noflet ((header-name (hdr)
                (if (symbolp (car hdr))
                    (symbol-name (car hdr))
                    (car hdr))))
@@ -875,7 +892,9 @@ port number of the connection."
         (case parse-status
           ;; If this fails with one of these specific codes it's
           ;; ok... we'll finish it when the data arrives
-          ('(header content)
+          ('header
+           (elnode-error "elnode--filter: partial header data received"))
+          ('content
            (elnode-error "elnode--filter: partial header data received"))
           ;; We were successful so we can call the user handler.
           ('done
@@ -926,6 +945,40 @@ port number of the connection."
                     (elnode--format-response 500))
                    (delete-process process)))))))))))
 
+
+(defun elnode--ip-addr->string (ip-addr)
+  "Turn a vector IP-ADDR into a string form.
+
+The vector form is produced by `process-contact' and includes the
+port number."
+  (destructuring-bind (a b c d port)
+      (mapcar 'identity ip-addr)
+    (format "%s.%s.%s.%s:%s" a b c d port)))
+
+(defun elnode-get-remote-ipaddr (httpcon)
+  "Return the remote IP address from the HTTPCON.
+
+Returned as a dotted ip address followed by a colon separated
+port number.  For example: \"127.0.0.1:8080\"."
+  (let* ((remote (plist-get
+                  (process-contact httpcon t)
+                  :remote)))
+    (elnode--ip-addr->string remote)))
+
+(defalias 'elnode-remote-ipaddr 'elnode-get-remote-ipaddr)
+
+(defun elnode-server-info (httpcon)
+  "Returns a string adress of the server host and port for HTTPCON.
+
+For example: \"127.0.0.1:8000\" - localhost on port 8000."
+  (elnode--ip-addr->string
+   (plist-get
+    (process-contact (process-get httpcon :server) t)
+    :local)))
+
+
+;;; Testing stuff
+
 (defvar elnode--cookie-store nil
   "Cookie store for test servers.
 
@@ -948,43 +1001,43 @@ routines."
    (indent 1)
    (debug t))
   `(let ((elnode--cookie-store (make-hash-table :test 'equal)))
-     (flet ((elnode--get-server-prop (proc key)
-              (cond
-                ((eq key :elnode-http-handler)
-                 ,handler))))
+     (noflet ((elnode--get-server-prop (proc key)
+                (cond
+                  ((eq key :elnode-http-handler)
+                   ,handler))))
        ,@body)))
 
 (defun elnode--alist-to-query (alist)
   "Turn an alist into a formdata/query string."
-  (flet ((web--key-value-encode (key value)
-           "Encode a KEY and VALUE for url encoding."
-           (cond
-             ((or
-               (numberp value)
-               (stringp value))
-              (format
-               "%s=%s"
-               (url-hexify-string (format "%s" key))
-               (url-hexify-string (format "%s" value))))
-             (t
-              (format "%s" (url-hexify-string (format "%s" key))))))
-         (web--to-query-string (object)
-           "Convert OBJECT (a hash-table or alist) to an HTTP query string."
-           ;; Stolen from web
-           (mapconcat
-            (lambda (pair)
-              (web--key-value-encode (car pair) (cdr pair)))
-            (cond
-              ((hash-table-p object)
-               (let (result)
-                 (maphash
-                  (lambda (key value)
+  (noflet ((web--key-value-encode (key value)
+             "Encode a KEY and VALUE for url encoding."
+             (cond
+               ((or
+                 (numberp value)
+                 (stringp value))
+                (format
+                 "%s=%s"
+                 (url-hexify-string (format "%s" key))
+                 (url-hexify-string (format "%s" value))))
+               (t
+                (format "%s" (url-hexify-string (format "%s" key))))))
+           (web--to-query-string (object)
+             "Convert OBJECT (a hash-table or alist) to an HTTP query string."
+             ;; Stolen from web
+             (mapconcat
+              (lambda (pair)
+                (web--key-value-encode (car pair) (cdr pair)))
+              (cond
+                ((hash-table-p object)
+                 (let (result)
+                   (maphash
+                    (lambda (key value)
                     (setq result (append (list (cons key value)) result)))
-                  object)
-                 (reverse result)))
-              ((listp object)
-               object))
-            "&")))
+                    object)
+                   (reverse result)))
+                ((listp object)
+                 object))
+              "&")))
     (web--to-query-string alist)))
 
 (defun elnode--make-test-call (path method parameters headers)
@@ -1097,7 +1150,7 @@ to external processes."
               (send-string-func (elnode--make-send-string))
               (the-end 0)
               (elnode-webserver-visit-file t))
-          (flet
+          (noflet
               ((elnode-http-send-string (httpcon str)
                  (funcall main-send-string httpcon str))
                (elnode--make-send-string ()
@@ -1106,14 +1159,12 @@ to external processes."
                (elnode--make-send-eof ()
                  (lambda (httpcon)
                    ;; Flet everything in elnode--http-end
-                   (flet ((process-send-eof (proc) ;; Signal the end
-                            (setq the-end 't))
-                          ;; Do nothing - we want the test proc
-                          (delete-process (proc))
-                          ;; Again, do nothing, we want this buffer
-                          (kill-buffer (buffer)
-                            ;; Return true, don't really kill the buffer
-                            t))
+                   ;; ... first signaling the end
+                   (noflet ((process-send-eof (proc) (setq the-end 't))
+                            ;; Do nothing - we want the test proc
+                            (delete-process (proc))
+                            ;; Again, do nothing, we want this buffer
+                            (kill-buffer (buffer) t))
                      ;; Now call the captured eof-func
                      (funcall eof-func httpcon)))))
             ;; FIXME - we should unwind protect this?
@@ -1163,7 +1214,7 @@ If STATUS-CODE is not nil we assert that the RESPONSE status-code
 is equal to the STATUS-CODE.
 
 If HEADER-NAME is present then we assert that the RESPONSE has
-the header and that it's value is the same as the HEADER-VALUE.
+the header and that its value is the same as the HEADER-VALUE.
 If HEADER-VALUE is `nil' then we assert that the HEADER-NAME is
 NOT present.
 
@@ -1242,13 +1293,36 @@ Serves only to connect the server process to the client processes"
   "List of all ports currently in use by elnode."
   (mapcar 'car elnode-server-socket))
 
+(defun elnode/make-service (host port service-mappings request-handler defer-mode)
+  "Make an actual TCP server."
+  (let ((an-buf (get-buffer-create "*elnode-webserver*")))
+    (make-network-process
+     :name "*elnode-webserver-proc*"
+     :buffer an-buf
+     :server t
+     :nowait 't
+     :host (cond
+             ((equal host "localhost") 'local)
+             ((equal host "*") nil)
+             (t host))
+     :service port
+     :coding '(raw-text-unix . raw-text-unix)
+     :family 'ipv4
+     :filter 'elnode--filter
+     :sentinel 'elnode--sentinel
+     :log 'elnode--log-fn
+     :plist (list
+             :elnode-service-map service-mappings
+             :elnode-http-handler request-handler
+             :elnode-defer-mode defer-mode))))
 
 ;;;###autoload
 (defun* elnode-start (request-handler
                       &key
                       port
                       (host "localhost")
-                      (defer-mode :managed))
+                      (defer-mode :managed)
+                      service-mappings)
   "Start a server using REQUEST-HANDLER.
 
 REQUEST-HANDLER will handle requests on PORT on HOST (which is
@@ -1283,7 +1357,19 @@ Additionally, you may specifiy an IP address, e.g \"1.2.3.4\"
 
 Note that although HOST may be specified, elnode does not
 disambiguate on running servers by HOST.  So you cannot start two
-elnode servers on the same port on different hosts."
+elnode servers on the same port on different hosts.
+
+DEFER-MODE may be used to control how deferred handlers are
+managed for this server.
+
+SERVICE-MAPPINGS is an alist of service resource symbols mapped
+to integer port numbers.  This can be supplied to elnode-start to
+allow it to map service resources defined by handlers to
+different TCP ports and therefore different Emacs instances.
+
+The list of SERVICE-MAPPINGS is also used to start ancilliary
+port servers.  Ancilliary port servers should be automatically
+stopped when the main server is stopped."
   (interactive
    (let ((handler (completing-read "Handler function: "
                                    obarray 'fboundp t nil nil))
@@ -1297,45 +1383,47 @@ elnode servers on the same port on different hosts."
       (setq elnode-server-socket
             (cons
              (cons port
-                   (let ((buf (get-buffer-create "*elnode-webserver*")))
-                     (make-network-process
-                      :name "*elnode-webserver-proc*"
-                      :buffer buf
-                      :server t
-                      :nowait 't
-                      :host (cond
-                             ((equal host "localhost") 'local)
-                             ((equal host "*") nil)
-                             (t host))
-                      :service port
-                      :coding '(raw-text-unix . raw-text-unix)
-                      :family 'ipv4
-                      :filter 'elnode--filter
-                      :sentinel 'elnode--sentinel
-                      :log 'elnode--log-fn
-                      :plist (list
-                              :elnode-http-handler request-handler
-                              :elnode-defer-mode defer-mode))))
+                   (let ((buf (get-buffer-create "*elnode-webserver*"))
+                         (ancilliarys
+                          (loop for (resource . port) in service-mappings
+                             collect
+                               (elnode/make-service
+                                host port service-mappings
+                                request-handler defer-mode)))
+                         (main (elnode/make-service
+                                host port service-mappings
+                                request-handler defer-mode)))
+                     ;; Add the link between the main and the ancilliarys
+                     (process-put main :elnode-ancilliarys ancilliarys)
+                     main))
              elnode-server-socket)))))
 
 ;; TODO: make this take an argument for the
 (defun elnode-stop (port)
   "Stop the elnode server attached to PORT."
-  (interactive (let ((prt
-                      (string-to-number
-                       (completing-read
-                        "Port: "
-                        (mapcar (lambda (n) (format "%s" n))
-                                (elnode-ports))))))
-                 (list prt)))
-  (let ((server (assoc port elnode-server-socket)))
+  (interactive
+   (let ((prt
+          (string-to-number
+           (completing-read
+            "Port: "
+            (mapcar (lambda (n) (format "%s" n))
+                    (elnode-ports))))))
+     (list prt)))
+  (let* ((server
+          (or (assoc port elnode-server-socket)
+              (assoc (format "%d" port) elnode-server-socket)))
+         (port-to-kill (car-safe server)))
     (when server
       (message "deleting server process")
+      (loop for ancilliary
+         in (process-get (cdr server) :elnode-ancilliarys)
+         do (delete-process ancilliary))
+      ;; Now the main one
       (delete-process (cdr server))
       (setq elnode-server-socket
             ;; remove-if
             (let ((test (lambda (elem)
-                          (= (car elem) port)))
+                          (equal (car elem) port-to-kill)))
                   (l elnode-server-socket)
                   result)
               (while (car l)
@@ -1402,6 +1490,10 @@ The status-line and the header alist."
   (cons
    (process-get httpcon :elnode-http-status)
    (process-get httpcon :elnode-http-header)))
+
+(defun elnode-http-headers (httpcon)
+  "Return the alist of headers from HTTPCON."
+  (process-get httpcon :elnode-http-header))
 
 (defun elnode-http-header (httpcon name &optional convert)
   "Get the header specified by NAME from the HTTPCON.
@@ -1486,38 +1578,46 @@ cons is returned."
   "Parse the status line of HTTPCON.
 
 If PROPERTY is non-nil, then return that property."
-  (let ((http-line (process-get httpcon :elnode-http-status)))
-    (string-match
-     "\\(GET\\|POST\\|HEAD\\) \\(.*\\) HTTP/\\(1.[01]\\)"
-     http-line)
-    (process-put httpcon :elnode-http-method (match-string 1 http-line))
-    (process-put httpcon :elnode-http-resource (match-string 2 http-line))
-    (process-put httpcon :elnode-http-version (match-string 3 http-line))
+  (let* ((http-line (process-get httpcon :elnode-http-status))
+         (method-regex (mapconcat
+                        'identity
+                        (list "GET" "POST" "HEAD" "DELETE" "PUT")
+                        "\\|")))
+    (save-match-data
+      (string-match (format "\\(%s\\) \\(.*\\) HTTP/\\(1.[01]\\)"
+                            method-regex)
+                    http-line)
+      (process-put httpcon :elnode-http-method (match-string 1 http-line))
+      (process-put httpcon :elnode-http-resource (match-string 2 http-line))
+      (process-put httpcon :elnode-http-version (match-string 3 http-line)))
     (if property
         (process-get httpcon property))))
 
 (defun elnode--http-parse-resource (httpcon &optional property)
   "Convert the specified resource to a path and a query."
-  (save-match-data
-    (let ((resource
-           (or
-            (process-get httpcon :elnode-http-resource)
-            (elnode--http-parse-status httpcon :elnode-http-resource))))
-      (or
-       ;; root pattern
-       (string-match "^\\(/\\)\\(\\?.*\\)*$" resource)
-       ;; /somepath or /somepath/somepath
-       (string-match "^\\(/[^?]+\\)\\(\\?.*\\)*$" resource))
-      (let ((path (url-unhex-string (match-string 1 resource))))
-        (process-put httpcon :elnode-http-pathinfo path))
-      (if (match-string 2 resource)
-          (let ((query (match-string 2 resource)))
-            (string-match "\\?\\(.+\\)" query)
-            (if (match-string 1 query)
-                (process-put
-                 httpcon
-                 :elnode-http-query
-                 (match-string 1 query)))))))
+  (let ((resource
+         (or
+          (process-get httpcon :elnode-http-resource)
+          (elnode--http-parse-status
+           httpcon :elnode-http-resource))))
+    (save-match-data
+      (if (or
+           ;; root pattern with 
+           (string-match "^\\(/\\)\\(\\?.*\\)*$" resource)
+           ;; /somepath or /somepath/somepath
+           (string-match "^\\(/[^?]+\\)\\(\\?.*\\)*$" resource))
+          (let ((path (url-unhex-string (match-string 1 resource))))
+            (process-put httpcon :elnode-http-pathinfo path)
+            (when (match-string 2 resource)
+              (let ((query (match-string 2 resource)))
+                (string-match "\\?\\(.+\\)" query)
+                (if (match-string 1 query)
+                    (process-put
+                     httpcon
+                     :elnode-http-query
+                     (match-string 1 query))))))
+          ;; Else it might be a more exotic path
+          (process-put httpcon :elnode-http-pathinfo resource))))
   (if property
       (process-get httpcon property)))
 
@@ -1582,7 +1682,7 @@ Returns an association list."
 (defun elnode--alist-merge (a b &optional operator)
   "Merge two association lists non-destructively.
 
-A is considered the priority (it's elements go in first)."
+A is considered the priority (its elements go in first)."
   (if (not operator)
       (setq operator 'assq))
   (let* ((res '()))
@@ -1629,7 +1729,7 @@ A is considered the priority (it's elements go in first)."
              (elnode--http-parse-header (current-buffer) (point) t)
            (let* ((cde
                    (mail-header-parse-content-disposition
-                    (aget alist "Content-Disposition")))
+                    (kva "content-disposition" alist)))
                   (name (aget (cdr cde) 'name))
                   (filename (aget (cdr cde) 'filename))
                   (pt (point)))
@@ -1694,7 +1794,9 @@ property :elnode-filename on them:
 
   (get-text-property 0 :elnode-filename
     (elnode-http-param httpcon \"myfile\")) => '/somefile.txt'
-"
+
+The value comes from the \"Content-Disposition\" header in the
+multipart upload."
   (loop for pair in
        (or
         (process-get httpcon :elnode-http-params)
@@ -1766,18 +1868,20 @@ return DEFAULT instead of `nil'."
     ;; would be nice to trap them and report and then re-raise them.
     (process-send-string httpcon (format "%x\r\n%s\r\n" len (or str "")))))
 
-(defvar elnode-http-codes-alist
+(defconst elnode-http-codes-alist
   (loop for p in '((200 . "Ok")
+                   (201 . "Created")
                    (302 . "Redirect")
                    (400 . "Bad Request")
                    (401 . "Authenticate")
                    (404 . "Not Found")
                    (500 . "Server Error"))
-        collect
-        p
-        collect
-        (cons (number-to-string (car p))
-              (cdr p)))
+     ;; add an alist entry with an integer key
+     collect p
+     ;; add an alist entry with a string key
+     collect
+       (cons (number-to-string (car p))
+             (cdr p)))
   "HTTP codes with string keys and integer keys.")
 
 (defun* elnode-http-cookie-make (name data &key expiry path)
@@ -1935,7 +2039,7 @@ of a buffer."
            "processing the access log"))))))
   (condition-case nil
       (process-send-eof httpcon)
-    (error (message "elnode--http-endL could not send EOF")))
+    (error (message "elnode--http-end could not send EOF")))
   (delete-process httpcon)
   (kill-buffer (process-buffer httpcon)))
 
@@ -1972,9 +2076,8 @@ The data is sent with content type: text/html."
 (defun elnode-json-fix (data)
   "Fix JSON "
   (let ((json-to-send
-         (flet
-             ((json-alist-p
-                  (list)
+         (noflet
+             ((json-alist-p (list)
                 "Proper check for ALIST."
                 (while (consp list)
                   (setq list
@@ -1987,8 +2090,48 @@ The data is sent with content type: text/html."
                 (null list)))
            (json-encode data)))) json-to-send))
 
+(defun elnode-send-report (httpcon)
+  "Send back an HTML report on the request.
+
+This is often useful for debugging."
+  (noflet ((alist->html (alist)
+             (mapconcat
+              (lambda (hdr-pair)
+                (format
+                 "%s %s"
+                 (car hdr-pair)
+                 (let ((v (cdr hdr-pair)))
+                   (if (and v (not (equal v "")))
+                       (format "%S" v) ""))))
+              alist
+              "\n")))
+    (let* ((method (elnode-http-method httpcon))
+           (paramters (alist->html
+                       (or (elnode-http-params httpcon)
+                           '(("None". "")))))
+           (headers (alist->html (elnode-http-headers httpcon)))
+           (page (s-lex-format "<html>
+<style>
+body { font-family: sans-serif;}
+td {
+vertical-align: top;
+}
+</style>
+<body>
+<table>
+<tr><td>method:</td><td>${method}</td></tr>
+<tr><td>parameters:</td><td><pre>${paramters}</pre></td><tr>
+<tr><td>headers:</td><td><pre>${headers}</pre></td><tr>
+</table>
+</body>
+</html>")))
+      (elnode-send-html httpcon page))))
+
+
 (defun* elnode-send-json (httpcon data &key content-type jsonp)
-  "Send a 200 OK to the HTTPCON along with DATA as JSON.
+  "Convert DATA to JSON and send to the HTTPCON with a 200 \"Ok\".
+
+DATA is some lisp object.
 
 If CONTENT-TYPE is specified then it is used as the HTTP Content
 Type of the response.
@@ -2078,7 +2221,7 @@ Otherwise it calls HANDLER."
   "Funtion to test MATCH-PATH against MATCH-PAIR."
   (let ((m (string-match (car match-pair) match-path)))
     (and m
-          (numberp m)
+         (numberp m)
          (>= m 0)
          match-pair)))
 
@@ -2091,7 +2234,7 @@ Otherwise it calls HANDLER."
 (defun elnode--mapper-find (httpcon path mapping-table)
   "Try and find the PATH inside the MAPPING-TABLE.
 
-This function exposes it's `match-data' on the 'path' variable so
+This function exposes its `match-data' on the 'path' variable so
 that you can access that in your handler with something like:
 
  (match-string 1 (elnode-http-pathinfo httpcon))
@@ -2102,26 +2245,23 @@ This function also establishes the `:elnode-http-mapping'
 property, adding it to the HTTPCON so it can be accessed from
 inside your handler with `elnode-http-mapping'."
   ;; First find the mapping in the mapping table
-  (let ((m (elnode--mapper-find-mapping path mapping-table)))
+  (let* ((pair (elnode--mapper-find-mapping path mapping-table))
+         (func-item (and pair
+                         (let* ((v (cdr pair)))
+                           (or (and (atom v) v) (car v))))))
     ;; Now work out if we found one and what it was mapped to
-    (when (and m
-               (or (functionp (cdr m))
-                   (functionp (and (symbolp (cdr m))
-                                   (symbol-value (cdr m))))))
+    (when (or (functionp func-item)
+              (functionp (and (symbolp func-item)
+                              (symbol-value func-item))))
       ;; Make the match parts accessible
       (process-put
        httpcon
        :elnode-http-mapping
-       (when (string-match (car m) path)
+       (when (string-match (car pair) path)
          (loop for i from 0 to (- (/ (length (match-data path)) 2) 1)
                collect (match-string i path))))
-      ;; Check if it's a function or a variable pointing to a
-      ;; function
-      (cond
-       ((functionp (cdr m))
-        (cdr m))
-       ((functionp (symbol-value (cdr m)))
-        (symbol-value (cdr m)))))))
+      ;; Return the function
+      func-item)))
 
 (defun elnode--http-mapping-implementation (httpcon &optional part)
   "The actual implementation of `elnode-http-mapping.'
@@ -2171,13 +2311,13 @@ If there is no leading slash then just return STR."
       str))
 
 (defun elnode-get-targetfile (httpcon docroot)
-  "Get the targetted file from the HTTPCON.
+  "Get the targeted file from the HTTPCON.
 
 Attempts to resolve the matched path of the HTTPCON against the
 DOCROOT.  If that doesn't work then it attempts to use just the
 pathinfo of the request.
 
-The resulting file is NOT checked for existance or safety."
+The resulting file is NOT checked for existence or safety."
   (let* ((pathinfo (elnode-http-pathinfo httpcon))
          (path (elnode-http-mapping httpcon 1))
          (targetfile
@@ -2224,7 +2364,7 @@ The handler for PATH is matched in the URL-MAPPING-TABLE via
 `elnode--mapper-find'.
 
 If no handler is found then a 404 is attempted via FUNCTION-404,
-it it's found to be a function, or as a last resort
+if it's found to be a function, or as a last resort
 `elnode-send-404'.
 
 The function also supports the searching of the map provided by
@@ -2676,11 +2816,12 @@ ARGS is a list of arguments to pass to the program.
 
 It is NOT POSSIBLE to run more than one process at a time
 directed at the same http connection."
-  (let* ((args `(,(format "%s-%s" (process-name httpcon) program)
-                 ,(format " %s-%s" (process-name httpcon) program)
-                 ,program
-                 ,@args
-                ))
+  (let* ((args
+          (append
+           (list
+            (format "%s-%s" (process-name httpcon) program)
+            (format " %s-%s" (process-name httpcon) program)
+            program) args))
          (p (let ((process-connection-type nil))
               (apply 'start-process args))))
     (set-process-coding-system p 'raw-text-unix)
@@ -2775,6 +2916,7 @@ It should not be used otherwise.")
 It should not be used otherwise.")
 
 (defun elnode--rfc1123-date (time)
+  "Return TIME in RFC1123 format, suitable for HTTP dates."
   (let* ((day-names '("Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat"))
 	 (month-names '("Jan" "Feb" "Mar" "Apr" "May" "Jun"
 			"Jul" "Aug" "Sep" "Oct" "Nov" "Dec"))
@@ -2782,14 +2924,18 @@ It should not be used otherwise.")
 	 (day (nth (nth 6 decoded-time) day-names))
 	 (month (nth (- (nth 4 decoded-time) 1) month-names)))
     (format "%s, %s %s %s"
-	    day 
-	    (format-time-string "%m" time t)
+	    day
+	    (format-time-string "%d" time t)
 	    month
 	    (format-time-string "%Y %H:%M:%S GMT" time t))))
+
+(defalias 'elnode-rfc1123-date 'elnode--rfc1123-date)
 
 (defun elnode--file-modified-time (file)
   "Get modification time for FILE."
   (nth 5 (file-attributes file)))
+
+(defalias 'elnode-file-modified-time 'elnode--file-modified-time)
 
 (defun* elnode-send-file (httpcon targetfile
                                   &key
@@ -2849,7 +2995,7 @@ delivered."
                          (file-name-extension targetfile)
                          mime-types)))
                  (mm-default-file-encoding targetfile)
-                  "application/octet-stream")))
+                 "application/octet-stream")))
         (elnode-http-start
          httpcon 200
          `("Content-type" . ,mimetype)
@@ -2895,13 +3041,15 @@ Write code like this:
        (cond
         ,@(loop
            for d in method-mappings
+           unless (eq (car d) t)
            collect `((eq ,var (quote ,(car d)))
                      ,@(cdr d)))
         ;; If we don't map then send an error
         ;;
         ;; probably should be 405
         (t
-         (elnode-send-500 ,conv))))))
+         ,@(or (cdr (assoc t method-mappings))
+               `((elnode-send-500 ,conv))))))))
 
 
 ;; Make simple handlers automatically
@@ -2971,15 +3119,24 @@ You can override this in tests to have interesting effects.  By
 default it just calls `elnode-send-404'."
   (elnode-send-404 httpcon))
 
-(defun elnode-cached-p (httpcon target-file)
-  "Is the specified TARGET-FILE older than the HTTPCON?"
-  (let ((modified-since
-         (elnode-http-header httpcon 'if-modified-since :time)))
+(defun elnode-modified-since (httpcon modified-time)
+  "Implement the HTTP If-Modified-Since test.
+
+MODIFIED-TIME is the time the resource was modified, for example
+a file modification time."
+  (let* ((modified-since
+          (elnode-http-header
+           httpcon 'if-modified-since :time)))
     (and
      modified-since
-     (time-less-p
-      (elnode--file-modified-time target-file)
-      modified-since))))
+     (time-less-p modified-time modified-since))))
+
+(defun elnode-cached-p (httpcon target-file)
+  "Is the specified TARGET-FILE older than the HTTPCON?
+
+This uses `elnode-modified-since'."
+  (elnode-modified-since
+   httpcon (elnode--file-modified-time target-file)))
 
 (defun elnode-cached (httpcon)
   "`elnode-docroot-for' calls this when the resources was cached.
@@ -3315,6 +3472,12 @@ implementations.")
                 username
                 password)))
 
+(defvar elnode--auth-user-add-databases-history nil
+  "The history of symbols used for auth databases.")
+
+(defvar elnode--auth-user-add-username-history nil
+  "The history of usernames used for auth databases.")
+
 (defun elnode-auth-user-add (username password &optional auth-db)
   "Command to add a user to the internal authentication database.
 
@@ -3322,24 +3485,27 @@ With prefix-arg also request the authentication database variable
 name.  The authentication database must exist.  By default the
 main `elnode-auth-db' is used."
   (interactive
-   (list (read-from-minibuffer "username: ")
+   (list (read-from-minibuffer
+          "username: " nil nil nil
+          'elnode--auth-user-add-username-history)
          (read-passwd "password: ")
          (when current-prefix-arg
-             (read-from-minibuffer
-              "auth database variable: "
-              "elnode-auth-db"
-              ;; FIXME - would be great to have completion of variable
-              ;; names here
-              nil
-              t))))
+           (intern
+            (completing-read
+             "auth database variable (elnode-auth-user-db): "
+             obarray
+             nil t nil
+             'elnode--auth-user-add-databases-history
+             'elnode-auth-db)))))
   (unless auth-db
     (setq auth-db 'elnode-auth-db))
   (db-put
    username
-   (elnode--auth-make-hash username password)
+   `(("token" . ,(elnode--auth-make-hash
+                  username password))
+     ("username" . ,username))
    (symbol-value auth-db))
   (message "username is %s" username))
-
 
 (defun* elnode-auth-user-p (username
                             password
@@ -3425,7 +3591,17 @@ Optionally use the LOGGEDIN-DB supplied.  By default this is
 (defun elnode-auth-cookie-decode (cookie-value)
   "Decode an encoded elnode auth COOKIE-VALUE."
   (when (string-match "\\(.*\\)::\\(.*\\)" cookie-value)
-    (cons (match-string 1 cookie-value) (match-string 2 cookie-value))))
+    (cons (match-string 1 cookie-value)
+          (match-string 2 cookie-value))))
+
+(defun* elnode-auth-get-cookie-value (httpcon &key (cookie-name "elnode-auth"))
+  "Return the decoded value for COOKIE-NAME.
+
+By default it's \"elnode-auth\" but you should use whatever
+cookie-name you're using for your app."
+  (let* ((cookie-value (elnode-http-cookie httpcon cookie-name t))
+         (decoded-cons (elnode-auth-cookie-decode (or cookie-value ""))))
+    decoded-cons))
 
 (defun* elnode-auth-cookie-check-p (httpcon
                                     &key
@@ -3438,12 +3614,14 @@ default is is \"elnode-auth\".
 
 LOGGEDIN-DB can be a loggedin state database which is expected to
 be a `db'.  By default it is `elnode-loggedin-db'."
-  (let ((cookie-value (elnode-http-cookie httpcon cookie-name t)))
-    (if (not (elnode-auth-cookie-decode (or cookie-value "")))
-        (signal 'elnode-auth-token cookie-value)
-        (let ((username (match-string 1 cookie-value))
-              (token (match-string 2 cookie-value)))
-          (elnode-auth-check-p username token :loggedin-db loggedin-db)))))
+  (let ((cookie-cons (elnode-auth-get-cookie-value
+                      httpcon :cookie-name cookie-name)))
+    (if (not cookie-cons)
+        (signal 'elnode-auth-token cookie-name)
+        (let ((username (car cookie-cons))
+              (token (cdr cookie-cons)))
+          (elnode-auth-check-p
+           username token :loggedin-db loggedin-db)))))
 
 (defun* elnode-auth-cookie-check (httpcon
                                   &key
@@ -3509,7 +3687,7 @@ password: <input type='password' name='password'/><br/>
 (defun elnode-auth-login-sender (httpcon target redirect)
   "Send the login page for auth to HTTPCON.
 
-The login page will send it's authentication request to TARGET.
+The login page will send its authentication request to TARGET.
 
 The authentication will include username, password AND REDIRECT,
 which is the URL to redirect to when login is successful.
@@ -3571,9 +3749,22 @@ path (the path to call this handler)."
              "elnode-auth--login-handler: unexpected error: %S"
              err)))))))
 
-(defun elnode-auth-default-test (username database)
-  "The default test function used for Elnode auth."
+(defun elnode-auth-default-test-v001 (username database)
+  "The first test function used for Elnode auth.
+
+This uses just the keyed value of the username as the token.  We
+no longer store databases like that by default."
   (db-get username database))
+
+(defun elnode-auth-default-test (username database)
+  "The default test function used for Elnode auth.
+
+Is uses a stored alist against USERNAME, the alist should contain
+the key \"token\" with a user's token.  Whatever else the alist
+contains is irrelevant."
+  (let ((user (db-get username database)))
+    (when user
+      (aget user "token"))))
 
 (defun* elnode-auth--make-login-handler
     (&key
@@ -3781,7 +3972,8 @@ the handler and listening on `elnode-init-host'"
       (if (not elnode--defer-timer)
           (elnode--init-deferring))))
 
-(defcustom elnode-do-init 't
+;;;###autoload
+(defcustom elnode-do-init nil
   "Should elnode start a server on load?
 
 The server that is started is controlled by more elnode
@@ -3796,12 +3988,14 @@ in `elnode-webserver-docroot', which by default is ~/public_html."
 
 (defvar elnode--inited nil
   "Records when elnode is initialized.
-This is autoloading mechanics, see the eval-after-load for doing init.")
+
+This is autoloading mechanics, see the eval-after-load for doing
+init.")
 
 ;; Auto start elnode if we're ever loaded
 ;;;###autoload
 (eval-after-load 'elnode
-  (if (and (boundp 'elnode-do-init)
+  '(if (and (boundp 'elnode-do-init)
            elnode-do-init
 	   (or (not (boundp 'elnode--inited))
 	       (not elnode--inited)))

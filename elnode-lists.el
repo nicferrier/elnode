@@ -2,6 +2,7 @@
 
 (require 'elnode)
 (require 'tabulated-list)
+(require 'noflet)
 
 ;;; Deferred queue list
 
@@ -66,7 +67,7 @@
 
 (defun elnode--list-servers ()
   "List the current Elnode servers for `elnode-list-mode'."
-  (flet ((closurep (v)
+  (noflet ((closurep (v)
            (and (functionp v) (listp v) (eq (car v) 'closure))))
     (loop for (port . socket-proc) in elnode-server-socket
        collect
@@ -80,6 +81,7 @@
              (cond
                ((closurep fn) (format "%S" fn))
                ((byte-code-function-p fn) (format "byte-code"))
+               ((and (listp fn)(eq (car fn) 'lambda)) (format "lambda"))
                (t (symbol-name fn)))
              (or (if (and doc (string-match "^\\([^\n]+\\)" doc))
                      (match-string 1 doc)
