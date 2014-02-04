@@ -1746,9 +1746,9 @@ A is considered the priority (its elements go in first)."
                          content))
                     (content-object
                      (cond
-                       ((not filename) content)
-                       (t (propertize content :elnode-filename filename)))))
-               (cons name content-data)))))))
+                       ((not filename) content-data)
+                       (t (propertize content-data :elnode-filename filename)))))
+               (cons name content-object)))))))
 
 (defun elnode--http-post-mp-decode (httpcon parsed-content-type)
   "Decode the HTTP POST multipart thing on HTTPCON."
