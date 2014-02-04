@@ -737,7 +737,7 @@ headers."
                         "\\([A-Za-z0-9_-]+\\):[ ]*\\(.*\\)"
                         hdrline)
                    (cons
-                    (match-string 1 hdrline)
+                    (downcase (match-string 1 hdrline))
                     (match-string 2 hdrline))))
                header)))
         (list status header-alist-strings)))))
@@ -1739,6 +1739,12 @@ A is considered the priority (its elements go in first)."
              (let* ((lbp (line-beginning-position))
                     (content (buffer-substring pt (cadr next-boundary)))
                     (content-data
+                     (if (equal
+                          "base64"
+                          (downcase (or (kva "content-transfer-encoding" alist) "")))
+                         (base64-decode-string content)
+                         content))
+                    (content-object
                      (cond
                        ((not filename) content)
                        (t (propertize content :elnode-filename filename)))))
