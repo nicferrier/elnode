@@ -1941,15 +1941,14 @@ of a buffer."
           (elnode-log-access access-log-name httpcon)
         (error
          (elnode-msg
-          :warning
-          (concat
-           "elnode--http-end: an error occurred "
-           "processing the access log"))))))
+             :warning
+             (concat
+              "elnode--http-end: an error occurred "
+              "processing the access log"))))))
   (when (eq 'open (process-status httpcon))
     (process-send-eof httpcon))
-  ;;(delete-process httpcon)
-  ;;(kill-buffer (process-buffer httpcon))
-  )
+  (delete-process httpcon)
+  (kill-buffer (process-buffer httpcon)))
 
 (defun elnode-http-return (httpcon &optional data)
   "End the response on HTTPCON optionally sending DATA first.
