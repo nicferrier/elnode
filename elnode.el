@@ -349,7 +349,7 @@ There is only one error log, in the future there may be more."
 (defconst elnode-msg-levels (list :debug :info :status :warning)
   "Levels of message `elnode-msg' uses.")
 
-(defun elnode--posq (element lst)
+(defsubst elnode--posq (element lst)
   "Return the index in the LST of ELEMENT."
   (catch :escape
     (let ((i 0))
