@@ -376,9 +376,12 @@ There is only one error log, in the future there may be more."
   "Log MSG to the error console with a particular LEVEL.
 
 LEVEL is compared to `elnode--do-error-logging'."
+  (declare (indent 2))
   `(when (or (eq t elnode--do-error-logging)
              (>= (elnode--posq ,level elnode-msg-levels)
-                 (elnode--posq elnode--do-error-logging elnode-msg-levels)))
+                 (elnode--posq
+                  (or elnode--do-error-logging (car elnode-msg-levels))
+                  elnode-msg-levels)))
      (elnode-error ,msg ,@args)))
 
 (defun elnode--log-filename (logname)
