@@ -359,10 +359,11 @@ There is only one error log, in the future there may be more."
        (when elnode-error-log-to-messages
          (message "elnode: %s" fmtmsg)))))
 
-(defconst elnode-msg-levels (list :debug :info :warning)
+(defconst elnode-msg-levels (list :debug :info :status :warning)
   "Levels of message `elnode-msg' uses.")
 
 (defun elnode--posq (element lst)
+  "Return the index in the LST of ELEMENT."
   (catch :escape
     (let ((i 0))
       (dolist (e lst)

@@ -28,6 +28,41 @@
          (1 10)
          (t "blah")))))))
 
+(ert-deftest elnode--posq ()
+  (equal
+   (list
+    (elnode--posq 10 '(1 2 3 4 5 10 20 70))
+    (elnode--posq 2 '(1 2 3 4 5 10 20 70))
+    (elnode--posq 100 '(1 2 3 4 5 10 20 70)))
+   '(5 1 nil)))
+
+(ert-deftest elnode-msg ()
+  (should
+   (equal
+    (list
+     ;; Checks we get a status
+     (let ((elnode--do-error-logging :status))
+       (let (received)
+         (noflet ((elnode-log-buffer-log (text buf &optional filename)
+                    (setq received text)))
+           (elnode-msg :status "hello")
+           received)))
+     ;; Checks we don't
+     (let ((elnode--do-error-logging :warning))
+       (let (received)
+         (noflet ((elnode-log-buffer-log (text buf &optional filename)
+                    (setq received text)))
+           (elnode-msg :status "hello")
+           received)))
+     ;; And now without a level set
+     (let ((elnode--do-error-logging nil))
+       (let (received)
+         (noflet ((elnode-log-buffer-log (text buf &optional filename)
+                    (setq received text)))
+           (elnode-msg :status "hello")
+           received))))
+    '("hello" nil nil))))
+
 (ert-deftest elnode-join ()
   "Test the path joining."
   (should
