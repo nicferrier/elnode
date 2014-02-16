@@ -342,22 +342,43 @@ elnode developer.")
   "Returns the buffer for the error-log."
   (get-buffer-create elnode-server-error-log))
 
-(defun elnode-error (msg &rest args)
+(defmacro elnode-error (msg &rest args)
   "Log MSG with ARGS as an error.
 
 This function is available for handlers to call.  It is also used
 by elnode iteslf.
 
 There is only one error log, in the future there may be more."
-  (when elnode--do-error-logging
-    (let ((filename (elnode--log-filename "elnode-error"))
-          (fmtmsg (apply 'format `(,msg ,@args))))
-      (elnode-log-buffer-log
-       fmtmsg
-       (elnode--get-error-log-buffer)
-       filename)
-      (when elnode-error-log-to-messages
-        (message "elnode-error: %s" fmtmsg)))))
+  `(when elnode--do-error-logging
+     (let ((filename (elnode--log-filename "elnode-error"))
+           (fmtmsg (format ,msg ,@args)))
+       (elnode-log-buffer-log
+        fmtmsg
+        (elnode--get-error-log-buffer)
+        filename)
+       (when elnode-error-log-to-messages
+         (message "elnode: %s" fmtmsg)))))
+
+(defconst elnode-msg-levels (list :debug :info :warning)
+  "Levels of message `elnode-msg' uses.")
+
+(defun elnode--posq (element lst)
+  (catch :escape
+    (let ((i 0))
+      (dolist (e lst)
+        (when (eq e element)
+          (throw :escape i))
+        (setq i (+ i 1)))
+      nil)))
+
+(defmacro elnode-msg (level msg &rest args)
+  "Log MSG to the error console with a particular LEVEL.
+
+LEVEL is compared to `elnode--do-error-logging'."
+  `(when (or (eq t elnode--do-error-logging)
+             (>= (elnode--posq ,level elnode-msg-levels)
+                 (elnode--posq elnode--do-error-logging elnode-msg-levels)))
+     (elnode-error ,msg ,@args)))
 
 (defun elnode--log-filename (logname)
   "Turn LOGNAME into a filename.
@@ -371,18 +392,23 @@ This function mainly exists to make testing easier."
              elnode-log-files-directory
              logname))))
 
-(defvar elnode-log-access-format-path-width 20)
+(defvar elnode-log-access-format-path-width 20
+  "How to truncate the path in the access log.")
+
 (defun elnode-log-access-format-func (httpcon)
   "Standard access log format function."
   (format
    (concat
     "%s % 8d %s % "
     (number-to-string elnode-log-access-format-path-width)
-    "s")
+    "s %s")
    (process-get httpcon :elnode-httpresponse-status)
    (or (process-get httpcon :elnode-bytes-written) 0)
    (elnode-http-method httpcon)
-   (elnode-http-pathinfo httpcon)))
+   (elnode-http-pathinfo httpcon)
+   (format-time-string ""
+    (time-subtract (current-time)
+                   (process-get httpcon :elnode-http-started)))))
 
 (defcustom elnode-log-access-default-formatter-function
   'elnode-log-access-format-func
@@ -480,7 +506,7 @@ the value of the GUARD."
 
 (defun elnode--deferred-add (httpcon handler)
   "Add the specified HTTPCON/HANDLER pair to the deferred list."
-  (elnode-error "deferred-add: adding a defer %s for %s" handler httpcon)
+  (elnode-msg :info "deferred-add: adding a defer %s for %s" handler httpcon)
   (push (cons httpcon handler) elnode--deferred))
 
 (defun elnode--deferred-process-open (httpcon handler)
@@ -501,10 +527,7 @@ the value of the GUARD."
 (defun elnode--deferred-log (level msg &rest args)
   "Special log for elnode-deferreds"
   (when (>= level elnode-defer-processor-log-level)
-    (apply
-     'elnode-error
-     (format "elnode-deferred-processor %s" msg)
-     args)))
+    (elnode-msg :info (format "elnode-deferred-processor %s %s" msg args))))
 
 (defvar elnode-defer-failure-hook nil
   "Hook called when a deferred socket fails.
@@ -516,6 +539,23 @@ failure state which either the symbol `closed' or the symbol
 (defconst elnode--debug-with-backtraces nil
   "Feature switch to include backtrace debugging support.")
 
+(defmacro elnode/case (expr &rest clauses)
+  "A better `case' implementation."
+  (declare (indent 1))
+  (let* ((backwards (reverse clauses))
+         (last-clause (car backwards))
+         (other-clauses (cdr backwards))
+         (else-clause (when (eq t (car last-clause)) last-clause)))
+    `(catch :escapesym
+       (let ((value (progn ,expr)))
+         ,@(let (collected)
+                (dolist (c (if else-clause other-clauses clauses) collected)
+                  (setq collected
+                        (cons `(when (eq ,(car c) value)
+                                 (throw :escapesym (progn ,@(cdr c))))
+                              collected))))
+         ,(if else-clause `(throw :escapesym ,@(cdr else-clause)))))))
+
 (defun elnode--deferred-processor ()
   "Process the deferred queue."
   (let ((run (random 5000)) ; use this to disambiguate runs in the logs
@@ -525,7 +565,7 @@ failure state which either the symbol `closed' or the symbol
        do
          (let ((httpcon (car pair))
                (handler (cdr pair)))
-           (case (process-status httpcon)
+           (elnode/case (process-status httpcon)
              ('open
               (elnode--deferred-log elnode-log-info
                                     "open %s %s" httpcon handler)
@@ -646,65 +686,56 @@ available.")
 
 ;; Main control functions
 
+(defvar elnode--buffers-closed nil
+  "List of closed buffers.")
+
+(defun elnode--gc-buffers ()
+  "Garbage collcect the `elnode--buffers-closed'."
+  (let ((i 0))
+    (while (and elnode--buffers-closed (< i 500))
+      (let ((buf (pop elnode--buffers-closed)))
+        (kill-buffer buf)
+        (setq i (+ 1 i))))
+    (length elnode--buffers-closed)))
+
+(defvar elnode--gc-buffers-timer nil)
+
+(defun elnode--init-gc-buffer-timer ()
+  "Initialize the `elnode--gc-buffers-timer' timer."
+  (setq elnode--gc-buffers-timer
+        (run-at-time "10 sec" 10 'elnode--gc-buffers)))
+
 (defun elnode--sentinel (process status)
   "Sentinel function for the main server and for the client sockets."
-  (elnode-error
-   "elnode--sentinel '%s' for process  %s with buffer %s"
-   (elnode-trunc status)
-   (process-name process)
-   (process-buffer process))
-  (cond
-   ;; Server status
-   ((and
-     (assoc (process-contact process :service) elnode-server-socket)
-     (equal status "deleted\n"))
-    (if (equal
-	 (process-buffer
-	  ;; Get the server process
-	  (cdr (assoc
-		(process-contact process :service)
-		elnode-server-socket)))
-	 (process-buffer process))
-	(message "found the server process - NOT deleting")
-      (message "aha! deleting the connection process")
-      (kill-buffer (process-buffer process)))
-    (elnode-error "Elnode server stopped"))
+  (let ((server-process (process-contact process :service)))
+    (cond
+      ;; Server status
+      ((and (assoc server-process elnode-server-socket)
+            (equal status "deleted\n"))
+       (let ((server-proc (kva server-process elnode-server-socket)))
+         (unless (equal (process-buffer server-proc)
+                        (process-buffer process))
+           ;; It's a connection - kill it
+           (kill-buffer (process-buffer process))))
+       (elnode-msg :status "Elnode server stopped"))
 
-   ;; Client socket status
-   ((equal status "connection broken by remote peer\n")
-    (when (process-buffer process)
-      (kill-buffer (process-buffer process))
-      (elnode-error "Elnode connection dropped %s" process)))
+      ;; Client socket status
+      ((equal status "connection broken by remote peer\n")
+       (when (process-buffer process)
+         (push (process-buffer process) elnode--buffers-closed)
+         ;;(elnode-error "Elnode connection dropped %s" process)
+         ))
 
-   ((equal status "open\n") ;; this says "open from ..."
-    (elnode-error "Elnode opened new connection"))
+      ((s-starts-with? "open from " status)
+       (elnode-msg :debug "Elnode opened connection %s" process))
 
-   ;; Default
-   (t
-    (elnode-error "Elnode status: %s %s" process (elnode-trim status)))))
+      ((s-starts-with? "deleted" status)
+       (elnode-msg :status "Elnode closed connection %s" process))
 
-(defun elnode--process-send-string (proc data)
-  "Elnode adapter for `process-send-string'.
+      ;; Default
+      (t
+       (elnode-msg :status "Elnode status: %s %s" process (s-trim status))))))
 
-Sends DATA to the HTTP connection PROC (which is an HTTP
-connection) using `elnode-http-send-string'.
-
-This is used by `elnode-worker-elisp' to implement a protocol for
-sending data through an elnode connection transparently."
-  (elnode-http-send-string proc data))
-
-(defun elnode--process-send-eof (proc)
-  "Elnode adapter for `process-send-eof'.
-
-Sends EOF to the HTTP connection PROC (which is an HTTP
-connection) in a way that chunked encoding is ended properly.
-
-This is used by `elnode-worker-elisp' to implement a protocol for
-sending data through an elnode connection transparently."
-  (elnode-error "elnode--process-send-eof on %s" proc)
-  (elnode-http-send-string proc "")
-  ;;(process-send-string proc "\r\n")
-  (elnode--http-end proc))
 
 (defun elnode--http-parse-header (buffer start &optional non-header)
   "Parse a header from the BUFFER at point START.
@@ -827,26 +858,11 @@ back to the server."
            (value (process-get server key)))
       value))
 
-(defun elnode--make-send-string ()
-    "Make a function to send a string to an HTTP connection."
-    (lambda (httpcon str)
-      "Send STR to the HTTPCON.
-Does any necessary encoding."
-      (elnode--process-send-string httpcon str)))
-
-(defun elnode--make-send-eof ()
-  "Make a function to send EOF to an HTTP connection."
-  (lambda (con)
-    "Send EOF to the HTTPCON.
-Does any necessary encoding."
-    (elnode--process-send-eof con)))
-
-
 (defun elnode--handler-call (handler process)
   "Simple function to wrap calling the HANDLER."
-  (elnode-error "filter: calling handler on %s" process)
+  (elnode-msg :debug "filter: calling handler on %s" process)
   (funcall handler process)
-  (elnode-error "filter: handler returned on %s" process))
+  (elnode-msg :debug "filter: handler returned on %s" process))
 
 (defun elnode--filter (process data)
   "Filtering DATA sent from the client PROCESS..
@@ -859,91 +875,64 @@ port number of the connection."
   (let ((buf
          (or
           (process-buffer process)
-          ;; Set the process buffer (because the server doesn't
-          ;; automatically allocate them)
-          ;;
-          ;; The name of the buffer has the client port in it
-          ;; the space in the name ensures that emacs does not list it
-          ;;
-          ;; We also use this moment to setup functions required by
-          ;; elnode-worker-lisp
           (let* ((port (cadr (process-contact process)))
-                 (send-string-func (elnode--make-send-string))
-                 (send-eof-func (elnode--make-send-eof)))
-            (process-put
-             process :send-string-function
-             send-string-func)
-            ;; ... and this one does closing the connection properly
-            ;; with elnode's chunked encoding.
-            (process-put
-             process :send-eof-function
-             send-eof-func)
-            ;; Now do the buffer creation
-            (set-process-buffer
-             process
-             (get-buffer-create (format " *elnode-request-%s*" port)))
+                 (buf (get-buffer-create (format " *elnode-request-%s*" port))))
+            (set-process-buffer process buf)
             (process-buffer process)))))
     (with-current-buffer buf
       (insert data)
       ;; Try and parse...
-      (let ((parse-status (catch 'elnode-parse-http
-                            (elnode--http-parse process))))
-        (case parse-status
-          ;; If this fails with one of these specific codes it's
-          ;; ok... we'll finish it when the data arrives
-          ('header
-           (elnode-error "elnode--filter: partial header data received"))
-          ('content
-           (elnode-error "elnode--filter: partial header data received"))
-          ;; We were successful so we can call the user handler.
-          ('done
-           (save-excursion
-             (goto-char (process-get process :elnode-header-end))
-             (let ((handler
-                    (elnode--get-server-prop process :elnode-http-handler)))
-               ;; This is where we call the user handler
-               ;; TODO: this needs error protection so we can return an error?
-               (unwind-protect
-                    (condition-case signal-value
-                        (elnode--handler-call handler process)
-                      ('elnode-defer ; see elnode-defer-now
-                       (elnode-error "filter: defer caught on %s" process)
-                       ;; Check the timer, this is probably spurious but
-                       ;; useful "for now"
-                       (unless elnode-defer-on
-                         (elnode-error "filter: no defer timer for %s" process))
-                       (case (elnode--get-server-prop
-                              process :elnode-defer-mode)
-                         ((:managed 'managed)
-                          (process-put process :elnode-deferred t)
-                          (elnode--deferred-add
-                           process
-                           ;; the cdr of the sig value is the func
-                           (cdr signal-value)))
-                         ((:immediate 'immediate)
-                          (elnode-error "filter: immediate defer on %s" process)
-                          (funcall (cdr signal-value) process))))
-                      ('t
-                       ;; FIXME: we need some sort of check to see if the
-                       ;; header has been written
-                       (elnode-error
-                        "elnode--filter: default handling %S"
-                        signal-value)
-                       (process-send-string
-                        process
-                        (elnode--format-response 500))))
-                 ;; Handle unwind errors
-                 (when
-                     (and
-                      (not (process-get process :elnode-deferred))
-                      (not (process-get process :elnode-http-started))
-                      (not (process-get process :elnode-child-process)))
-                   (elnode-error "filter: caught an error in the handling")
-                   (process-send-string
-                    process
-                    (elnode--format-response 500))
-                   (delete-process process)))))))))))
-
+      (elnode/case (catch 'elnode-parse-http (elnode--http-parse process))
+        ;; If this fails with one of these specific codes it's
+        ;; ok... we'll finish it when the data arrives
+        ('header
+         (elnode-msg :info "filter: partial header data received"))
+        ('content
+         (elnode-msg :info "filter: partial header data received"))
+        ;; We were successful so we can call the user handler.
+        ('done
+         (save-excursion
+           (goto-char (process-get process :elnode-header-end))
+           (let ((handler
+                  (elnode--get-server-prop process :elnode-http-handler)))
+             ;; This is where we call the user handler
+             ;; TODO: this needs error protection so we can return an error?
+             (unwind-protect
+                  (condition-case signal-value
+                      (elnode--handler-call handler process)
+                    ('elnode-defer ; see elnode-defer-now
+                     (elnode-msg :info "filter: defer caught on %s" process)
+                     ;; Check the timer, this is probably spurious but
+                     ;; useful "for now"
+                     (unless elnode-defer-on
+                       (elnode-msg :info "filter: no defer timer for %s" process))
+                     (elnode/case (elnode--get-server-prop process :elnode-defer-mode)
+                       ((:managed 'managed)
+                        (process-put process :elnode-deferred t)
+                        (elnode--deferred-add
+                         process
+                         ;; the cdr of the sig value is the func
+                         (cdr signal-value)))
+                       ((:immediate 'immediate)
+                        (elnode-msg :info "filter: immediate defer on %s" process)
+                        (funcall (cdr signal-value) process))))
+                    ('t
+                     ;; FIXME: we need some sort of check to see if the
+                     ;; header has been written
+                     (elnode-msg :info "filter: default handling %S" signal-value)
+                     (process-send-string
+                      process
+                      (elnode--format-response 500))))
+               ;; Handle unwind errors
+               (when
+                   (and
+                    (not (process-get process :elnode-deferred))
+                    (not (process-get process :elnode-http-started))
+                    (not (process-get process :elnode-child-process)))
+                 (elnode-msg :info "filter: caught an error in the handling")
+                 (process-send-string
+                  process
+                  (elnode--format-response 500)))))))))))
 
 (defun elnode--ip-addr->string (ip-addr)
   "Turn a vector IP-ADDR into a string form.
@@ -1458,7 +1447,6 @@ The port is chosen randomly from the ephemeral ports. "
     (delete-process myserver)
     port))
 
-
 (defun elnode-list-buffers ()
   "List the current buffers being managed by Elnode."
   (interactive)
@@ -1513,7 +1501,7 @@ currently supported conversions are:
                    :elnode-http-header-syms
                  :elnode-http-header)))
          (val (cdr (assoc key hdr))))
-    (case convert
+    (elnode/case convert
       (:time
        (when val
          (elnode-time-encode val)))
@@ -1729,8 +1717,8 @@ A is considered the priority (its elements go in first)."
            (let* ((cde
                    (mail-header-parse-content-disposition
                     (kva "content-disposition" alist)))
-                  (name (aget (cdr cde) 'name))
-                  (filename (aget (cdr cde) 'filename))
+                  (name (kva 'name (cdr cde)))
+                  (filename (kva 'filename (cdr cde)))
                   (pt (point)))
              ;; Find the next end point
              (setq next-boundary
@@ -1751,7 +1739,7 @@ A is considered the priority (its elements go in first)."
 
 (defun elnode--http-post-mp-decode (httpcon parsed-content-type)
   "Decode the HTTP POST multipart thing on HTTPCON."
-  (let ((boundary (aget (cdr parsed-content-type) 'boundary))
+  (let ((boundary (kva 'boundary (cdr parsed-content-type)))
         (buf (process-buffer httpcon))
         (hdr-end-pt (process-get httpcon :elnode-header-end)))
     (elnode--http-mp-decode buf hdr-end-pt boundary)))
@@ -1860,18 +1848,40 @@ return DEFAULT instead of `nil'."
    (process-get httpcon :elnode-http-version)
    (elnode--http-parse-status httpcon :elnode-http-version)))
 
+(defun elnode--send-blocks (httpcon str)
+  (let* ((len (length str))
+         (sz 8000))
+    (if (> len sz)
+        (let ((n (/ len sz)))
+          (append
+           (loop for i from 1 to n
+              do
+                (process-send-string
+                 httpcon
+                 (substring str (* (- i 1) sz) (* i sz))))
+           (list
+            (substring str (* n sz))))))))
+
 (defun elnode-http-send-string (httpcon str)
   "Send STR to HTTPCON, doing chunked encoding."
-  (if elnode--http-send-string-debug
-      (elnode-error
-       "elnode-http-send-string %s [[%s]]"
-       httpcon (elnode-trunc str)))
+  (elnode-msg :debug "elnode-http-send-string %s [[%s]]" httpcon (elnode-trunc str))
   (let ((len (string-bytes str)))
     (process-put httpcon :elnode-bytes-written
                  (+ len (or (process-get httpcon :elnode-bytes-written) 0)))
     ;; FIXME Errors can happen here, because the socket goes away.. it
     ;; would be nice to trap them and report and then re-raise them.
-    (process-send-string httpcon (format "%x\r\n%s\r\n" len (or str "")))))
+    (if (eq (process-status httpcon) 'open)
+        (condition-case err
+            (process-send-string
+             httpcon
+             (format "%x\r\n%s\r\n" (length str) (or str "")))
+          (error
+           (elnode-msg :warning
+                       "elnode-http-send-string failed to send [%s] on %s (%s)"
+                       (length str) httpcon (process-status httpcon))))
+        (elnode-msg :warning 
+                    "elnode-http-send-string can't print [%s] because %s is %s"
+                    (length str) httpcon (process-status httpcon)))))
 
 (defconst elnode-http-codes-alist
   (loop for p in '((200 . "Ok")
@@ -1943,7 +1953,7 @@ header.  This function will log the error and return `nil'.
 
 See `elnode-http-start'."
   (if (process-get httpcon :elnode-http-started)
-      (elnode-error "can't set header, HTTP already started on %s" httpcon)
+      (elnode-msg :warning "can't set header, HTTP already started on %s" httpcon)
       (let ((headers (process-get httpcon :elnode-headers-to-set)))
         (process-put
          httpcon
@@ -2002,29 +2012,29 @@ For example:
 The status and the header are also stored on the process as meta
 data.  This is done mainly for testing infrastructure."
   (if (process-get httpcon :elnode-http-started)
-      (elnode-error "Http already started on %s" httpcon)
-    ;; Send the header
-    (elnode-error "starting HTTP response on %s" httpcon)
-    (let ((header-alist
-           (append (process-get httpcon :elnode-headers-to-set) header))
-          (status-code (if (stringp status)
-                           (string-to-number status)
-                           status)))
-      ;; Store the meta data about the response.
-      (process-put httpcon :elnode-httpresponse-status status-code)
-      (process-put httpcon :elnode-httpresponse-header header-alist)
-      (process-send-string
-       httpcon
-       (format
-        "HTTP/1.1 %d %s\r\n%s\r\n"
-        status-code
-        ;; The status text
-        (assoc-default status-code elnode-http-codes-alist)
-        ;; The header
-        (or
-         (elnode--http-result-header header-alist)
-         "\r\n")))
-      (process-put httpcon :elnode-http-started 't))))
+      (elnode-msg :warning "elnode-http-start: HTTP already started on %s" httpcon)
+      ;; Send the header
+      (elnode-msg :debug "elnode-http-start: starting HTTP response on %s" httpcon)
+      (let ((header-alist
+             (append (process-get httpcon :elnode-headers-to-set) header))
+            (status-code (if (stringp status)
+                             (string-to-number status)
+                             status)))
+        ;; Store the meta data about the response.
+        (process-put httpcon :elnode-httpresponse-status status-code)
+        (process-put httpcon :elnode-httpresponse-header header-alist)
+        (process-send-string
+         httpcon
+         (format
+          "HTTP/1.1 %d %s\r\n%s\r\n"
+          status-code
+          ;; The status text
+          (kva status-code elnode-http-codes-alist)
+          ;; The header
+          (or
+           (elnode--http-result-header header-alist)
+           "\r\n")))
+        (process-put httpcon :elnode-http-started (current-time)))))
 
 (defun elnode--http-end (httpcon)
   "We need a special end function to do the emacs clear up.
@@ -2032,21 +2042,22 @@ data.  This is done mainly for testing infrastructure."
 This makes access log file calls if the socket has a property
 `:elnode-access-log-name'.  The property is taken to be the name
 of a buffer."
-  (elnode-error "elnode--http-end ending socket %s" httpcon)
+  (elnode-msg :info "elnode--http-end ending socket %s" httpcon)
   (let ((access-log-name (process-get httpcon :elnode-access-log-name)))
     (when access-log-name
       (condition-case err
           (elnode-log-access access-log-name httpcon)
         (error
-         (message
+         (elnode-msg
+          :warning
           (concat
            "elnode--http-end: an error occurred "
            "processing the access log"))))))
-  (condition-case nil
-      (process-send-eof httpcon)
-    (error (message "elnode--http-end could not send EOF")))
-  (delete-process httpcon)
-  (kill-buffer (process-buffer httpcon)))
+  (when (eq 'open (process-status httpcon))
+    (process-send-eof httpcon))
+  ;;(delete-process httpcon)
+  ;;(kill-buffer (process-buffer httpcon))
+  )
 
 (defun elnode-http-return (httpcon &optional data)
   "End the response on HTTPCON optionally sending DATA first.
@@ -2056,15 +2067,13 @@ sent with `elnode-http-start'
 
 DATA must be a string, it's just passed to `elnode-http-send'."
   (if (not (process-get httpcon :elnode-http-started))
-      (elnode-error "Http not started")
+      (elnode-msg :warning "elnode-http-return: HTTP not started")
     (progn
-      (if data
-          (elnode-http-send-string httpcon data))
-      (let ((eof-func (process-get httpcon :send-eof-function)))
-        (if (functionp eof-func)
-            (funcall eof-func httpcon)
-            ;; Need to close the chunked encoding here
-            (elnode-http-send-string httpcon ""))))))
+      (when data
+        (elnode-http-send-string httpcon data))
+      ;; Need to close the chunked encoding here
+      (elnode-http-send-string httpcon "")
+      (elnode--http-end httpcon))))
 
 (defun elnode-send-html (httpcon html)
   "Simple send for HTML.
@@ -2770,8 +2779,9 @@ happens."
   (cond
    ((equal status "finished\n")
     (let ((httpcon (process-get process :elnode-httpcon)))
-      (elnode-error
-       "Elnode-child-process-sentinel Status @ finished: %s -> %s on %s"
+      (elnode-msg
+       :info
+       "elnode-child-process-sentinel Status @ finished: %s -> %s on %s"
        (process-status httpcon)
        (process-status process)
        httpcon)
@@ -2782,7 +2792,9 @@ happens."
             (elnode--http-end httpcon)))))
    ((string-match "exited abnormally with code \\([0-9]+\\)\n" status)
     (let ((httpcon (process-get process :elnode-httpcon)))
-      (elnode-error "Elnode-child-process-sentinel: %s on %s" status httpcon)
+      (elnode-msg
+       :info "elnode-child-process-sentinel: %s on %s"
+       status httpcon)
       (if (not (eq 'closed (process-status httpcon)))
           (progn
             (elnode-http-send-string httpcon "")
@@ -2791,20 +2803,22 @@ happens."
       (delete-process process)
       (kill-buffer (process-buffer process))))
    (t
-    (elnode-error "Elnode-chlild-process-sentinel: %s on %s" status process))))
+    (elnode-msg
+     :info "elnode-child-process-sentinel: %s on %s"
+     status process))))
 
 (defun elnode--child-process-filter (process data)
   "A generic filter function for elnode child processes.
 
-elnode child processes are just emacs asynchronous processes that
-send their output to an elnode http connection.
+Elnode child processes are just Emacs asynchronous processes that
+send their output to an Elnode HTTP connection.
 
 This filter function does the job of taking the output from the
-async process and finding the associated elnode http connection
+async process and finding the associated Elnode HTTP connection
 and sending the data there."
   (let ((httpcon (process-get process :elnode-httpcon)))
-    (elnode-error
-     "Elnode-child-process-filter http state: %s data length: %s on %s"
+    (elnode-msg
+     :info "elnode-child-process-filter http state: %s data length: %s on %s"
      (process-status httpcon)
      (length data)
      httpcon)
@@ -2840,7 +2854,7 @@ directed at the same http connection."
     ;; incomming data and signals
     (set-process-filter p 'elnode--child-process-filter)
     (set-process-sentinel p 'elnode--child-process-sentinel)
-    (elnode-error "Elnode-child-process init %s" httpcon)))
+    (elnode-msg :info "elnode-child-process init %s" httpcon)))
 
 
 ;; File management
@@ -3750,8 +3764,8 @@ path (the path to call this handler)."
            (if (not logged-in)
                target
                (format "%s?redirect=%s" target logged-in))))
-         (t (elnode-error
-             "elnode-auth--login-handler: unexpected error: %S"
+         (t (elnode-msg
+             :warning "elnode-auth--login-handler: unexpected error: %S"
              err)))))))
 
 (defun elnode-auth-default-test-v001 (username database)

@@ -12,6 +12,22 @@
 (require 'mail-parse)
 (require 'noflet)
 
+(ert-deftest elnode/case ()
+  "Show that elnode/case works."
+  (should
+   (equal
+    '(10 "blah")
+    (list
+     (let ((v 1))
+       (elnode/case v
+         (1 10)
+         (t 11)))
+     ;; Shows the else case
+     (let ((v 2))
+       (elnode/case v
+         (1 10)
+         (t "blah")))))))
+
 (ert-deftest elnode-join ()
   "Test the path joining."
   (should
