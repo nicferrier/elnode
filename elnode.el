@@ -1560,23 +1560,24 @@ cons is returned."
         (cdr cookie)
         cookie)))
 
-
 (defun elnode--http-parse-status (httpcon &optional property)
   "Parse the status line of HTTPCON.
 
 If PROPERTY is non-nil, then return that property."
-  (let* ((http-line (process-get httpcon :elnode-http-status))
-         (method-regex (mapconcat
-                        'identity
-                        (list "GET" "POST" "HEAD" "DELETE" "PUT")
-                        "\\|")))
+  (let* ((http-line (process-get httpcon :elnode-http-status)))
     (save-match-data
-      (string-match (format "\\(%s\\) \\(.*\\) HTTP/\\(1.[01]\\)"
-                            method-regex)
-                    http-line)
+      (string-match
+       (rx (and (group-n 1 (or "GET" "HEAD" "POST" "DELETE" "PUT"))
+                " "
+                (group-n 2 (1+ (any "A-Za-z0-9+?/:-")))
+                " "
+                "HTTP/"
+                (group-n 3 (and "1." (1+ (any "0-9"))))))
+       http-line)
       (process-put httpcon :elnode-http-method (match-string 1 http-line))
       (process-put httpcon :elnode-http-resource (match-string 2 http-line))
-      (process-put httpcon :elnode-http-version (match-string 3 http-line)))
+      (process-put httpcon :elnode-http-version (match-string 3 http-line))
+      (process-put httpcon :elnode-http-parsed-time (current-time)))
     (if property
         (process-get httpcon property))))
 
