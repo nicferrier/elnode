@@ -2207,12 +2207,12 @@ The function `elnode-test-path' uses this facility to work out a
 target path."
   (elnode--http-mapping-implementation httpcon part))
 
-(defun elnode--strip-leading-slash (str)
+(defsubst elnode--strip-leading-slash (str)
   "Strip any leading slash from STR.
 
 If there is no leading slash then just return STR."
-  (if (string-match "^/\\(.*\\)" str)
-      (match-string 1 str)
+  (if (eq (elt str 0) ?/)
+      (substring str 1)
       str))
 
 (defun elnode-get-targetfile (httpcon docroot)
