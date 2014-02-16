@@ -131,19 +131,6 @@ be set, even when emacs is started with -Q.")
 
 ;; Error log handling
 
-(defun elnode-trunc (data)
-  "Truncate and clean DATA."
-  (replace-regexp-in-string
-   "[\r\n]" "."
-   (substring data 0 (if (> 20 (length data)) (length data) 20))))
-
-(defun elnode-trim (str)
-  "Trim off whitespace."
-  (string-match "[ \t\n\r]*$" str)
-  (setq str (replace-match "" nil nil str))
-  (string-match "^[ \t\n\r]*" str)
-  (replace-match "" nil nil str))
-
 (defun elnode-join (&rest parts)
   "Path join the parts together.
 
