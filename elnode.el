@@ -1121,8 +1121,7 @@ For header and parameter names, strings MUST be used currently.
 During the test the variable `elnode-webserver-visit-file' is set
 to `t' to ensure that Elnode does not pass fake HTTP connections
 to external processes."
-  (let (result
-        (fakir-mock-process-require-specified-buffer t))
+  (let ((fakir-mock-process-require-specified-buffer t))
     (fakir-mock-process :httpcon ()
       (let ((req (elnode--make-test-call
                   path method parameters
@@ -1131,58 +1130,38 @@ to external processes."
                    (let ((cookies (elnode--cookie-store-to-header-value)))
                      (when cookies
                        (list (cons "Cookie" cookies)))))))
-            (http-connection :httpcon))
-        ;; Capture the real eof-func and then override it to do fake ending.
-        (let ((eof-func (elnode--make-send-eof))
-              (main-send-string (symbol-function 'elnode-http-send-string))
-              (send-string-func (elnode--make-send-string))
-              (the-end 0)
-              (elnode-webserver-visit-file t))
-          (noflet
-              ((elnode-http-send-string (httpcon str)
-                 (funcall main-send-string httpcon str))
-               (elnode--make-send-string ()
-                 (lambda (httpcon str)
-                   (funcall send-string-func httpcon str)))
-               (elnode--make-send-eof ()
-                 (lambda (httpcon)
-                   ;; Flet everything in elnode--http-end
-                   ;; ... first signaling the end
-                   (noflet ((process-send-eof (proc) (setq the-end 't))
-                            ;; Do nothing - we want the test proc
-                            (delete-process (proc))
-                            ;; Again, do nothing, we want this buffer
-                            (kill-buffer (buffer) t))
-                     ;; Now call the captured eof-func
-                     (funcall eof-func httpcon)))))
-            ;; FIXME - we should unwind protect this?
-            (elnode--filter http-connection req)
-            ;; Now we sleep till the-end is true
-            (while (not the-end) (sit-for 0.1))
-            (when the-end
-              (elnode--response-header-to-cookie-store
-               (process-get
-                http-connection
-                :elnode-httpresponse-header))
-              ;; Add to the cookie store?
-              (setq result
-                    (list
-                     :result-string
-                     (with-current-buffer (fakir-get-output-buffer)
-                       (buffer-substring-no-properties (point-min) (point-max)))
-                     :buffer
-                     (process-buffer http-connection)
-                     ;; These properties are set by elnode-http-start
-                     :status
-                     (process-get
-                      http-connection
-                      :elnode-httpresponse-status)
-                     :header
-                     (process-get
-                      http-connection
-                      :elnode-httpresponse-header))))))))
-    ;; Finally return the result
-    result))
+            (http-connection :httpcon)
+            (the-end 0)
+            (elnode-webserver-visit-file t))
+        (noflet ((process-send-eof (proc) (setq the-end 't))
+                  (elnode--get-server-prop (proc prop)
+                    (elnode/case prop
+                      (:elnode-defer-mode nil)
+                      (t (funcall this-fn proc prop))))
+                  ;; Do nothing - we want the test proc
+                  (delete-process (proc))
+                  ;; Again, do nothing, we want this buffer
+                  (kill-buffer (buffer) t))
+          ;; FIXME - we should unwind protect this?
+          (elnode--filter http-connection req)
+          ;; Now we sleep till the-end is true
+          (while (not the-end) (sit-for 0.1))
+          (when the-end
+            (elnode--response-header-to-cookie-store
+             (process-get
+              http-connection
+              :elnode-httpresponse-header))
+            ;; Could we add to the cookie store here?
+            (list
+             :result-string
+             (with-current-buffer (fakir-get-output-buffer)
+               (buffer-substring-no-properties (point-min) (point-max)))
+             :buffer (process-buffer http-connection)
+             ;; These properties are set by elnode-http-start
+             :status
+             (process-get http-connection :elnode-httpresponse-status)
+             :header
+             (process-get http-connection :elnode-httpresponse-header))))))))
 
 (defmacro* should-elnode-response (call
                                    &key
