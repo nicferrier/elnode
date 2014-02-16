@@ -3976,20 +3976,14 @@ function will launch a server on it.
 The server is started with `elnode-hostpath-default-handler' as
 the handler and listening on `elnode-init-host'"
   (interactive)
-  (if elnode-init-port
-      (condition-case nil
+  (when elnode-init-port
+    (condition-case nil
+        (progn
           (elnode-start
            'elnode-hostpath-default-handler
-           :port elnode-init-port
-           :host elnode-init-host)
-        (error
-         (elnode-error
-          "elnode-init: can't start - port %d has something attached already"
-          elnode-init-port))))
-  ;; Turn on the defer queue processor if we need to
-  (if elnode-defer-on
-      (if (not elnode--defer-timer)
-          (elnode--init-deferring))))
+           :port elnode-init-port)
+          (setq elnode--inited t))
+      (error "Elnode could not initialize."))))
 
 ;;;###autoload
 (defcustom elnode-do-init nil
@@ -4011,16 +4005,25 @@ in `elnode-webserver-docroot', which by default is ~/public_html."
 This is autoloading mechanics, see the eval-after-load for doing
 init.")
 
+
+;; Make sure we add elnode/case to the keywords
+(font-lock-add-keywords
+ 'emacs-lisp-mode
+ '(("\\<elnode/case\\>" . 'font-lock-keyword-face)))
+
 ;; Auto start elnode if we're ever loaded
 ;;;###autoload
 (eval-after-load 'elnode
-  '(if (and (boundp 'elnode-do-init)
-           elnode-do-init
-	   (or (not (boundp 'elnode--inited))
-	       (not elnode--inited)))
-      (progn
-        (elnode-init)
-        (setq elnode--inited nil))))
+  '(progn
+    (when (and (boundp 'elnode-do-init) 
+               elnode-do-init)
+      (condition-case err
+          (progn
+            (elnode-init)
+            (when (and elnode-defer-on 
+                       (not elnode--defer-timer))
+              (elnode--init-deferring)))
+        (error "Elnode could not be started.")))))
 
 (provide 'elnode)
 
