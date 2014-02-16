@@ -232,7 +232,7 @@ X-test-Header: somevalue\r
             (elnode--http-parse-header (current-buffer) (point-min)))
         (should
          (equal
-          (aget header-alist "Content-type")
+          (kva "Content-type" header-alist)
           "application/form-www-data"))
         (should (equal "POST /blah HTTP/1.1" status))))))
 
@@ -260,7 +260,7 @@ Content-Type: application/octet-stream\r
             (elnode--http-parse-header (current-buffer) (point) t)
           (should
            (equal
-            (aget header-alist "Content-Type")
+            (kva "Content-Type" header-alist)
             "application/octet-stream"))
           (should
            (equal
@@ -890,14 +890,14 @@ Content-Type: text/plain\r
            (hdr-end-pt (with-current-buffer buffer (point)))
            (parsed-cont-type
             (mail-header-parse-content-type
-             (aget (cadr hdr) "Content-Type")))
-           (boundary (aget (cdr parsed-cont-type) 'boundary))
+             (kva "Content-Type" (cadr hdr))))
+           (boundary (kva 'boundary (cdr parsed-cont-type)))
            (params
             (elnode--http-mp-decode buffer hdr-end-pt boundary)))
-      (should (equal (aget params "submit-name") "Larry"))
-      (should (equal (aget params "files") "... contents of file1.txt ..."))
+      (should (equal (kva "submit-name" params) "Larry"))
+      (should (equal (kva "files" params) "... contents of file1.txt ..."))
       (should (equal (get-text-property
-                      0 :elnode-filename (aget params "files"))
+                      0 :elnode-filename (kva "files" params))
                      "file1.txt")))))
 
 (ert-deftest elnode-test-http-multipart-post ()

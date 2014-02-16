@@ -56,7 +56,6 @@
 (require 'mail-parse) ; for mail-header-parse-content-type
 (require 'url-util)
 (require 'kv)
-(require 'assoc) ; for aget - which we could move to kv?
 (require 's)
 (require 'dash)
 (require 'rx)
