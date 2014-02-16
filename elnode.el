@@ -887,8 +887,6 @@ port number.  For example: \"127.0.0.1:8080\"."
                   :remote)))
     (elnode--ip-addr->string remote)))
 
-(defalias 'elnode-remote-ipaddr 'elnode-get-remote-ipaddr)
-
 (defun elnode-server-info (httpcon)
   "Returns a string adress of the server host and port for HTTPCON.
 
@@ -1175,12 +1173,6 @@ whole body of the RESPONSE."
           ,body-matchv
           (plist-get ,responsev :result-string))))))
 
-(defun elnode--log-fn (server con msg)
-  "Log function for elnode.
-
-Serves only to connect the server process to the client processes"
-  (process-put con :server server))
-
 (defvar elnode-handler-history '()
   "The history of handlers bound to servers.")
 
@@ -1210,8 +1202,8 @@ Serves only to connect the server process to the client processes"
      :coding '(raw-text-unix . raw-text-unix)
      :family 'ipv4
      :filter 'elnode--filter
-     :sentinel 'elnode--sentinel
-     :log 'elnode--log-fn
+     ;;:sentinel 'elnode--sentinel
+     :log (lambda (server con msg) (process-put con :server server))
      :plist (list
              :elnode-service-map service-mappings
              :elnode-http-handler request-handler
@@ -1762,23 +1754,9 @@ return DEFAULT instead of `nil'."
    (process-get httpcon :elnode-http-version)
    (elnode--http-parse-status httpcon :elnode-http-version)))
 
-(defun elnode--send-blocks (httpcon str)
-  (let* ((len (length str))
-         (sz 8000))
-    (if (> len sz)
-        (let ((n (/ len sz)))
-          (append
-           (loop for i from 1 to n
-              do
-                (process-send-string
-                 httpcon
-                 (substring str (* (- i 1) sz) (* i sz))))
-           (list
-            (substring str (* n sz))))))))
-
 (defun elnode-http-send-string (httpcon str)
   "Send STR to HTTPCON, doing chunked encoding."
-  (elnode-msg :debug "elnode-http-send-string %s [[%s]]" httpcon (elnode-trunc str))
+  (elnode-msg :debug "elnode-http-send-string %s [[%s]]" httpcon (s-truncate str))
   (let ((len (string-bytes str)))
     (process-put httpcon :elnode-bytes-written
                  (+ len (or (process-get httpcon :elnode-bytes-written) 0)))
@@ -2664,13 +2642,9 @@ It should not be used otherwise.")
 	    month
 	    (format-time-string "%Y %H:%M:%S GMT" time t))))
 
-(defalias 'elnode-rfc1123-date 'elnode--rfc1123-date)
-
-(defun elnode--file-modified-time (file)
+(defsubst elnode--file-modified-time (file)
   "Get modification time for FILE."
   (nth 5 (file-attributes file)))
-
-(defalias 'elnode-file-modified-time 'elnode--file-modified-time)
 
 (defun* elnode-send-file (httpcon targetfile
                                   &key
