@@ -677,57 +677,6 @@ available.")
 
 ;; Main control functions
 
-(defvar elnode--buffers-closed nil
-  "List of closed buffers.")
-
-(defun elnode--gc-buffers ()
-  "Garbage collcect the `elnode--buffers-closed'."
-  (let ((i 0))
-    (while (and elnode--buffers-closed (< i 500))
-      (let ((buf (pop elnode--buffers-closed)))
-        (kill-buffer buf)
-        (setq i (+ 1 i))))
-    (length elnode--buffers-closed)))
-
-(defvar elnode--gc-buffers-timer nil)
-
-(defun elnode--init-gc-buffer-timer ()
-  "Initialize the `elnode--gc-buffers-timer' timer."
-  (setq elnode--gc-buffers-timer
-        (run-at-time "10 sec" 10 'elnode--gc-buffers)))
-
-(defun elnode--sentinel (process status)
-  "Sentinel function for the main server and for the client sockets."
-  (let ((server-process (process-contact process :service)))
-    (cond
-      ;; Server status
-      ((and (assoc server-process elnode-server-socket)
-            (equal status "deleted\n"))
-       (let ((server-proc (kva server-process elnode-server-socket)))
-         (unless (equal (process-buffer server-proc)
-                        (process-buffer process))
-           ;; It's a connection - kill it
-           (kill-buffer (process-buffer process))))
-       (elnode-msg :status "Elnode server stopped"))
-
-      ;; Client socket status
-      ((equal status "connection broken by remote peer\n")
-       (when (process-buffer process)
-         (push (process-buffer process) elnode--buffers-closed)
-         ;;(elnode-error "Elnode connection dropped %s" process)
-         ))
-
-      ((s-starts-with? "open from " status)
-       (elnode-msg :debug "Elnode opened connection %s" process))
-
-      ((s-starts-with? "deleted" status)
-       (elnode-msg :status "Elnode closed connection %s" process))
-
-      ;; Default
-      (t
-       (elnode-msg :status "Elnode status: %s %s" process (s-trim status))))))
-
-
 (defun elnode--http-parse-header (buffer start &optional non-header)
   "Parse a header from the BUFFER at point START.
 
@@ -849,12 +798,6 @@ back to the server."
            (value (process-get server key)))
       value))
 
-(defun elnode--handler-call (handler process)
-  "Simple function to wrap calling the HANDLER."
-  (elnode-msg :debug "filter: calling handler on %s" process)
-  (funcall handler process)
-  (elnode-msg :debug "filter: handler returned on %s" process))
-
 (defun elnode--filter (process data)
   "Filtering DATA sent from the client PROCESS..
 
@@ -890,7 +833,7 @@ port number of the connection."
              ;; TODO: this needs error protection so we can return an error?
              (unwind-protect
                   (condition-case signal-value
-                      (elnode--handler-call handler process)
+                      (funcall handler process)
                     ('elnode-defer ; see elnode-defer-now
                      (elnode-msg :info "filter: defer caught on %s" process)
                      ;; Check the timer, this is probably spurious but
