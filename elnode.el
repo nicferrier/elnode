@@ -541,7 +541,7 @@ failure state which either the symbol `closed' or the symbol
 
 (defmacro elnode/case (expr &rest clauses)
   "A better `case' implementation."
-  (declare (indent 1))
+  (declare (indent 1)(debug (form &rest (sexp body))))
   (let* ((backwards (reverse clauses))
          (last-clause (car backwards))
          (other-clauses (cdr backwards))
