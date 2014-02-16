@@ -2714,14 +2714,16 @@ delivered."
             (let ((file-buf (find-file-noselect filename)))
               (elnode-http-return
                httpcon
-               (elnode--buffer-template
-                file-buf
-                ;; Replacements handling
-                (if (functionp replacements)
-                    (let ((elnode-replacements-httpcon httpcon)
-                          (elnode-replacements-targetfile targetfile))
-                      (funcall replacements))
-                    replacements))))
+               (if replacements
+                   (elnode--buffer-template
+                    file-buf
+                    ;; Replacements handling
+                    (if (functionp replacements)
+                        (let ((elnode-replacements-httpcon httpcon)
+                              (elnode-replacements-targetfile targetfile))
+                          (funcall replacements))
+                        replacements))
+                   (with-current-buffer file-buf (buffer-string)))))
             (elnode-child-process
              httpcon
              elnode-send-file-program
