@@ -1,0 +1,26 @@
+= FAQ =
+
+== is Elnode fast enough? ==
+
+Speed just isn't a concern of Elnode. Elnode is focussed on making it
+easy to write asynchronous webapps with EmacsLisp. The focus is on
+scalability, not speed.
+
+
+== is Elnode scalable enough? ==
+
+No. But this is mostly a function of Emacs' IO which uses {{{select}}}
+for non-blocking calls and not other, more scalable non-blocking IO
+librarys.
+
+I hope at some point to contribute a better IO library to Emacs.
+
+
+== Why does Elnode always use chunked encoding? ==
+
+Because it's simpler. {{{elnode-http-start}}} can send the header
+without knowing what sort of data you'll be sending.
+
+I may provide a single start and return call in the future that can
+send a buffer or a single string. Pre-buffered, one shot computed
+stuff isn't really the point of async programming though.
