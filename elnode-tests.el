@@ -555,14 +555,16 @@ The text spat out is tested, so is the status."
 
 This tests the basics of mocked server, it goes through the
 filter so it's very useful for working stuff out."
-  (setplist 'elnode-test-handler (list :dispatcher :blah))
-  (with-elnode-mock-server 'elnode-test-handler
-    (should-elnode-response
-     (elnode-test-call "/test/test.something")
-     :status-code 200
-     :header-name "Content-Type"
-     :header-value "text/html"
-     :body-match ".*<h1>Hello World</h1>")))
+  (with-elnode-mock-server
+      (lambda (httpcon)
+        (elnode-http-start httpcon 200 '("Content-Type" . "text/plain"))
+        (elnode-http-return httpcon "that's it"))
+    (let ((response (elnode-test-call "/test/test.something")))
+      (should-elnode-response response
+       :status-code 200
+       :header-name "Content-Type"
+       :header-value "text/plain"
+       :body-match ".*that's it"))))
 
 (ert-deftest elnode--make-test-call ()
   "Test the HTTP request construction."
