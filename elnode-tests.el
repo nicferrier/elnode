@@ -299,7 +299,7 @@ X-test-Header: somevalue\r
             (elnode--http-parse-header (current-buffer) (point-min)))
         (should
          (equal
-          (kva "Content-type" header-alist)
+          (kva "content-type" header-alist)
           "application/form-www-data"))
         (should (equal "POST /blah HTTP/1.1" status))))))
 
@@ -327,7 +327,7 @@ Content-Type: application/octet-stream\r
             (elnode--http-parse-header (current-buffer) (point) t)
           (should
            (equal
-            (kva "Content-Type" header-alist)
+            (kva "content-type" header-alist)
             "application/octet-stream"))
           (should
            (equal
@@ -999,7 +999,7 @@ Content-Type: text/plain\r
            (hdr-end-pt (with-current-buffer buffer (point)))
            (parsed-cont-type
             (mail-header-parse-content-type
-             (kva "Content-Type" (cadr hdr))))
+             (kva "content-type" (cadr hdr))))
            (boundary (kva 'boundary (cdr parsed-cont-type)))
            (params
             (elnode--http-mp-decode buffer hdr-end-pt boundary)))
