@@ -12,8 +12,10 @@
   (kv "0.0.17"))
  :files 
  ("elnode.el" 
+  "elnode-compat.el"
   "elnode-lists.el"
   "elnode-rle.el"
+  "elnode-tools.el"
   "elnode-wiki.el"
   "elnode-proxy.el"
   "elnode-log-mode.el"
