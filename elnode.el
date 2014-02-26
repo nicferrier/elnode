@@ -391,15 +391,17 @@ There is only one error log, in the future there may be more."
 (defconst elnode-msg-levels (list :debug :info :status :warning)
   "Levels of message `elnode-msg' uses.")
 
-(defsubst elnode--posq (element lst)
+(defmacro elnode--posq (element lst)
   "Return the index in the LST of ELEMENT."
-  (catch :escape
-    (let ((i 0))
-      (dolist (e lst)
-        (when (eq e element)
-          (throw :escape i))
-        (setq i (+ i 1)))
-      nil)))
+  (let ((elv (make-symbol "el")))
+    `(let ((,elv ,element))
+       (catch :escape
+         (let ((i 0))
+           (dolist (e ,lst)
+             (when (eq e ,elv)
+               (throw :escape i))
+             (setq i (+ i 1)))
+           nil)))))
 
 (defmacro elnode-msg (level msg &rest args)
   "Log MSG to the error console with a particular LEVEL.
@@ -754,8 +756,9 @@ headers."
                header)))
         (list status header-alist-strings)))))
 
-(defun elnode--http-parse (httpcon)
-  "Parse the HTTP header for the process.
+
+(defun elnode--http-parse (process)
+  "Parse the HTTP header for the PROCESS.
 
 If the request is not fully complete (if the header has not
 arrived yet or we don't have all the content-length yet for

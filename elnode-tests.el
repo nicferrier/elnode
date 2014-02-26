@@ -108,24 +108,31 @@ is just a test helper."
 
 (ert-deftest elnode-log-buffer-log ()
   "Test the log buffer stuff."
-  (let ((tf (make-temp-file "logbufferlog")))
-    (with-temp-buffer
-      (elnode-log-buffer-log "test it" (current-buffer) tf)
-      (should
-       (equal
-        (marker-position elnode-log-buffer-position-written)
-        (point-max)))
-      (elnode-log-buffer-log "test again" (current-buffer) tf)
-      (should
-       (equal
-        '("test it" "test again")
-        (elnode--log-buffer-read-text (current-buffer)))))
-    ;; Test that we can read it back from the file.
-    (let* ((log-buf (find-file-noselect tf)))
-      (should
-       (equal
-        '("test it" "test again")
-        (elnode--log-buffer-read-text log-buf))))))
+  (noflet ((read-log (&optional buffer)
+             (with-current-buffer (or buffer (current-buffer))
+               (->> (split-string (buffer-string) "\n")
+                 (-filter (lambda (s) (> (length s) 0)))
+                 (-map
+                  (lambda (str)
+                    (string-match "^[^ ]+ \\(.*\\)" str)
+                    (match-string 1 str)))))))
+    (let ((tf (make-temp-file "logbufferlog")))
+      (with-temp-buffer
+        (elnode-log-buffer-log "test it" (current-buffer) tf)
+        (should
+         (equal
+          (marker-position elnode-log-buffer-position-written)
+          (point-max)))
+        (elnode-log-buffer-log "test again" (current-buffer) tf)
+        (should
+         (equal '("test it" "test again")
+                (read-log))))
+      ;; Test that we can read it back from the file.
+      (let* ((log-buf (find-file-noselect tf)))
+        (should
+         (equal
+          '("test it" "test again")
+          (read-log log-buf)))))))
 
 (ert-deftest elnode-log-buffer-log-truncates ()
   "Test the log buffer gets truncated stuff."
