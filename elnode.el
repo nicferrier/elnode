@@ -3292,6 +3292,9 @@ Check the USERNAME and PASSWORD with `elnode-auth-user-p' and
 then update `elnode-loggedin-db' with the username and the login
 record.
 
+When the authentication test fails `elnode-auth-credentials'
+signal is raised.
+
 Takes optional AUTH-DB which is the database variable to
 use (which is `elnode-auth-db' by default) and LOGGEDIN-DB which
 is the logged-in state database to use and which is
@@ -3348,8 +3351,8 @@ cookie-name you're using for your app."
 The name of the cookie can be supplied with :COOKIE-NAME - by
 default is is \"elnode-auth\".
 
-LOGGEDIN-DB can be a loggedin state database which is expected to
-be a `db'.  By default it is `elnode-loggedin-db'."
+LOGGEDIN-DB can be a loggedin state database which is a
+hash-table.  By default it is `elnode-loggedin-db'."
   (let ((cookie-cons (elnode-auth-get-cookie-value
                       httpcon :cookie-name cookie-name)))
     (if (not cookie-cons)
