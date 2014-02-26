@@ -2242,7 +2242,7 @@ target path."
   "Strip any leading slash from STR.
 
 If there is no leading slash then just return STR."
-  (if (eq (elt str 0) ?/)
+  (if (and (stringp str) (eq (elt str 0) ?/))
       (substring str 1)
       str))
 
@@ -3449,23 +3449,26 @@ This function sends the contents of the custom variable
                                     auth-test ; assert not nil?
                                     (cookie-name "elnodeauth")
                                     (loggedin-db elnode-loggedin-db))
-  "The implementation of the login handler for auth testing.
+  "An authentication handler implementation.
 
-This is the handler that is mapped to /login/ (which is the
-default login path) or whatever you want the login path to be.
+This is the handler that is mapped to the login path, by default
+\"/login/\".
 
 SENDER is the function which will send the login page to the
-user, it takes an HTTPCON.  It must send a 'username' and
-'password' HTTP parameters to this handler.
+user, it takes an HTTPCON and the TARGET from the call to this
+and a redirect path.  The redirect path is taken from the HTTP
+parameter \"redirect\".  The SENDER function must send a
+'username' and 'password' HTTP parameters to this handler.  The
+SENDER function may also send a \"redirect\" parameter which will
+be used to HTTP redirect the user-agent on successful
+authentication.
 
 TARGET is the path that will be used as the login handler
 path (the path to call this handler)."
   (elnode-method httpcon
       (GET
-       (let ((to (or
-                  (elnode-http-param httpcon "redirect")
-                  "/")))
-         (funcall sender httpcon target to)))
+       (funcall sender httpcon target
+                (or (elnode-http-param httpcon "redirect") "/")))
     (POST
      (let ((username (elnode-http-param httpcon "username"))
            (password (elnode-http-param httpcon "password"))
@@ -3547,13 +3550,12 @@ COOKIE-NAME is used when the TEST is `:cookie'.  It is the name
 of the cookie to use for authentication.  By default this is
 `elnode-auth'.  It must be specified as a string.
 
+AUTH-TEST is a function to implement retrieval of users.  It can
+be nil in which case a default based on AUTH-DB will be used.
+
 AUTH-DB is the `db' used for authentication information.
 It is used as the authority of information on users.  By default
 this is `elnode-auth-db'.
-
-AUTH-TEST is a function to implement retrieval of users.  It is
-used in preference to AUTH-DB but can be nil in which case a
-default based on AUTH-DB will be used.
 
 FAILURE-TYPE is what to do if authentication fails.  Currently
 only `:redirect' is supported.  To redirect on failure means to
