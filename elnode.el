@@ -770,7 +770,7 @@ process properties to the HTTP connection.  These are the result
 of successful parsing."
   ;; FIXME - we don't need to do this - we should check for
   ;; header-parsed and avoid it we we can
-  (with-current-buffer (process-buffer httpcon)
+  (with-current-buffer (process-buffer process)
     (save-excursion
       (goto-char (point-min))
       (destructuring-bind (leader alist-strings)
@@ -834,15 +834,16 @@ added or content length computed."
          ;; If we have a body then add that as well
          (or body "")))))
 
-(defun elnode--get-server-prop (process key)
-  "Get the value of the KEY from the server attached to PROCESS.
+(defun elnode/get-or-make-con-buffer (httpcon)
+  (or
+   (process-buffer httpcon)
+   (let* ((port (cadr (process-contact httpcon)))
+          (buf (get-buffer-create (format " *elnode-request-%s*" port))))
+     (set-process-buffer httpcon buf)
+     (process-buffer httpcon))))
 
-Server properties are bound with `elnode-start' which sets up
-`elnode--log-fn' to ensure that all sockets created have a link
-back to the server."
-    (let* ((server (process-get process :server))
-           (value (process-get server key)))
-      value))
+(defsubst elnode--call (handler con)
+  (funcall handler con))
 
 (defun elnode--filter (process data)
   "Filtering DATA sent from the client PROCESS..
@@ -1798,11 +1799,11 @@ return DEFAULT instead of `nil'."
              (format "%x\r\n%s\r\n" (length str) (or str "")))
           (error
            (elnode-msg :warning
-                       "elnode-http-send-string failed to send [%s] on %s (%s)"
-                       (length str) httpcon (process-status httpcon))))
-        (elnode-msg :warning 
-                    "elnode-http-send-string can't print [%s] because %s is %s"
-                    (length str) httpcon (process-status httpcon)))))
+               "elnode-http-send-string failed to send [%s] on %s (%s)"
+             (length str) httpcon (process-status httpcon))))
+        (elnode-msg :warning
+            "elnode-http-send-string can't print [%s] because %s is %s"
+          (length str) httpcon (process-status httpcon)))))
 
 (defconst elnode-http-codes-alist
   (loop for p in '((200 . "Ok")
@@ -1984,7 +1985,7 @@ HTTPCON is the http connection which must have had the headers
 sent with `elnode-http-start'
 
 DATA must be a string, it's just passed to `elnode-http-send'."
-  (if (not (process-get httpcon :elnode-http-started))
+  (if (not (elnode/con-get httpcon :elnode-http-started))
       (elnode-msg :warning "elnode-http-return: HTTP not started")
     (progn
       (when data
@@ -2204,10 +2205,10 @@ inside your handler with `elnode-http-mapping'."
 This is here so that you flet `elnode-http-mapping' and still get
 at the real functionality."
   (if (eq part t)
-      (length (process-get httpcon :elnode-http-mapping))
+      (length (elnode/con-get httpcon :elnode-http-mapping))
       ;; Else it's a specific part
       (elt
-       (process-get httpcon :elnode-http-mapping)
+       (elnode/con-get httpcon :elnode-http-mapping)
        (if part part 0))))
 
 (defun elnode-http-mapping (httpcon &optional part)
