@@ -2840,9 +2840,7 @@ match replacements.  See `elnode-replacements-pattern'."
 (defun elnode--under-docroot-p (target-file doc-root &optional ignore-missing)
   "Is the TARGET-FILE under the DOC-ROOT?
 Optional argument IGNORE-MISSING will inhibit checks for missing files."
-  (let ((docroot
-         (directory-file-name
-          (expand-file-name doc-root))))
+  (let ((docroot (directory-file-name (expand-file-name doc-root))))
     (and
      (string-match
       (format "^%s\\($\\|/\\)" docroot)
