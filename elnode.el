@@ -1341,7 +1341,7 @@ currently supported conversions are:
          (hdr (if (symbolp key)
                   (elnode/con-get httpcon :elnode-http-header-syms)
                   (elnode/con-get httpcon :elnode-http-header)))
-         (val (cdr (assoc (downcase key) hdr))))
+         (val (cdr (assoc (if (stringp key) (downcase key) key) hdr))))
     (elnode/case convert
       (:time
        (when val
