@@ -1383,9 +1383,7 @@ That sounds more fun than it is."
        (equal
          200
         (catch :test
-          (fakir-mock-process :fake
-              ((:elnode-http-pathinfo "/wiki/test.creole")
-               (:elnode-http-mapping '("/wiki/test.creole" "test.creole")))
+          (fakir-mock-process :fake ()
             (set-process-plist :fake (list (make-hash-table :test 'eq)))
             (elnode/con-put :fake
               :elnode-http-pathinfo "/wiki/test.creole"
@@ -1404,9 +1402,7 @@ That sounds more fun than it is."
        (equal
         404
         (catch :test
-          (fakir-mock-process :fake
-            ((:elnode-http-pathinfo "/wiki/test.creole")
-             (:elnode-http-mapping '("/wiki/test.creole" "test.creole")))
+          (fakir-mock-process :fake ()
             (set-process-plist :fake (list (make-hash-table :test 'eq)))
             (elnode/con-put :fake
               :elnode-http-pathinfo "/wiki/test.creole"
@@ -1425,11 +1421,7 @@ That sounds more fun than it is."
        (equal
         304
         (catch :test
-          (fakir-mock-process :fake
-              ((:elnode-http-pathinfo "/wiki/test.creole")
-               (:elnode-http-mapping ["/wiki/test.creole" "test.creole"])
-               (:elnode-http-header-syms
-                '((if-modified-since . "Mon, Feb 27 2012 22:10:24 GMT"))))
+          (fakir-mock-process :fake ()
             (set-process-plist :fake (list (make-hash-table :test 'eq)))
             (elnode/con-put :fake
               :elnode-http-pathinfo "/wiki/test.creole"
@@ -1574,9 +1566,7 @@ authenticated."
     ;; Now test
     (let ((hash (elnode-auth-login
                  "nferrier" "password" :auth-test auth-test)))
-      (fakir-mock-process :httpcon
-          ((:elnode-http-header
-            `(("cookie" . ,(concat "elnode-auth=nferrier::" hash)))))
+      (fakir-mock-process :httpcon ()
         (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
         (elnode/con-put :httpcon
           :elnode-http-header `(("Cookie" . ,(concat "elnode-auth=nferrier::" hash))))
@@ -1584,9 +1574,7 @@ authenticated."
     ;; Test what happens without a cookie
     (let ((hash (elnode-auth-login
                  "nferrier" "password" :auth-test auth-test)))
-      (fakir-mock-process :httpcon
-          ((:elnode-http-header
-            `(("Referer" . "http://somehost.example.com"))))
+      (fakir-mock-process :httpcon ()
         (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
         (elnode/con-put :httpcon
           :elnode-http-header `(("Referer" . "http://somehost.example.com")))
