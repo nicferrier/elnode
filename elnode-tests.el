@@ -1561,8 +1561,7 @@ authenticated."
             (elnode-auth-default-test username elnode-auth-db))))
     ;; The only time we really need clear text passwords is when
     ;; faking records for test
-    (elnode--auth-init-user-db '(("nferrier" . "password")
-                                 ("someuser" "secret")))
+    (elnode--auth-init-user-db '(("nferrier" . "password") ("someuser" "secret")))
     ;; Now test
     (let ((hash (elnode-auth-login
                  "nferrier" "password" :auth-test auth-test)))
