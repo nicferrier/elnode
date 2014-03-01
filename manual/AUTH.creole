@@ -77,3 +77,18 @@ What does it need to declare a cookie type authentication scheme?
 ** the login page contains a form with the username and password fields in it
 ** and sends it back to wherever :redirect is
 
+
+
+== From the ground up ==
+
+{{{elnode--auth-make-hash}}} makes a hash out of a secret key and a
+supplied username and password. So it can be used to store a username
+and a secret made from the key and the password.
+
+{{{elnode-auth-user-p}}} is a function which takes a username and
+password and an {{{:auth-test}}} function. It makes a hash of the
+username and password and then checks that the value returned by
+{{{:auth-test}}} for the username is the same as the hashed token.
+
+{{{elnode-auth-login}}} is a function which takes a username and a
+password as well as an {{{:auth-test}}} function 
