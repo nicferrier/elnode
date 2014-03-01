@@ -1613,193 +1613,73 @@ authenticated."
                "<input type='hidden' name='redirect' value='/myapp/loggedin'/>"
                nil 't)))))
 
-;; (ert-deftest elnode--auth-define-scheme-do-wrap ()
-;;   "Test wrapper destructuring.
+(defmacro elnode--auth-state (handler &rest body)
+  "A bunch of authentication state wrapped around BODY."
+  (declare (debug (sexp &rest form))
+           (indent 1))
+  `(noflet ((get-result (response)
+             (cadr (split-string (plist-get response :result-string) "\r\n\r\n"))))
+    (let* ((elnode-auth-db
+            (prog1
+                (db-make '(db-hash))
+              (elnode--auth-init-user-db
+               '(("nferrier" . "password")
+                 ("someuser" . "secret")))))
+           (elnode--defined-authentication-schemes (make-hash-table :test 'equal))
+           (token (elnode--auth-make-hash "nferrier" "password"))
+           (auth-hash (progn
+                        (elnode-defauth :if-auth-test :cookie-name "if-auth")
+                        (elnode-auth-login
+                         "nferrier" "password"
+                         :auth-test (lambda (username) token)))))
+      (with-elnode-mock-server ,handler
+        (progn ,@body)))))
 
-;; The function under test uses some slightly exotic destructuring
-;; so we test it deliberately here."
-;;   ;; First, test with a specified path
-;;   (flet ((elnode--wrap-handler (wrap-target path wrapping-func &rest args)
-;;            (should (equal wrap-target 'blah))
-;;            (should (equal path "/doit/"))))
-;;     (elnode--auth-define-scheme-do-wrap
-;;      (list 'blah
-;;            (lambda (httpcon)
-;;              (elnode-send-500 httpcon))
-;;            "/doit/")))
-;;   ;; Now with the default path
-;;   (flet ((elnode--wrap-handler (wrap-target path wrapping-func &rest args)
-;;            (should (equal wrap-target 'blah))
-;;            (should (equal path "/login/"))))
-;;     (elnode--auth-define-scheme-do-wrap
-;;      (list 'blah
-;;            (lambda (httpcon)
-;;              (elnode-send-500 httpcon))))))
-
-;; this is the thing I did to test the new let-elnode-handlers macro
-
-;; (let-handlers
-;;  ((my-handler-4 (httpcon)
-;;      (elnode-send-html httpcon "<P>hello!</P>"))
-;;   (my-handler-5 (httpcon)
-;;      (elnode-send-html httpcon "<P>Goodbye!</P>")))
-;;  (symbol-plist 'my-handler-4)
-;;  )
-
-
-(defmacro elnode-auth-flets (&rest body)
-  "Wrap the BODY with some standard handler flets."
-  (declare (debug (&rest form)))
-  `(noflet
-       ((auth-reqd-handler (httpcon)
-          (with-elnode-auth httpcon 'test-auth
-            (elnode-dispatcher
-             httpcon
-             '(("^/someplace/.*" .
-                (lambda (httpcon)
-                  (elnode-send-html
-                   httpcon
-                   "<html><body>You are logged in!</body></html>")))
-               ("^/$" .
-                (lambda (httpcon)
-                  (elnode-send-html
-                   httpcon
-                   "<html><body>You are logged in too!</body></html>"))))))))
-     ,@body))
+(ert-deftest elnode-if-auth ()
+  "Basic auth test testing."
+  (elnode--auth-state
+      (lambda (httpcon)
+        (elnode-http-start httpcon 200 '(Content-type . "text/plain"))
+        (if-elnode-auth httpcon :if-auth-test
+          (elnode-http-return httpcon "done")
+          (elnode-http-return httpcon "bad")))
+    ;; need one call without a cookie
+    (should
+     (assert-elnode-response
+      (let ((headers `(("Cookie" . ,(concat "if-auth=nferrier::" auth-hash)))))
+        (elnode-test-call "/" :headers headers))
+      :body-match ".*\r\n4\r\ndone\r\n0\r\n\r\n"))
+    (should
+     (assert-elnode-response
+      (let ((headers `(("Cookie" . ,(concat "if-auth=someuser::" auth-hash)))))
+        (elnode-test-call "/" :headers headers))
+      :body-match ".*\r\n3\r\nbad\r\n0\r\n\r\n"))
+    (should
+     (assert-elnode-response
+      (let ((headers `(("User-Agent" . "blah"))))
+        (elnode-test-call "/" :headers headers))
+      :body-match ".*\r\n3\r\nbad\r\n0\r\n\r\n"))))
 
 (ert-deftest elnode-with-auth ()
   "Test protection of code with authentication.
 
 This tests that the auth protection macro does its job, including
 the wrapping of a specified handler with the login sender."
-  :expected-result :failed ; because this uses the old auth system
-  ;; Setup the user db
-  (let ((elnode-auth-db (db-make '(db-hash))))
-    ;; The only time we really need clear text passwords is when
-    ;; faking records for test
-    (elnode--auth-init-user-db '(("nferrier" . "password")
-                                 ("someuser" . "secret")))
-    ;; Setup handlers to wrap
-    (elnode-auth-flets
-     ;; Make the auth scheme - since we use fset in
-     ;; elnode--wrap-handler this should work ok.
-     (elnode-auth-define-scheme
-      'test-auth
-      :test :cookie
-      :cookie-name "secret"
-      :redirect "/my-login/"
-      :sender auth-reqd-handler)
-     ;; Test that we are redirected to login when we don't have cookie
-     (with-elnode-mock-server 'auth-reqd-handler t
-                              (should-elnode-response
-                               (elnode-test-call "/")
-                               :status-code 302
-                               :header-name "Location"
-                               :header-value "/my-login/?redirect=/")
-                              ;; Test that we get the login page - this tests that the main
-                              ;; handler was wrapped
-                              (should-elnode-response
-                               (elnode-test-call "/my-login/")
-                               :status-code 200
-                               :body-match "<input type='hidden' name='redirect' value='/'/>")
-                              ;; Do it all again with a different 'to'
-                              (should-elnode-response
-                               (elnode-test-call "/somepage/test/")
-                               :status-code 302
-                               :header-name "Location"
-                               :header-value "/my-login/?redirect=/somepage/test/")
-                              ;; Test that we get the login page - this tests that the main
-                              ;; handler was wrapped
-                              (should-elnode-response
-                               (elnode-test-call "/my-login/")
-                               :status-code 200
-                               :body-match "<input type='hidden' name='redirect' value='/'/>")))))
-
-(ert-deftest elnode-with-auth-bad-auth ()
-  "Test bad auth causes login page again."
-  :expected-result :failed
-  ;; Setup the user db
-  (let ((elnode-auth-db (db-make '(db-hash))))
-    ;; The only time we really need clear text passwords is when
-    ;; faking records for test
-    (elnode--auth-init-user-db '(("nferrier" . "password")
-                                 ("someuser" . "secret")))
-    ;; Setup handlers to wrap
-    (elnode-auth-flets
-     (elnode-auth-define-scheme
-      'test-auth
-      :test :cookie
-      :cookie-name "secret"
-        :redirect (elnode-auth-make-login-wrapper
-                   'auth-reqd-handler
-                   :target "/my-login/"))
-     ;; Test that we are redirected to login when we don't have cookie
-       (with-elnode-mock-server 'auth-reqd-handler
-         ;; Test a bad auth
-         (should-elnode-response
-          (elnode-test-call
-           "/my-login/?redirect=/somepage/test/"
-           :method "POST"
-           :parameters
-           '(("username" . "nferrier")
-             ("password" . "secret")))
-          ;; The auth will fail - here's what we should get back
-          :status-code 302
-          :header-name "Location"
-          :header-value "/my-login/?redirect=/somepage/test/")))))
-
-
-(defvar elnode-test--my-db nil
-  "Special variable just for specific db test.")
-
-(ert-deftest elnode-with-auth-specific-db ()
-  "Test using a specific database."
-  :expected-result :failed
-  ;; Setup the user db
-  (let ((elnode-auth-db (db-make '(db-hash)))
-        (elnode-test--my-db (db-make '(db-hash))))
-    (elnode--auth-init-user-db
-     '(("nferrier" . "password")
-       ("someuser" . "secret"))
-     elnode-auth-db)
-    (elnode--auth-init-user-db
-     '(("nic" . "test")
-         ("other" . "simple"))
-     elnode-test--my-db)
-    ;; Setup handlers to wrap
-    (elnode-auth-flets
-     (elnode-auth-define-scheme
-      'test-auth
-      :test :cookie
-      :auth-db elnode-test--my-db
-      :cookie-name "secret"
-      :redirect (elnode-auth-make-login-wrapper
-                 'auth-reqd-handler
-                   :target "/my-login/"))
-     ;; Test that we are redirected to login when we don't have cookie
-     (with-elnode-mock-server 'auth-reqd-handler t
-                              (should-elnode-response
-                               (elnode-test-call
-                                "/my-login/?redirect=/somepage/test/"
-                                :method 'POST
-                                :parameters
-                                '(("username" . "nic")
-                                  ("password" . "testxx")))
-                               ;; The auth fails
-                               :status-code 302
-                               :header-name "Location"
-                               :header-value "/my-login/?redirect=/somepage/test/")
-                              (should-elnode-response
-                               (elnode-test-call
-                                "/my-login/?redirect=/somepage/test/"
-                                  :method 'POST
-                                  :parameters
-                                  '(("username" . "nic")
-                                    ("password" . "test")))
-                               ;; The auth succeeds
-                               :status-code 302
-                               :header-name "Location"
-                               :header-value "/somepage/test/")))))
+  (elnode--auth-state
+      (lambda (httpcon)
+        (with-elnode-auth httpcon :if-auth-test
+          (elnode-http-start httpcon 200 '(Content-type . "text/plain"))
+          (elnode-http-return httpcon "done")))
+    (should
+     (assert-elnode-response
+      (let ((headers `(("User-Agent" . "blah"))))
+        (elnode-test-call "/" :headers headers))
+      :header-list '(("Location" . "/login/"))))
+    (should
+     (assert-elnode-response
+      (let ((headers `(("Cookie" . ,(concat "if-auth=nferrier::" auth-hash)))))
+        (elnode-test-call "/" :headers headers))
+      :body-match ".*\r\n4\r\ndone\r\n0\r\n\r\n"))))
 
 (ert-deftest elnode-server-info ()
   "Test server meta data."

@@ -65,7 +65,7 @@
 (require 'dired) ; needed for the setup
 (require 'tabulated-list)
 (require 'noflet)
-(require 'ert) ; we provide some assertions and need 'should'
+
 (eval-when-compile (require 'cl))
 
 (defconst ELNODE-FORM-DATA-TYPE "application/x-www-form-urlencoded"
@@ -74,20 +74,6 @@
 (defconst http-referrer 'referer
   "Helper to bypass idiot spelling of the word `referrer'.")
 
-
-;; Extensions to ert
-
-(defmacro should-equal (a b)
-  "Simple shortcut for `(should (equal a b))'."
-  `(should
-    (equal ,a ,b)))
-
-(defmacro should-match (regex a)
-  "Simple shortcut for a `string-match' with `should'."
-  `(should
-   (string-match
-    ,regex
-    ,a)))
 
 ;; Customization stuff
 
@@ -1117,83 +1103,6 @@ to external processes."
              :status (elnode/con-get http-con :elnode-httpresponse-status)
              :header (elnode/con-get http-con :elnode-httpresponse-header))))))))
 
-(defmacro* should-elnode-response (call
-                                   &key
-                                   status-code
-                                   header-name
-                                   header-value
-                                   header-list
-                                   header-list-match
-                                   body-match)
-  "Assert on the supplied RESPONSE.
-
-CALL should be an `elnode-test-call', something that can make a
-response.  Assertions are done by checking the specified values
-of the other parameters to this function.
-
-If STATUS-CODE is not nil we assert that the RESPONSE status-code
-is equal to the STATUS-CODE.
-
-If HEADER-NAME is present then we assert that the RESPONSE has
-the header and that its value is the same as the HEADER-VALUE.
-If HEADER-VALUE is `nil' then we assert that the HEADER-NAME is
-NOT present.
-
-If HEADER-LIST is present then we assert that all those headers
-are present and `equal' to the value.
-
-If HEADER-LIST-MATCH is present then we assert that all those
-headers are present and `equal' to the value.
-
-If BODY-MATCH is present then it is a regex used to match the
-whole body of the RESPONSE."
-  (let ((status-codev (make-symbol "status-codev"))
-        (header-namev (make-symbol "header-namev"))
-        (header-valuev (make-symbol "header-valuev"))
-        (header-listv (make-symbol "header-listv"))
-        (header-list-matchv (make-symbol "header-list-match"))
-        (body-matchv (make-symbol "body-matchv"))
-        (responsev (make-symbol "responsev")))
-    `(let ((,responsev ,call)
-           (,status-codev ,status-code)
-           (,header-namev ,header-name)
-           (,header-valuev ,header-value)
-           (,header-listv ,header-list)
-           (,header-list-matchv ,header-list-match)
-           (,body-matchv ,body-match))
-       (when ,status-codev
-         (should
-          (equal
-           ,status-codev
-           (plist-get ,responsev :status))))
-       (when (or ,header-namev ,header-listv ,header-list-matchv)
-         (let ((hdr (plist-get ,responsev :header)))
-           (when ,header-namev
-             (if ,header-valuev
-                 (should
-                  (equal
-                   ,header-valuev
-                   (assoc-default ,header-namev hdr)))
-                 ;; Else we want to ensure the header isn't there
-                 (should
-                  (eq nil (assoc-default ,header-namev hdr)))))
-           (when ,header-listv
-             (loop for reqd-hdr in ,header-listv
-                do (should
-                    (equal
-                     (assoc-default (car reqd-hdr) hdr)
-                     (cdr reqd-hdr)))))
-           (when ,header-list-matchv
-             (loop for reqd-hdr in ,header-list-matchv
-                do (should
-                    (>=
-                     (string-match
-                      (cdr reqd-hdr)
-                      (assoc-default (car reqd-hdr) hdr)) 0))))))
-       (when ,body-matchv
-         (should-match
-          ,body-matchv
-          (plist-get ,responsev :result-string))))))
 
 (defvar elnode-handler-history '()
   "The history of handlers bound to servers.")
@@ -1432,7 +1341,7 @@ currently supported conversions are:
          (hdr (if (symbolp key)
                   (elnode/con-get httpcon :elnode-http-header-syms)
                   (elnode/con-get httpcon :elnode-http-header)))
-         (val (cdr (assoc key hdr))))
+         (val (cdr (assoc (downcase key) hdr))))
     (elnode/case convert
       (:time
        (when val
@@ -3250,10 +3159,7 @@ main `elnode-auth-db' is used."
   "Does the AUTH-TEST pass?
 
 The password is stored in the db hashed keyed by the USERNAME,
-this looks up and tests the hash.
-
-The AUTH-DB is an `db', by default it is
-`elnode-auth-db'"
+this looks up and tests the hash."
   (let ((token (elnode--auth-make-hash username password)))
     (equal token (funcall auth-test username))))
 
@@ -3295,10 +3201,11 @@ record.
 When the authentication test fails `elnode-auth-credentials'
 signal is raised.
 
-Takes optional AUTH-DB which is the database variable to
-use (which is `elnode-auth-db' by default) and LOGGEDIN-DB which
-is the logged-in state database to use and which is
-`elnode-loggedin-db' by default."
+Takes optional AUTH-TEST which is the test to check the username
+and password with. 
+
+LOGGEDIN-DB is the logged-in state database to use.  By default,
+this is `elnode-loggedin-db'."
   ;; FIXME - pass in the test function
   (if (elnode-auth-user-p username password :auth-test auth-test)
       (let* ((rndstr (format "%d" (random)))
@@ -3506,7 +3413,7 @@ the key \"token\" with a user's token.  Whatever else the alist
 contains is irrelevant."
   (let ((user (db-get username database)))
     (when user
-      (aget user "token"))))
+      (kva "token" user))))
 
 (defun* elnode-auth--make-login-handler
     (&key
@@ -3657,7 +3564,7 @@ SCHEME is the authentication scheme to use as defined by
   (let ((httpconv (make-symbol "httpconv")))
     `(let ((,httpconv ,httpcon))
        (if-elnode-auth ,httpconv ,scheme
-         ,@body
+         (progn ,@body)
          (let ((to
                 (cond
                   (;; We have a wrapper... other lists other
