@@ -1496,13 +1496,11 @@ USER-ALIST is an assoc list of username and passwords.
 Optionally allow the database to be specified with DB (the
 default is `elnode-auth-db')."
   (loop for pair in user-alist
-       do
+     do
        (db-put
         (car pair)
         `(("username" . ,(car pair))
-          ("token" . ,(elnode--auth-make-hash
-                       (car pair)
-                       (cdr pair))))
+          ("token" . ,(elnode--auth-make-hash (car pair) (cdr pair))))
         (or db elnode-auth-db))))
 
 (ert-deftest elnode-auth-user-p ()
@@ -1532,10 +1530,7 @@ authenticated."
          (auth-test
           (lambda (username)
             (elnode-auth-default-test username elnode-auth-db))))
-    ;; The only time we really need clear text passwords is when
-    ;; faking records for test
-    (elnode--auth-init-user-db '(("nferrier" . "password")
-                                 ("someuser" "secret")))
+    (elnode--auth-init-user-db '(("nferrier" . "password") ("someuser" "secret")))
     ;; Test a failure
     (should
      (equal "an error occured!"
@@ -1559,16 +1554,15 @@ authenticated."
          (auth-test
           (lambda (username)
             (elnode-auth-default-test username elnode-auth-db))))
-    ;; The only time we really need clear text passwords is when
-    ;; faking records for test
+    ;; Fake the db data
     (elnode--auth-init-user-db '(("nferrier" . "password") ("someuser" "secret")))
     ;; Now test
-    (let ((hash (elnode-auth-login
-                 "nferrier" "password" :auth-test auth-test)))
+    (let ((hash (elnode-auth-login "nferrier" "password" :auth-test auth-test)))
       (fakir-mock-process :httpcon ()
         (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
         (elnode/con-put :httpcon
-          :elnode-http-header `(("Cookie" . ,(concat "elnode-auth=nferrier::" hash))))
+          :elnode-http-header-syms
+          `((cookie . ,(concat "elnode-auth=nferrier::" hash))))
         (should (elnode-auth-cookie-check-p :httpcon))))
     ;; Test what happens without a cookie
     (let ((hash (elnode-auth-login
@@ -1576,7 +1570,8 @@ authenticated."
       (fakir-mock-process :httpcon ()
         (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
         (elnode/con-put :httpcon
-          :elnode-http-header `(("Referer" . "http://somehost.example.com")))
+          :elnode-http-header-syms 
+          `((referer . "http://somehost.example.com")))
         ;; The error should signal the cookie name
         (should-equal
          (condition-case token
@@ -1605,22 +1600,18 @@ authenticated."
   (declare (debug (sexp &rest form))
            (indent 1))
   `(noflet ((get-result (response)
-             (cadr (split-string (plist-get response :result-string) "\r\n\r\n"))))
-    (let* ((elnode-auth-db
-            (prog1
-                (db-make '(db-hash))
-              (elnode--auth-init-user-db
-               '(("nferrier" . "password")
-                 ("someuser" . "secret")))))
-           (elnode--defined-authentication-schemes (make-hash-table :test 'equal))
-           (token (elnode--auth-make-hash "nferrier" "password"))
-           (auth-hash (progn
-                        (elnode-defauth :if-auth-test :cookie-name "if-auth")
-                        (elnode-auth-login
-                         "nferrier" "password"
-                         :auth-test (lambda (username) token)))))
-      (with-elnode-mock-server ,handler
-        (progn ,@body)))))
+              (cadr (split-string (plist-get response :result-string) "\r\n\r\n"))))
+     (let* ((elnode-auth-db (db-make '(db-hash))))
+       (elnode--auth-init-user-db '(("nferrier" . "password") ("someuser" . "secret")))
+       (let ((elnode--defined-authentication-schemes (make-hash-table :test 'equal))
+             (token (elnode--auth-make-hash "nferrier" "password"))
+             (auth-hash (progn
+                          (elnode-defauth :if-auth-test :cookie-name "if-auth")
+                          (elnode-auth-login
+                           "nferrier" "password"
+                           :auth-test (lambda (username) token))))))
+       (with-elnode-mock-server ,handler
+         (progn ,@body)))))
 
 (ert-deftest elnode-if-auth ()
   "Basic auth test testing."

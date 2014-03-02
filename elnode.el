@@ -1373,7 +1373,7 @@ JUST-HOST return just the host-name part, dropping any port entirely."
 The list of cookies is an alist."
   (or
    (elnode/con-get httpcon :elnode-http-cookie-list)
-   (let* ((cookie-hdr (elnode-http-header httpcon "Cookie"))
+   (let* ((cookie-hdr (elnode-http-header httpcon 'Cookie))
           (lst (when cookie-hdr
                  (kvalist-sort
                   (mapcar
@@ -3289,7 +3289,7 @@ See `elnode-auth-cookie-check-p' for more details."
 (defun* elnode-auth-http-login (httpcon
                                 username password logged-in
                                 &key
-                                (cookie-name "elnodeauth")
+                                (cookie-name "elnode-auth")
                                 auth-test
                                 (loggedin-db elnode-loggedin-db))
   "Log the USERNAME in on the HTTPCON if PASSWORD is correct.
@@ -3356,7 +3356,7 @@ This function sends the contents of the custom variable
                                     sender target
                                     &key
                                     auth-test ; assert not nil?
-                                    (cookie-name "elnodeauth")
+                                    (cookie-name "elnode-auth")
                                     (loggedin-db elnode-loggedin-db))
   "An authentication handler implementation.
 
@@ -3421,7 +3421,7 @@ contains is irrelevant."
      (target "/login/")
      auth-test
      (auth-db elnode-auth-db) ; only used if the auth-test is not present
-     (cookie-name "elnodeauth")
+     (cookie-name "elnode-auth")
      (loggedin-db elnode-loggedin-db))
   "Make an `elnode-auth--login-handler', binding parameters."
   (lambda (httpcon)
@@ -3441,7 +3441,7 @@ contains is irrelevant."
                         (test :cookie)
                         auth-test
                         (auth-db 'elnode-auth-db)
-                        (cookie-name "elnodeauth")
+                        (cookie-name "elnode-auth")
                         (failure-type :redirect)
                         (redirect "/login/")
                         (sender 'elnode-auth-login-sender))
