@@ -725,21 +725,18 @@ a=1&b=hello"
 
 (ert-deftest elnode-test-cookies ()
   "Test that we can get all the cookies."
-  (fakir-mock-process :httpcon
-      ((:elnode-http-header
-        '(("Cookie" . "csrf=213u2132%20321412nsfnwlv; username=nicferrier"))))
+  (fakir-mock-process :httpcon ()
     (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
     (elnode/con-put :httpcon
-      :elnode-http-header 
-      '(("Cookie" . "csrf=213u2132%20321412nsfnwlv; username=nicferrier")))
+      :elnode-http-header-syms
+      '((cookie . "csrf=213u2132%20321412nsfnwlv; username=nicferrier")))
     (should
      (equal
       (elnode-http-cookies :httpcon)
       '(("csrf" . "213u2132 321412nsfnwlv")
         ("username" . "nicferrier")))))
   ;; Now with empty header
-  (fakir-mock-process :httpcon
-      ((:elnode-http-header '(("Content-type" . "text/xml"))))
+  (fakir-mock-process :httpcon ()
     (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
     (elnode/con-put :httpcon :elnode-http-header '(("Content-type" . "text/xml")))
     (should-not (elnode-http-cookies :httpcon))))
@@ -747,20 +744,17 @@ a=1&b=hello"
 (ert-deftest elnode-test-cookie ()
   "Test the cookie retrieval"
   ;; First test no cookie header
-  (fakir-mock-process :httpcon
-      ((:elnode-http-header '(("Referer" . "http://somehost.example/com"))))
+  (fakir-mock-process :httpcon ()
     (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
     (elnode/con-put :httpcon
-      :elnode-http-header '(( "Referer" . "http://somehost.example/com")))
+      :elnode-http-header-syms '((referer . "http://somehost.example/com")))
     (should-not (elnode-http-cookie :httpcon "username")))
   ;; Now do we have a cookie?
-  (fakir-mock-process :httpcon
-      ((:elnode-http-header
-        '(("Cookie" . "csrf=213u21321321412nsfnwlv; username=nicferrier"))))
+  (fakir-mock-process :httpcon ()
     (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
     (elnode/con-put :httpcon
-      :elnode-http-header
-      '(("Cookie" . "csrf=213u21321321412nsfnwlv; username=nicferrier")))
+      :elnode-http-header-syms
+      '((cookie . "csrf=213u21321321412nsfnwlv; username=nicferrier")))
     (should
      (equal
       (elnode-http-cookie :httpcon "username")
@@ -775,9 +769,7 @@ a=1&b=hello"
 
 Cookie lists are good fake up values for higher abstraction
 testing code so we specifically test that they work."
-  (fakir-mock-process :httpcon
-      ;; Define a cookie with a faked cookie list
-      ((:elnode-http-cookie-list '(("name" . "value"))))
+  (fakir-mock-process :httpcon ()
     (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
     (elnode/con-put :httpcon :elnode-http-cookie-list '(("name" . "value")))
     (should
@@ -785,13 +777,11 @@ testing code so we specifically test that they work."
       '("name" . "value")
       (elnode-http-cookie :httpcon "name"))))
   ;; Not sure about what the property should contain here...
-  (fakir-mock-process
-    :httpcon
-    ((:elnode-http-header
-      '(("Cookie" . "name=value; other=hello%20world"))))
+  (fakir-mock-process :httpcon ()
     (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
     (elnode/con-put :httpcon
-      :elnode-http-header '(("Cookie" . "name=value; other=hello%20world")))
+      :elnode-http-header-syms 
+      '((cookie . "name=value; other=hello%20world")))
     (elnode-http-cookie :httpcon "name")
     (should
      (equal
