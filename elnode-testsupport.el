@@ -231,6 +231,6 @@ whole body of the RESPONSE."
           (string-match ,body-matchv (plist-get ,responsev :result-string))))
        ,responsev)))
 
-  (provide 'elnode-testsupport))
+(provide 'elnode-testsupport)
 
 ;;; elnode-testsupport.el ends here
