@@ -3110,7 +3110,7 @@ implementations.")
 (defvar elnode-secret-key "secret"
   "Secret key used to hash secrets like passwords.")
 
-(defun elnode--auth-make-hash (username password)
+(defun elnode-auth-make-hash (username password)
   "Hash the secret key and the USERNAME and PASSWORD."
   (sha1 (format "%s:%s:%s"
                 elnode-secret-key
@@ -3146,8 +3146,7 @@ main `elnode-auth-db' is used."
     (setq auth-db 'elnode-auth-db))
   (db-put
    username
-   `(("token" . ,(elnode--auth-make-hash
-                  username password))
+   `(("token" . ,(elnode-auth-make-hash username password))
      ("username" . ,username))
    (symbol-value auth-db))
   (message "username is %s" username))
@@ -3160,7 +3159,7 @@ main `elnode-auth-db' is used."
 
 The password is stored in the db hashed keyed by the USERNAME,
 this looks up and tests the hash."
-  (let ((token (elnode--auth-make-hash username password)))
+  (let ((token (elnode-auth-make-hash username password)))
     (equal token (funcall auth-test username))))
 
 

@@ -1483,7 +1483,7 @@ default is `elnode-auth-db')."
        (db-put
         (car pair)
         `(("username" . ,(car pair))
-          ("token" . ,(elnode--auth-make-hash (car pair) (cdr pair))))
+          ("token" . ,(elnode-auth-make-hash (car pair) (cdr pair))))
         (or db elnode-auth-db))))
 
 (ert-deftest elnode-auth-user-p ()
@@ -1587,7 +1587,7 @@ authenticated."
      (let* ((elnode-auth-db (db-make '(db-hash))))
        (elnode--auth-init-user-db '(("nferrier" . "password") ("someuser" . "secret")))
        (let ((elnode--defined-authentication-schemes (make-hash-table :test 'equal))
-             (token (elnode--auth-make-hash "nferrier" "password"))
+             (token (elnode-auth-make-hash "nferrier" "password"))
              (auth-hash (progn
                           (elnode-defauth :if-auth-test :cookie-name "if-auth")
                           (elnode-auth-login
