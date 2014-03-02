@@ -854,8 +854,7 @@ parsing. That checks the ':elnode-http-method':
   ':elnode-http-query'.
 
 *** WARNING:: This test so far only handles GET ***"
-  (fakir-mock-process :httpcon
-      ()
+  (fakir-mock-process :httpcon ()
     (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
     (elnode/con-put :httpcon
       :elnode-http-params nil
@@ -863,10 +862,7 @@ parsing. That checks the ':elnode-http-method':
       :elnode-http-query "a=10")
     (should (equal "10" (elnode-http-param :httpcon "a"))))
   ;; Test some more complex params
-  (fakir-mock-process :httpcon
-      (:elnode-http-params
-       (:elnode-http-method "GET")
-       (:elnode-http-query "a=10&b=lah+dee+dah&c+a=blah+blah"))
+  (fakir-mock-process :httpcon ()
     (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
     (elnode/con-put :httpcon
       :elnode-http-params nil
@@ -876,10 +872,7 @@ parsing. That checks the ':elnode-http-method':
     (should (equal "lah dee dah" (elnode-http-param :httpcon 'b)))
     (should (equal "blah blah" (elnode-http-param :httpcon "c a"))))
   ;; Test the filtering
-  (fakir-mock-process :httpcon
-      (:elnode-http-params
-       (:elnode-http-method "GET")
-       (:elnode-http-query "a=10&b=lah+dee+dah&d=blah+blah"))
+  (fakir-mock-process :httpcon ()
     (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
     (elnode/con-put :httpcon
       :elnode-http-params nil
