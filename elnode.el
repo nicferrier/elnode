@@ -3534,7 +3534,7 @@ Otherwise do BODY."
 
 If the auth fails then evaluate ANONYMOUS instead.
 
-When evaling AUTHD the `:username' property of the process is set
+When evaling AUTHD the `:auth-username' property of the process is set
 to the user who authenticated."
   (declare
    (debug (sexp sexp sexp &rest form))
@@ -3550,7 +3550,7 @@ to the user who authenticated."
                       (elnode-auth-cookie-check
                        ,httpconv
                        :cookie-name (plist-get scheme-list :cookie-name))))
-                 (elnode/con-put ,httpconv :username username)
+                 (elnode/con-put ,httpconv :auth-username username)
                  ;; Do whatever the code was now.
                  ,authd)
              ;; On auth failure do the ELSE
