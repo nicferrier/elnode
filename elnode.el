@@ -3529,6 +3529,9 @@ Otherwise do BODY."
            ;; Else do whatever the body was
            ,@body))))
 
+(defun elnode-auth-username (httpcon)
+  (elnode/con-get httpcon :auth-username))
+
 (defmacro if-elnode-auth (httpcon scheme authd &rest anonymous)
   "Check the HTTPCON for SCHEME auth and eval AUTHD.
 
