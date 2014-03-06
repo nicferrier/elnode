@@ -3229,9 +3229,12 @@ this is `elnode-loggedin-db'."
   "Check login status of the USERNAME against the hashed TOKEN.
 
 Optionally use the LOGGEDIN-DB supplied.  By default this is
-`elnode-loggedin-db'."
+`elnode-loggedin-db'.
+
+Returns USERNAME if true and `nil' if not it fails."
   (let ((record (gethash username loggedin-db)))
-    (equal token (plist-get record :hash))))
+    (when (equal token (plist-get record :hash))
+      username)))
 
 (defun elnode-auth-cookie-decode (cookie-value)
   "Decode an encoded elnode auth COOKIE-VALUE."
@@ -3258,29 +3261,34 @@ The name of the cookie can be supplied with :COOKIE-NAME - by
 default is is \"elnode-auth\".
 
 LOGGEDIN-DB can be a loggedin state database which is a
-hash-table.  By default it is `elnode-loggedin-db'."
+hash-table.  By default it is `elnode-loggedin-db'.
+
+Returns the username that authenticated or `nil' if it did not or
+signal's an `elnode-auth-token' error with the COOKIE-NAME if
+that cookie was not found."
   (let ((cookie-cons (elnode-auth-get-cookie-value
                       httpcon :cookie-name cookie-name)))
     (if (not cookie-cons)
         (signal 'elnode-auth-token cookie-name)
         (let ((username (car cookie-cons))
               (token (cdr cookie-cons)))
-          (elnode-auth-check-p
-           username token :loggedin-db loggedin-db)))))
+          (elnode-auth-check-p username token :loggedin-db loggedin-db)))))
 
 (defun* elnode-auth-cookie-check (httpcon
                                   &key
                                   (cookie-name "elnode-auth")
                                   (loggedin-db elnode-loggedin-db))
-  "Signal on cookie failure.
+  "Check the COOKIE-NAME has a loggedin cookie in LOGGEDIN-DB.
+
+Signals `elnode-auth-token' on cookie or authentication failure.
 
 See `elnode-auth-cookie-check-p' for more details."
-  (unless (elnode-auth-cookie-check-p
-           httpcon
-           :cookie-name cookie-name
-           :loggedin-db loggedin-db)
-    ;; Not sure this is the correct token...
-    (signal 'elnode-auth-token :not-logged-in)))
+  (or (elnode-auth-cookie-check-p
+       httpcon
+       :cookie-name cookie-name
+       :loggedin-db loggedin-db)
+      ;; Not sure this is the correct token...
+      (signal 'elnode-auth-token :not-logged-in)))
 
 (defvar elnode-auth-httpcon nil
   "Dynamic scope variable for HTTP con while we auth.")
@@ -3524,7 +3532,10 @@ Otherwise do BODY."
 (defmacro if-elnode-auth (httpcon scheme authd &rest anonymous)
   "Check the HTTPCON for SCHEME auth and eval AUTHD.
 
-If the auth fails then evaluate ANONYMOUS instead."
+If the auth fails then evaluate ANONYMOUS instead.
+
+When evaling AUTHD the `:username' property of the process is set
+to the user who authenticated."
   (declare
    (debug (sexp sexp sexp &rest form))
    (indent 2))
@@ -3535,17 +3546,17 @@ If the auth fails then evaluate ANONYMOUS instead."
                      elnode--defined-authentication-schemes)))
        (if (eq :cookie (plist-get scheme-list :test))
            (condition-case token
-               (progn
-                 (elnode-auth-cookie-check
-                  ,httpconv
-                  :cookie-name (plist-get scheme-list :cookie-name))
+               (let ((username
+                      (elnode-auth-cookie-check
+                       ,httpconv
+                       :cookie-name (plist-get scheme-list :cookie-name))))
+                 (elnode/con-put ,httpconv :username username)
                  ;; Do whatever the code was now.
                  ,authd)
              ;; On auth failure do the ELSE
-             (elnode-auth-token
-              (progn ,@anonymous)))
+             (elnode-auth-token (progn ,@anonymous)))
            ;; Not a cookie test - not sure what to do...
-           (message "ELNODE AUTH IF - NOT COOKIE!")))))
+           (error 'elnode-not-a-cookie)))))
 
 (defmacro with-elnode-auth (httpcon scheme &rest body)
   "Protect code with authentication using HTTPCON and SCHEME.
