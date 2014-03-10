@@ -3540,7 +3540,7 @@ If the auth fails then evaluate ANONYMOUS instead.
 When evaling AUTHD the `:auth-username' property of the process is set
 to the user who authenticated."
   (declare
-   (debug (sexp sexp sexp &rest form))
+   (debug (sexp sexp form body))
    (indent 2))
   (let ((httpconv (make-symbol "httpconv")))
     `(let ((,httpconv ,httpcon)
@@ -3571,9 +3571,8 @@ login page.
 
 SCHEME is the authentication scheme to use as defined by
 `elnode-auth-define-scheme'."
-  (declare
-   (debug (sexp sexp &rest form))
-   (indent 2))
+  (declare (debug (sexp sexp body))
+           (indent 2))
   (let ((httpconv (make-symbol "httpconv")))
     `(let ((,httpconv ,httpcon))
        (if-elnode-auth ,httpconv ,scheme
