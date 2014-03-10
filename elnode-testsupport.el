@@ -1,4 +1,4 @@
-;;; test support functions for elnode
+;;; test support functions for elnode   -*- lexical-binding: t -*-
 
 (require 'noflet)
 (require 'ert)
