@@ -1529,6 +1529,19 @@ authenticated."
                  "nferrier" "password" :auth-test auth-test)))
       (should (elnode-auth-check-p "nferrier" hash)))))
 
+(ert-deftest elnode-auth-cookie-value ()
+  (let* ((elnode-loggedin-db (make-hash-table :test 'equal)))
+    (fakir-mock-process :httpcon ()
+      (noflet ((elnode-auth-get-cookie-value (httpcon :cookie-name cookie-name)
+                 (cons "nic" "blah")))
+        (with-elnode-auth :httpcon 'marmalade-auth
+          ;; Nil first...
+          (should-not (elnode-auth-cookie-check :httpcon :cookie-name "blah"))
+          ;;; ... then the username
+          (should
+           (equal (elnode-auth-cookie-check :httpcon :cookie-name "blah")
+                  "nic")))))))
+
 (ert-deftest elnode-auth-cookie-check-p ()
   "Check that a cookie can be used for auth."
   (let* ((elnode-loggedin-db (make-hash-table :test 'equal))
