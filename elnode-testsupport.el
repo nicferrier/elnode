@@ -48,16 +48,19 @@ Note the first parameter is an improper list.
 PARAM-BINDINGS should be quoted."
   (declare (indent 2)
            (debug (sexp sexp &rest form)))
-  `(let ((,httpcon ,params-list))
-     (noflet ((elnode-http-param (httpc param-name)
-                (if (eq httpc ,httpcon)
-                    (let ((v (kva param-name ,httpcon)))
-                      (cond
-                        ((listp v)
-                         (apply 'propertize (car v) (cdr v)))
-                        (t v)))
-                    (funcall this-fn httpcon param-name))))
-       ,@body)))
+  (let ((httpconv (make-symbol "httpconv"))
+        (paramsv (make-symbol "paramsv")))
+    `(let ((,httpconv ,httpcon)
+           (,paramsv ,params-list))
+       (noflet ((elnode-http-param (httpc param-name)
+                  (if (eq httpc ,httpcon)
+                      (let ((v (kva param-name ,paramsv)))
+                        (cond
+                          ((listp v)
+                           (apply 'propertize (car v) (cdr v)))
+                          (t v)))
+                      (funcall this-fn httpcon param-name))))
+         ,@body))))
 
 
 ;; Extensions to ert
