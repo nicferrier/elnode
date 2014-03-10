@@ -3272,14 +3272,14 @@ that cookie was not found."
                       httpcon :cookie-name cookie-name)))
     (if (not cookie-cons)
         (signal 'elnode-auth-token cookie-name)
+        ;; Else check the username and token
         (let ((username (car cookie-cons))
               (token (cdr cookie-cons)))
           (elnode-auth-check-p username token :loggedin-db loggedin-db)))))
 
-(defun* elnode-auth-cookie-check (httpcon
-                                  &key
-                                  (cookie-name "elnode-auth")
-                                  (loggedin-db elnode-loggedin-db))
+(defun* elnode-auth-cookie-check (httpcon &key
+                                          (cookie-name "elnode-auth")
+                                          (loggedin-db elnode-loggedin-db))
   "Check the COOKIE-NAME has a loggedin cookie in LOGGEDIN-DB.
 
 Signals `elnode-auth-token' on cookie or authentication failure.
@@ -3552,10 +3552,9 @@ to the user who authenticated."
                      elnode--defined-authentication-schemes)))
        (if (eq :cookie (plist-get scheme-list :test))
            (condition-case token
-               (let ((username
-                      (elnode-auth-cookie-check
-                       ,httpconv
-                       :cookie-name (plist-get scheme-list :cookie-name))))
+               (let* ((cookie (plist-get scheme-list :cookie-name))
+                      (username
+                       (elnode-auth-cookie-check ,httpconv :cookie-name cookie)))
                  (elnode/con-put ,httpconv :auth-username username)
                  ;; Do whatever the code was now.
                  ,authd)
