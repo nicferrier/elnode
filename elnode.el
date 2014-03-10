@@ -3237,7 +3237,9 @@ Returns USERNAME if true and `nil' if not it fails."
       username)))
 
 (defun elnode-auth-cookie-decode (cookie-value)
-  "Decode an encoded elnode auth COOKIE-VALUE."
+  "Decode an encoded elnode auth COOKIE-VALUE.
+
+Returns a cons of `username' and `token'"
   (when (string-match "\\(.*\\)::\\(.*\\)" cookie-value)
     (cons (match-string 1 cookie-value)
           (match-string 2 cookie-value))))
