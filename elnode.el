@@ -2595,7 +2595,7 @@ WARNING: this resolution order is likely to change because,
 especially when developing `default-directory' can be quite
 random (change buffer, change `default-directory').
 
-Optionally you may specify extra keyword arguments:t
+Optionally you may specify extra keyword arguments:
 
 :PREAMBLE a string of data to send before the file.
 
