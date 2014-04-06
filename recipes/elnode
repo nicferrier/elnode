@@ -14,7 +14,7 @@
  ("elnode.el" 
   "elnode-compat.el"
   "elnode-lists.el"
-  "elnode-rle.el"
+  "elnode-js.el"
   "elnode-tools.el"
   "elnode-wiki.el"
   "elnode-proxy.el"

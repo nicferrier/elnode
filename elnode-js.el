@@ -78,8 +78,8 @@ that works inside the browser."
            (expand-file-name "~/work/bwinparty/cards")
            (elnode-http-pathinfo httpcon)))))))
 
-(elnode-start 'elnode-js-handler-demo :port 8102)
-;;(elnode-stop 8102)
+;; (elnode-start 'elnode-js-handler-demo :port 8102)
+;; (elnode-stop 8102)
 
 (provide 'elnode-js)
 
