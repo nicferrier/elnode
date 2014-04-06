@@ -2622,12 +2622,10 @@ variables are bound during the function's execution
 delivered."
   (let ((filename
          (if (not (file-name-absolute-p targetfile))
-             (file-relative-name
-              targetfile
-              (let ((dir (or load-file-name buffer-file-name)))
-                (if dir
-                    (directory-file-name dir)
-                  default-directory)))
+             (let ((dir (or load-file-name buffer-file-name)))
+               (file-relative-name
+                targetfile
+                (if dir (directory-file-name dir) default-directory)))
            targetfile)))
     (if (not (file-exists-p filename))
         ;; FIXME: This needs improving so we can handle the 404
