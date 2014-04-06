@@ -69,6 +69,7 @@ that works inside the browser."
       (elnode-child-process httpcon program (concat docroot path)))))
 
 (defun elnode-js-handler-demo (httpcon)
+  "A demonstration server for browserify support."
   (elnode-hostpath-dispatcher
    httpcon
    '(("^[^/]*//scripts/example.js"
