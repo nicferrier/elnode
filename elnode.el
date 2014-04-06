@@ -2631,38 +2631,38 @@ delivered."
         ;; FIXME: This needs improving so we can handle the 404
         ;; This function should raise an exception?
         (elnode-send-404 httpcon)
-      (let ((mimetype
-             (or (when (listp mime-types)
-                   (car (rassoc
-                         (file-name-extension targetfile)
-                         mime-types)))
-                 (mm-default-file-encoding targetfile)
-                 "application/octet-stream")))
-        (elnode-http-start
-         httpcon 200
-         `("Content-type" . ,mimetype)
-         `("Last-Modified" . ,(elnode--rfc1123-date
-                               (elnode--file-modified-time targetfile))))
-        (when preamble (elnode-http-send-string httpcon preamble))
-        (if (or elnode-webserver-visit-file replacements)
-            (elnode-http-return
-             httpcon
-             (if replacements
-                 (elnode--buffer-template
-                  (find-file-noselect filename)
-                  ;; Replacements handling
-                  (if (functionp replacements)
-                      (let ((elnode-replacements-httpcon httpcon)
-                            (elnode-replacements-targetfile targetfile))
-                        (funcall replacements))
-                      replacements))
-                 (with-temp-buffer 
-                   (insert-file-contents-literally filename)
-                   (buffer-string))))
-            (elnode-child-process
-             httpcon
-             elnode-send-file-program
-             (expand-file-name targetfile)))))))
+        (let ((mimetype
+               (or (when (listp mime-types)
+                     (car (rassoc
+                           (file-name-extension targetfile)
+                           mime-types)))
+                   (mm-default-file-encoding targetfile)
+                   "application/octet-stream")))
+          (elnode-http-start
+           httpcon 200
+           `("Content-type" . ,mimetype)
+           `("Last-Modified" . ,(elnode--rfc1123-date
+                                 (elnode--file-modified-time targetfile))))
+          (when preamble (elnode-http-send-string httpcon preamble))
+          (if (or elnode-webserver-visit-file replacements)
+              (elnode-http-return
+               httpcon
+               (if replacements
+                   (elnode--buffer-template
+                    (find-file-noselect filename)
+                    ;; Replacements handling
+                    (if (functionp replacements)
+                        (let ((elnode-replacements-httpcon httpcon)
+                              (elnode-replacements-targetfile targetfile))
+                          (funcall replacements))
+                        replacements))
+                   (with-temp-buffer 
+                     (insert-file-contents-literally filename)
+                     (buffer-string))))
+              (elnode-child-process
+               httpcon
+               elnode-send-file-program
+               (expand-file-name targetfile)))))))
 
 (defmacro elnode-method (httpcon &rest method-mappings)
   "Map the HTTP method.
