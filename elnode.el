@@ -3025,9 +3025,10 @@ request does not go above the DOCROOT."
   (let ((my-docroot (or docroot elnode-webserver-docroot))
         (my-mime-types (or extra-mime-types
                            elnode-webserver-extra-mimetypes)))
-    (lambda (httpcon)
-      (elnode--webserver-handler-proc
-       httpcon my-docroot my-mime-types))))
+    `(lambda (httpcon)
+       ,(format "Webserver serving files on %s" my-docroot)
+       (elnode--webserver-handler-proc
+        httpcon my-docroot my-mime-types))))
 
 
 (defvar elnode--make-webserver-store nil
