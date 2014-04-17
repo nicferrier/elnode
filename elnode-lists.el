@@ -122,7 +122,7 @@
       'elnode-lists-kill-server)
     (setq tabulated-list-format
           [("Port" 10 nil)
-           ("Handler function" 40 nil)
+           ("Handler function" 20 nil)
            ("Documentation" 80 nil)])
     (tabulated-list-init-header))
 
