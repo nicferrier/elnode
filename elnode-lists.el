@@ -73,7 +73,7 @@
        collect
          (list
           port
-          (let* ((fn (process-get socket-proc :elnode-http-handler))
+          (let* ((fn (elnode/con-lookup socket-proc :elnode-http-handler))
                  (doc (when (functionp fn)
                         (documentation fn))))
             (vector
