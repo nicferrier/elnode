@@ -3110,7 +3110,15 @@ implementations.")
   "Secret key used to hash secrets like passwords.")
 
 (defun elnode-auth-make-hash (username password)
-  "Hash the secret key and the USERNAME and PASSWORD."
+  "Hash the `elnode-secret-key' and the USERNAME and PASSWORD.
+
+This is not an ideal hashing function because `elnode-secret-key'
+is not very customizable.  We need to find a way of making a
+secret key per elnode app and communicating that to this kind of function.
+
+It is possible to use a different hashing function when you
+define an elnode-auth scheme and that's probably the best way to
+do it right now."
   (sha1 (format "%s:%s:%s"
                 elnode-secret-key
                 username
@@ -3153,12 +3161,21 @@ main `elnode-auth-db' is used."
 (defun* elnode-auth-user-p (username
                             password
                             &key
-                            auth-test)
+                            auth-test
+                            (make-hash 'elnode-auth-make-hash))
   "Does the AUTH-TEST pass?
 
 The password is stored in the db hashed keyed by the USERNAME,
-this looks up and tests the hash."
-  (let ((token (elnode-auth-make-hash username password)))
+this looks up and tests the hash.
+
+MAKE-HASH is `elnode-auth-make-hash' by default.  It takes a
+username and password and returns a token.  Implementing a
+different function can implement different hashing algorithms.
+
+AUTH-TEST is passed a username and must return a token.
+AUTH-TEST can be used to change the hashed token lookup to find
+the token in a particular database."
+  (let ((token (funcall make-hash username password)))
     (equal token (funcall auth-test username))))
 
 
@@ -3189,6 +3206,7 @@ See `elnode-auth-login' for how this is updated.")
                            password
                            &key
                            auth-test
+                           make-hash
                            (loggedin-db elnode-loggedin-db))
   "Log a user in.
 
@@ -3199,13 +3217,16 @@ record.
 When the authentication test fails `elnode-auth-credentials'
 signal is raised.
 
-Takes optional AUTH-TEST which is the test to check the username
-and password with. 
+The optional AUTH-TEST which is the test to check the username
+and password with.  It is passed to `elnode-auth-user-p'.
+
+The optional MAKE-HASH is a hash generation function passed to
+`elnode-auth-user-p'.
 
 LOGGEDIN-DB is the logged-in state database to use.  By default,
 this is `elnode-loggedin-db'."
-  ;; FIXME - pass in the test function
-  (if (elnode-auth-user-p username password :auth-test auth-test)
+  (if (elnode-auth-user-p username password
+                          :auth-test auth-test :make-hash make-hash)
       (let* ((rndstr (format "%d" (random)))
              (hash (sha1 (format "%s:%s:%s"
                                  username
@@ -3299,6 +3320,7 @@ See `elnode-auth-cookie-check-p' for more details."
                                 &key
                                 (cookie-name "elnode-auth")
                                 auth-test
+                                make-hash
                                 (loggedin-db elnode-loggedin-db))
   "Log the USERNAME in on the HTTPCON if PASSWORD is correct.
 
@@ -3309,12 +3331,16 @@ Actually uses `elnode-auth-login' to do the assertion.
 `elnode-auth-credentials' is signaled by that if the assertion fails.
 
 AUTH-DB is a database, by default `elnode-auth-db', it's passed
-to `elnode-auth-login'."
+to `elnode-auth-login'.
+
+AUTH-TEST and MAKE-HASH are both optional and passed down to
+`elnode-auth-user-p' if they exist."
   (let* ((elnode-auth-httpcon httpcon)
          (hash
           (elnode-auth-login
            username password
            :auth-test auth-test
+           :make-hash make-hash
            :loggedin-db loggedin-db)))
     (elnode-http-header-set
      httpcon
@@ -3364,6 +3390,7 @@ This function sends the contents of the custom variable
                                     sender target
                                     &key
                                     auth-test ; assert not nil?
+                                    make-hash
                                     (cookie-name "elnode-auth")
                                     (loggedin-db elnode-loggedin-db))
   "An authentication handler implementation.
@@ -3381,7 +3408,13 @@ be used to HTTP redirect the user-agent on successful
 authentication.
 
 TARGET is the path that will be used as the login handler
-path (the path to call this handler)."
+path (the path to call this handler).
+
+AUTH-TEST checks the hashed details of the user's password and is
+passed to `elnode-auth-user-p'.
+
+MAKE-HASH is optional and passed down to `elnode-auth-user-p' if
+present."
   (elnode-method httpcon
       (GET
        (funcall sender httpcon target
@@ -3395,6 +3428,7 @@ path (the path to call this handler)."
             httpcon
             username password logged-in
             :auth-test auth-test
+            :make-hash make-hash
             :cookie-name cookie-name)
          (elnode-auth-credentials
           (elnode-send-redirect
@@ -3423,14 +3457,15 @@ contains is irrelevant."
     (when user
       (kva "token" user))))
 
-(defun* elnode-auth--make-login-handler
-    (&key
-     (sender 'elnode-auth-login-sender)
-     (target "/login/")
-     auth-test
-     (auth-db elnode-auth-db) ; only used if the auth-test is not present
-     (cookie-name "elnode-auth")
-     (loggedin-db elnode-loggedin-db))
+(defun* elnode-auth--make-login-handler (&key
+                                         (sender 'elnode-auth-login-sender)
+                                         (target "/login/")
+                                         auth-test
+                                         make-hash
+                                         ;; only used if the auth-test is not present
+                                         (auth-db elnode-auth-db) 
+                                         (cookie-name "elnode-auth")
+                                         (loggedin-db elnode-loggedin-db))
   "Make an `elnode-auth--login-handler', binding parameters."
   (lambda (httpcon)
     (elnode-auth--login-handler
@@ -3441,6 +3476,7 @@ contains is irrelevant."
                     auth-test
                     (lambda (username)
                       (elnode-auth-default-test username auth-db)))
+     :make-hash (when (functionp make-hash) make-hash)
      :cookie-name cookie-name
      :loggedin-db loggedin-db)))
 
@@ -3448,6 +3484,7 @@ contains is irrelevant."
                         &key
                         (test :cookie)
                         auth-test
+                        make-hash
                         (auth-db 'elnode-auth-db)
                         (cookie-name "elnode-auth")
                         (failure-type :redirect)
@@ -3467,8 +3504,16 @@ COOKIE-NAME is used when the TEST is `:cookie'.  It is the name
 of the cookie to use for authentication.  By default this is
 `elnode-auth'.  It must be specified as a string.
 
-AUTH-TEST is a function to implement retrieval of users.  It can
-be nil in which case a default based on AUTH-DB will be used.
+AUTH-TEST is a function to implement checking authentiation of
+users.  It is passed a username and must respond with a token
+that can be checked against the value returned by the hashing
+function (see MAKE-HASH and `elnode-auth-make-hash' which is the
+default hashing function).  AUTH-TEST can be nil in which case a
+default based on AUTH-DB will be used.
+
+MAKE-HASH is a function to implement the construction of a hash
+token for authentication.  It takes a username and password and
+must produce the same value as AUTH-TEST.
 
 AUTH-DB is the `db' used for authentication information.
 It is used as the authority of information on users.  By default
@@ -3492,6 +3537,7 @@ want to totally change the login page."
                          :sender sender
                          :target redirect
                          :auth-test auth-test
+                         :make-hash make-hash
                          :auth-db auth-db
                          :cookie-name cookie-name))
          (auth-scheme (list
