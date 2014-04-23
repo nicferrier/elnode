@@ -1599,24 +1599,39 @@ authenticated."
               (cadr (split-string (plist-get response :result-string) "\r\n\r\n"))))
      (let* ((elnode-auth-db (db-make '(db-hash))))
        (elnode--auth-init-user-db '(("nferrier" . "password") ("someuser" . "secret")))
-       (let ((elnode--defined-authentication-schemes (make-hash-table :test 'equal))
-             (token (elnode-auth-make-hash "nferrier" "password"))
-             (auth-hash (progn
-                          (elnode-defauth :if-auth-test :cookie-name "if-auth")
-                          (elnode-auth-login
-                           "nferrier" "password"
-                           :auth-test (lambda (username) token))))))
-       (with-elnode-mock-server ,handler
-         (progn ,@body)))))
+       (let* ((elnode--defined-authentication-schemes (make-hash-table :test 'equal))
+              (token (elnode-auth-make-hash "nferrier" "password"))
+              (auth-hash (progn
+                           (elnode-defauth :if-auth-test :cookie-name "if-auth")
+                           (elnode-auth-login
+                            "nferrier" "password"
+                            :auth-test (lambda (username) token)))))
+         (with-elnode-mock-server ,handler
+           (progn ,@body))))))
 
 (ert-deftest elnode-if-auth ()
   "Basic auth test testing."
   (elnode--auth-state
       (lambda (httpcon)
         (elnode-http-start httpcon 200 '(Content-type . "text/plain"))
-        (if-elnode-auth httpcon :if-auth-test
-          (elnode-http-return httpcon "done")
-          (elnode-http-return httpcon "bad")))
+        (let
+            ((httpconv httpcon)
+             (scheme-list
+              (gethash :if-auth-test elnode--defined-authentication-schemes)))
+          (if (eq :cookie (plist-get scheme-list :test))
+              (condition-case token
+                  (let*
+                      ((cookie
+                        (plist-get scheme-list :cookie-name))
+                       (username
+                        (elnode-auth-cookie-check httpconv :cookie-name cookie)))
+                    (elnode/con-put httpconv :auth-username username)
+                    (elnode-http-return httpcon "done"))
+                (elnode-auth-token
+                 (progn
+                   (elnode-http-return httpcon "bad"))))
+              ;; Else ...
+              (error 'elnode-not-a-cookie))))
     ;; need one call without a cookie
     (should
      (assert-elnode-response
