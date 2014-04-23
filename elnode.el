@@ -3175,7 +3175,8 @@ different function can implement different hashing algorithms.
 AUTH-TEST is passed a username and must return a token.
 AUTH-TEST can be used to change the hashed token lookup to find
 the token in a particular database."
-  (let ((token (funcall make-hash username password)))
+  (let ((token (funcall (or make-hash 'elnode-auth-make-hash)
+                        username password)))
     (equal token (funcall auth-test username))))
 
 
