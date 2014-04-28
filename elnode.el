@@ -1498,17 +1498,14 @@ will do:
   "Crap parser for HTTP QUERY data.
 
 Returns an association list."
-  (let ((alist (mapcar
-                (lambda (nv)
-                  (if (string-match "\\([^=]+\\)\\(=\\(.*\\)\\)*" nv)
-                      (cons
-                       (elnode--http-param-part-decode (match-string 1 nv))
-                       (if (match-string 2 nv)
-                           (elnode--http-param-part-decode (match-string 3 nv))
-                         nil))))
-                (split-string query "&"))
-               ))
-    alist))
+  (--map
+   (if (string-match "\\([^=]+\\)\\(=\\(.*\\)\\)*" it)
+       (cons
+        (elnode--http-param-part-decode (match-string 1 it))
+        (if (match-string 2 it)
+            (elnode--http-param-part-decode (match-string 3 it))
+            nil)))
+   (split-string query "&")))
 
 (defun elnode--alist-merge (a b &optional operator)
   "Merge two association lists non-destructively.
