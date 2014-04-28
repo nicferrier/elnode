@@ -1588,6 +1588,15 @@ A is considered the priority (its elements go in first)."
         (hdr-end-pt (elnode/con-get httpcon :elnode-header-end)))
     (elnode--http-mp-decode buf hdr-end-pt boundary)))
 
+(defun elnode--http-post-body (httpcon)
+  "Get the HTTP POST body."
+  (with-current-buffer (process-buffer httpcon)
+    ;; (buffer-substring (point-min) (point-max)) ;debug
+    (buffer-substring
+     ;; we might have to add 2 to this because of trailing \r\n
+     (elnode/con-get httpcon :elnode-header-end)
+     (point-max))))
+
 (defun elnode--http-post-to-alist (httpcon)
   "Parse the POST body."
   ;; FIXME: this is ONLY a content length header parser -- it should
@@ -1599,13 +1608,7 @@ A is considered the priority (its elements go in first)."
     (if (equal "multipart/form-data" (car parsed-type))
         (elnode--http-post-mp-decode httpcon parsed-type)
         ;; Else it's a non-multipart request
-        (elnode--http-query-to-alist
-         (with-current-buffer (process-buffer httpcon)
-           ;; (buffer-substring (point-min) (point-max)) ;debug
-           (buffer-substring
-            ;; we might have to add 2 to this because of trailing \r\n
-            (elnode/con-get httpcon :elnode-header-end)
-            (point-max)))))))
+        (elnode--http-query-to-alist (elnode--http-post-body httpcon)))))
 
 (defun elnode-http-params (httpcon &rest names)
   "Get an alist of the parameters in the request.
