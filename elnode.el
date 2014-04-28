@@ -3229,10 +3229,8 @@ this is `elnode-loggedin-db'."
   (if (elnode-auth-user-p username password
                           :auth-test auth-test :make-hash make-hash)
       (let* ((rndstr (format "%d" (random)))
-             (hash (sha1 (format "%s:%s:%s"
-                                 username
-                                 rndstr
-                                 elnode-secret-key)))
+             (str (format "%s:%s:%s" username rndstr elnode-secret-key))
+             (hash (sha1 str))
              (user-record
               (list
                :user username
