@@ -123,7 +123,11 @@ server with:
 There may be many things that a full proxy does that this does
 not do however.
 
-Reverse proxying is a simpler and perhaps more useful."
+Reverse proxying is a simpler and perhaps more useful.
+
+Proxying is a form of shortcut evaluation.  This function returns
+having bound it's HTTP connection paremeter to a process which
+will deliver the content from the downstream HTTP connection."
   (lambda (httpcon)
     (elnode-proxy-do httpcon url)))
 
@@ -183,7 +187,10 @@ If the HTTPCON comes from a proxy (detected by checking the
 location is sent.
 
 Alternately it sets up a direct proxy call to the current server
-for the location."
+for the location.  So, either way, this call causes a shortcut
+evaluation.  Either the upstream proxy server handles the request
+or we return having bound the current HTTPCON to an internal
+proxy connection."
   (if (and (elnode-http-header httpcon "X-Forwarded-For")
            (not (equal
                  "elnode/web"
