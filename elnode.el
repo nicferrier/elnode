@@ -3576,7 +3576,7 @@ Otherwise do BODY."
            ,@body))))
 
 (defun elnode-auth-username (httpcon)
-  "Return the username currently assocuated to the HTTPCON."
+  "Return the username currently associated to the HTTPCON."
   (elnode/con-get httpcon :auth-username))
 
 (defmacro if-elnode-auth (httpcon scheme authd &rest anonymous)
