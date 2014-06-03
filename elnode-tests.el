@@ -281,6 +281,23 @@ is just a test helper."
         (elnode--deferred-processor))
       (should (equal 0 (length elnode--deferred))))))
 
+(ert-deftest elnode--http-parse-status-line-rx ()
+  "Prove different status lines."
+  (assert (string-match-p elnode--http-status-line-rx "GET / HTTP/1.1"))
+  (assert (string-match-p elnode--http-status-line-rx "POST / HTTP/1.1"))
+  (assert (string-match-p elnode--http-status-line-rx "POST /abc HTTP/1.1"))
+  (assert (string-match-p elnode--http-status-line-rx "DELETE /abc HTTP/1.1"))
+  (assert (string-match-p elnode--http-status-line-rx "PUT /abc HTTP/1.1"))
+  (assert (string-match-p elnode--http-status-line-rx "GET /abc/09283 HTTP/1.1"))
+  (assert (string-match-p elnode--http-status-line-rx "GET /abc/09283?abc HTTP/1.1"))
+  (assert (string-match-p elnode--http-status-line-rx "GET /abc/09283?abc=1234 HTTP/1.1"))
+  (assert (string-match-p elnode--http-status-line-rx "GET /abc?abc=123 HTTP/1.1"))
+  (assert (string-match-p elnode--http-status-line-rx "GET /abc/?abc=123 HTTP/1.1"))
+  (assert (string-match-p elnode--http-status-line-rx "GET /abc/09283?x=1 HTTP/1.1"))
+  (assert (string-match-p elnode--http-status-line-rx "GET /abc/09283?x=1&a=1 HTTP/1.1"))
+  (assert (string-match-p elnode--http-status-line-rx "GET /abc/09283;def HTTP/1.1"))
+  (assert (string-match-p elnode--http-status-line-rx "GET /abc/09283;def?a=1 HTTP/1.1")))
+
 (ert-deftest elnode--http-parse-header ()
   "Pass an HTTP header."
   (let ((content "some content"))
