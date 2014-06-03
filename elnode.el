@@ -1401,21 +1401,22 @@ cons is returned."
         (cdr cookie)
         cookie)))
 
+(defconst elnode--http-status-line-rx
+  (rx (and (group-n 1 (or "GET" "HEAD" "POST" "DELETE" "PUT"))
+           " "
+           (group-n 2 (1+ (any "A-Za-z0-9+&=?./:-"))) ; FIXME - get this from the spec?
+           " "
+           "HTTP/"
+           (group-n 3 (and "1." (1+ (any "0-9"))))))
+  "The regex used to match the status line.")
+
 (defun elnode--http-parse-status (httpcon &optional property)
   "Parse the status line of HTTPCON.
 
 If PROPERTY is non-nil, then return that property."
   (let* ((http-line (elnode/con-get httpcon :elnode-http-status)))
     (save-match-data
-      (when
-          (string-match
-           (rx (and (group-n 1 (or "GET" "HEAD" "POST" "DELETE" "PUT"))
-                    " "
-                    (group-n 2 (1+ (any "A-Za-z0-9+?./:-"))) ; FIXME - get this from the spec?
-                    " "
-                    "HTTP/"
-                    (group-n 3 (and "1." (1+ (any "0-9"))))))
-           http-line)
+      (when (string-match elnode--http-status-line-rx http-line)
         (elnode/con-put httpcon
           :elnode-http-method (match-string 1 http-line)
           :elnode-http-resource (match-string 2 http-line)
