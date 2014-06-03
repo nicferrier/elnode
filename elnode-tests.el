@@ -1374,14 +1374,14 @@ That sounds more fun than it is."
   "Test the docroot protection macro."
   (let ((httpcon :fake))
     (noflet ((process-status (proc) 'open)
-              (elnode-send-404 (httpcon) (throw :test 404))
-              (send-200 (httpcon)  (throw :test 200))
-              (elnode-send-status (httpcon status &optional msg)
-                (throw :test status)))
+             (elnode-send-404 (httpcon) (throw :test 404))
+             (send-200 (httpcon)  (throw :test 200))
+             (elnode-send-status (httpcon status &optional msg)
+               (throw :test status)))
       ;; Test straight through
       (should
        (equal
-         200
+        200
         (catch :test
           (fakir-mock-process :fake ()
             (set-process-plist :fake (list (make-hash-table :test 'eq)))
@@ -1391,7 +1391,7 @@ That sounds more fun than it is."
             (fakir-mock-file
                 (fakir-file
                  :filename "test.creole"
-                   :directory "/home/elnode/wikiroot")
+                 :directory "/home/elnode/wikiroot")
               (elnode-docroot-for "/home/elnode/wikiroot"
                   with target-path
                   on httpcon
