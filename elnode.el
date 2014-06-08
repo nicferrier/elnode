@@ -1416,7 +1416,8 @@ cons is returned."
 If PROPERTY is non-nil, then return that property."
   (let* ((http-line (elnode/con-get httpcon :elnode-http-status)))
     (save-match-data
-      (when (string-match elnode--http-status-line-rx http-line)
+      (when (and http-line
+                 (string-match elnode--http-status-line-rx http-line))
         (elnode/con-put httpcon
           :elnode-http-method (match-string 1 http-line)
           :elnode-http-resource (match-string 2 http-line)
