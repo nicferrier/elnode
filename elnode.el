@@ -938,6 +938,19 @@ routines."
                    ,handler))))
        ,@body)))
 
+(defmacro with-elnode-mock-httpcon (symbol elnode-plist &rest body)
+  "Mock an HTTP connection for SYMBOL and evaluate BODY.
+
+ELNODE-PLIST is either `nil' or a list of elnode properties, such
+as `:elnode-method'."
+  (declare
+   (debug (sexp sexp &rest form))
+   (indent 2))
+  `(fakir-mock-process ,symbol ()
+     (set-process-plist ,symbol (list (make-hash-table :test 'eq)))
+     (elnode/con-put ,symbol ,@elnode-plist)
+     (progn ,@body)))
+
 (defun elnode--alist-to-query (alist)
   "Turn an alist into a formdata/query string."
   (noflet ((web--key-value-encode (key value)
