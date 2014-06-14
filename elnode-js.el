@@ -23,21 +23,18 @@
 ;; Often we make websites with Javascript. Elnode has built in tools
 ;; to help.
 
+;; elnode-js/browserify -- let's elnode take advantage of browserify
+;; to simplify your javascript (by using node's require which
+;; browserify translates into the correct browser code).
+
 ;;; Code:
 
+(require 'elnode)
+(require 'noflet)
 
-(defun elnode-js/npm-present? (directory)
-  "Does the DIRECTORY have an NPM install?"
-  (file-exists-p (concat (file-name-as-directory directory) "node_modules")))
-
-(defun elnode-js/browserify? (directory)
-  "Does the DIRECTORY have browserify?"
-  (file-exists-p (concat
-                  (file-name-as-directory directory)
-                  "node_modules/.bin/browserify")))
-
-(defmacro* let-env ((var value) &rest body)
+(defmacro* env-let ((var value) &rest body)
   "Very quick and simple Unix ENV let."
+  ;; have a copy of this in world-time-list
   (declare
    (debug (sexp &rest form))
    (indent 1))
@@ -53,20 +50,60 @@
               ,@body)
          (setenv ,varv ,saved-var)))))
 
+(defun env-add-path (var value)
+  "Add VALUE to env var VAR if it's not there already."
+  (let ((e-val (substitute-in-file-name value)))
+    (if (member e-val (split-string (getenv var) ":"))
+        (getenv var)
+        (setenv var (concat (getenv var) ":" e-val)))))
+
+
+(defun elnode-js/node-bin ()
+  "Where is the NodeJS binary?
+
+We look in a place provided by `nodejs-repl' package or in
+\"~/nodejs\", \"/usr/local/bin\" or in \"/usr/bin\" in that
+order."
+  (noflet ((file-exists (filename)
+             (and (file-exists-p (expand-file-name filename)) filename)))
+    (or (and (featurep 'nodejs-repl)
+             (symbol-value 'nodejs-repl-command))
+        (or (file-exists "~/nodejs/bin/nodejs")
+            (file-exists "/usr/local/bin/nodejs")
+            (file-exists "/usr/bin/nodejs")))))
+
+(defun elnode-js/browserify-bin (&optional directory)
+  "Where is browserify?
+
+We search DIRECTORY, if it's supplied, and then the project root,
+if there is one and then the `default-directory'."
+  (let ((browserify "node_modules/.bin/browserify"))
+    (noflet ((file-exists (filename)
+               (and (file-exists-p (expand-file-name filename)) filename)))
+      (or
+       (and directory (file-exists (expand-file-name browserify directory)))
+       (and (featurep 'find-file-in-project)
+            (file-exists (expand-file-name
+                          browserify
+                          (funcall 'ffip-project-root))))
+       (file-exists "node_modules/.bin/browserify")))))
+
 (defun elnode-js/browserify (httpcon docroot path)
   "Run browserify from DOCROOT for the PATH.
 
-Browserify is a node tool that turns node based js into stuff
-that works inside the browser."
-  (let-env ("PATH" (concat
-                    (expand-file-name "~/nodejs/bin") ":"
-                    (getenv "PATH")))
-    (let ((default-directory docroot)
-          (program (concat
-                    (file-name-as-directory docroot)
-                    "node_modules/.bin/browserify")))
-      (elnode-http-start httpcon 200 '(Content-type . "application/js"))
-      (elnode-child-process httpcon program (concat docroot path)))))
+Browserify is a nodejs tool that turns nodejs based Javascript
+into Javascript that works inside the browser.
+
+nodejs code can use nodejs's `require' form to import modules,
+which is simpler than many client side solutions.  So browserify
+solves the module problem across node.js and the browser."
+  (let ((browserify (elnode-js/browserify-bin docroot))
+        (nodejs (elnode-js/node-bin)))
+    (when (and nodejs browserify)
+      (env-let ("PATH" nodejs)
+        (let ((default-directory docroot))
+          (elnode-http-start httpcon 200 '(Content-type . "application/js")))
+          (elnode-child-process httpcon browserify (concat docroot path))))))
 
 (defun elnode-js-handler-demo (httpcon)
   "A demonstration server for browserify support."
