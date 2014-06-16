@@ -85,16 +85,12 @@ solves the module problem across node.js and the browser."
           (elnode-http-start httpcon 200 '(Content-type . "application/js")))
           (elnode-child-process httpcon browserify (concat docroot path))))))
 
-(defun elnode-js-handler-demo (httpcon)
-  "A demonstration server for browserify support."
-  (elnode-hostpath-dispatcher
+(defun elnode-js/browserify-send-func (httpcon targetfile)
+  "An `elnode-send-file-assoc' function for browserify."
+  (elnode-js/browserify
    httpcon
-   '(("^[^/]*//scripts/example.js"
-      . (lambda (httpcon)
-          (elnode-js/browserify
-           httpcon 
-           (expand-file-name "~/work/bwinparty/cards")
-           (elnode-http-pathinfo httpcon)))))))
+   (file-name-directory targetfile)
+   (file-name-nondirectory targetfile)))
 
 ;; (elnode-start 'elnode-js-handler-demo :port 8102)
 ;; (elnode-stop 8102)
