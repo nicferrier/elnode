@@ -50,16 +50,20 @@ order."
   "Where is browserify?
 
 We search DIRECTORY, if it's supplied, and then the project root,
-if there is one and then the `default-directory'."
+if there is one (and if `find-file-in-project' is installed) and
+then the `default-directory'."
   (let ((browserify "node_modules/.bin/browserify"))
     (noflet ((file-exists (filename)
                (and (file-exists-p (expand-file-name filename)) filename)))
       (or
        (and directory (file-exists (expand-file-name browserify directory)))
-       (and (featurep 'find-file-in-project)
-            (file-exists (expand-file-name
-                          browserify
-                          (funcall 'ffip-project-root))))
+       (and (or (functionp 'find-file-in-project)
+                (featurep 'find-file-in-project))
+            (let ((ffip-project-file "node_modules"))
+              (let ((default-directory directory))
+                (file-exists (expand-file-name
+                              browserify
+                              (funcall 'ffip-project-root))))))
        (file-exists "node_modules/.bin/browserify")))))
 
 (defun elnode-js/browserify (httpcon docroot path)
