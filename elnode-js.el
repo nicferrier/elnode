@@ -32,32 +32,6 @@
 (require 'elnode)
 (require 'noflet)
 
-(defmacro* env-let ((var value) &rest body)
-  "Very quick and simple Unix ENV let."
-  ;; have a copy of this in world-time-list
-  (declare
-   (debug (sexp &rest form))
-   (indent 1))
-  (let ((varv (make-symbol "varv"))
-        (valuev (make-symbol "valuev"))
-        (saved-var (make-symbol "saved-var")))
-    `(let* ((,varv ,var)
-            (,saved-var (getenv ,varv))
-            (,valuev ,value))
-       (unwind-protect
-            (progn
-              (setenv ,varv ,valuev)
-              ,@body)
-         (setenv ,varv ,saved-var)))))
-
-(defun env-add-path (var value)
-  "Add VALUE to env var VAR if it's not there already."
-  (let ((e-val (substitute-in-file-name value)))
-    (if (member e-val (split-string (getenv var) ":"))
-        (getenv var)
-        (setenv var (concat (getenv var) ":" e-val)))))
-
-
 (defun elnode-js/node-bin ()
   "Where is the NodeJS binary?
 
@@ -100,7 +74,9 @@ solves the module problem across node.js and the browser."
   (let ((browserify (elnode-js/browserify-bin docroot))
         (nodejs (elnode-js/node-bin)))
     (when (and nodejs browserify)
-      (env-let ("PATH" nodejs)
+      (let ((process-environment
+             (cons (format "PATH=%s:%s" nodejs  (getenv "PATH"))
+                   process-environment)))
         (let ((default-directory docroot))
           (elnode-http-start httpcon 200 '(Content-type . "application/js")))
           (elnode-child-process httpcon browserify (concat docroot path))))))
