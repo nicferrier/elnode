@@ -92,8 +92,6 @@ solves the module problem across node.js and the browser."
    (file-name-directory targetfile)
    (file-name-nondirectory targetfile)))
 
-;; (elnode-start 'elnode-js-handler-demo :port 8102)
-;; (elnode-stop 8102)
 
 (provide 'elnode-js)
 
