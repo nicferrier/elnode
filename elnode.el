@@ -2596,6 +2596,14 @@ It should not be used otherwise.")
   "Get modification time for FILE."
   (nth 5 (file-attributes file)))
 
+(defvar elnode-send-file-assoc nil
+  "A-list of file patterns vs functions to serve files.
+
+When a file is sent with `elnode-send-file' we try and match the
+targetfile against the regex patterns in the `car' of this alist
+and then use the function in the `cdr' to send the file instead
+of sending it directly.")
+
 (defun* elnode-send-file (httpcon targetfile
                                   &key
                                   preamble
@@ -2634,7 +2642,9 @@ variables.  The function should have no arguments but two
 variables are bound during the function's execution
 `elnode-replacements-httpcon' is the `httpcon' and
 `elnode-replacements-targetfile' is the targetfile to be
-delivered."
+delivered.
+
+See `elnode-send-file-assoc' for more possible transformations."
   (let ((filename
          (if (not (file-name-absolute-p targetfile))
              (let ((dir (or load-file-name buffer-file-name)))
@@ -2646,38 +2656,47 @@ delivered."
         ;; FIXME: This needs improving so we can handle the 404
         ;; This function should raise an exception?
         (elnode-send-404 httpcon)
-        (let ((mimetype
-               (or (when (listp mime-types)
-                     (car (rassoc
-                           (file-name-extension targetfile)
-                           mime-types)))
-                   (mm-default-file-encoding targetfile)
-                   "application/octet-stream")))
-          (elnode-http-start
-           httpcon 200
-           `("Content-type" . ,mimetype)
-           `("Last-Modified" . ,(elnode--rfc1123-date
-                                 (elnode--file-modified-time targetfile))))
-          (when preamble (elnode-http-send-string httpcon preamble))
-          (if (or elnode-webserver-visit-file replacements)
-              (elnode-http-return
-               httpcon
-               (if replacements
-                   (elnode--buffer-template
-                    (find-file-noselect filename)
-                    ;; Replacements handling
-                    (if (functionp replacements)
-                        (let ((elnode-replacements-httpcon httpcon)
-                              (elnode-replacements-targetfile targetfile))
-                          (funcall replacements))
-                        replacements))
-                   (with-temp-buffer 
-                     (insert-file-contents-literally filename)
-                     (buffer-string))))
-              (elnode-child-process
-               httpcon
-               elnode-send-file-program
-               (expand-file-name targetfile)))))))
+        ;; Else ...
+        (let (send-func)
+          (if (setq send-func
+                    (and elnode-send-file-assoc
+                         (loop for (pattern . func) in elnode-send-file-assoc
+                            if (string-match-p pattern targetfile)
+                            return func)))
+              (funcall send-func httpcon targetfile)
+              ;; Else we don't have a send func so just send it
+              (let ((mimetype
+                     (or (when (listp mime-types)
+                           (car (rassoc
+                                 (file-name-extension targetfile)
+                                 mime-types)))
+                         (mm-default-file-encoding targetfile)
+                         "application/octet-stream")))
+                (elnode-http-start
+                 httpcon 200
+                 `("Content-type" . ,mimetype)
+                 `("Last-Modified" . ,(elnode--rfc1123-date
+                                       (elnode--file-modified-time targetfile))))
+                (when preamble (elnode-http-send-string httpcon preamble))
+                (if (or elnode-webserver-visit-file replacements)
+                    (elnode-http-return
+                     httpcon
+                     (if replacements
+                         (elnode--buffer-template
+                          (find-file-noselect filename)
+                          ;; Replacements handling
+                          (if (functionp replacements)
+                              (let ((elnode-replacements-httpcon httpcon)
+                                    (elnode-replacements-targetfile targetfile))
+                                (funcall replacements))
+                              replacements))
+                         (with-temp-buffer 
+                           (insert-file-contents-literally filename)
+                           (buffer-string))))
+                    (elnode-child-process
+                     httpcon
+                     elnode-send-file-program
+                     (expand-file-name targetfile)))))))))
 
 (defmacro elnode-method (httpcon &rest method-mappings)
   "Map the HTTP method.
