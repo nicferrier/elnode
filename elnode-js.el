@@ -57,13 +57,11 @@ then the `default-directory'."
                (and (file-exists-p (expand-file-name filename)) filename)))
       (or
        (and directory (file-exists (expand-file-name browserify directory)))
-       (and (or (functionp 'find-file-in-project)
-                (featurep 'find-file-in-project))
-            (let ((ffip-project-file "node_modules"))
-              (let ((default-directory directory))
-                (file-exists (expand-file-name
-                              browserify
-                              (funcall 'ffip-project-root))))))
+       (and (let ((default-directory (expand-file-name directory)))
+              (file-exists
+               (expand-file-name
+                browserify
+                (locate-dominating-file default-directory "node_modules")))))
        (file-exists "node_modules/.bin/browserify")))))
 
 (defun elnode-js/browserify (httpcon docroot path)
