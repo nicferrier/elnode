@@ -84,12 +84,60 @@ solves the module problem across node.js and the browser."
           (elnode-child-process httpcon browserify (concat docroot path))))))
 
 (defun elnode-js/browserify-send-func (httpcon targetfile)
-  "An `elnode-send-file-assoc' function for browserify."
+  "An `elnode-send-file-assoc' function for node.js' browserify.
+
+Associate js with this function in the `elnode-send-file-assoc'
+alist to get automatic browserify packaging of JavaScript files
+served by `elnode-send-file'.  This includes anything sent by the
+elnode webserver.
+
+An easy way of getting this effect is to use
+`elnode-make-js-server'."
   (elnode-js/browserify
    httpcon
    (file-name-directory targetfile)
    (file-name-nondirectory targetfile)))
 
+(defvar elnode-make-js-server/docroot-history nil
+  "The history for the docroot in `elnode-make-js-server'.")
+
+(defvar elnode-make-js-server/port-history nil
+  "The history for the port in `elnode-make-js-server'.")
+
+(defvar elnode-make-js-server/host-history nil
+  "The history for the host in `elnode-make-js-server'.")
+
+;;;###autoload
+(defun elnode-make-js-server (docroot port &optional host)
+  "Make a webserver with additional js browserify support.
+
+See `elnode-make-webserver' for basic webserver details."
+  (interactive
+   (list
+    (if (or (member "package.json" (directory-files default-directory))
+            (member "node_modules" (directory-files default-directory)))
+        default-directory
+        (read-from-minibuffer
+         "JS docroot: " default-directory nil nil 
+         'elnode-make-js-server/docroot-history
+         default-directory))
+    (read-from-minibuffer
+     "Port: " nil nil nil
+     'elnode-make-js-server/port-history)
+    (if current-prefix-arg
+        (read-from-minibuffer
+         "Host: " nil nil nil
+         'elnode-make-js-server/host-history)
+        elnode-init-host)))
+  (let ((handler
+         (lambda (httpcon)
+           (let ((elnode-send-file-assoc
+                  '(("\\.js$" . elnode-js/browserify-send-func))))
+             (elnode--webserver-handler-proc
+              httpcon docroot elnode-webserver-extra-mimetypes)))))
+    (elnode-start handler 
+                  :port (string-to-number (format "%s" port))
+                  :host host)))
 
 (provide 'elnode-js)
 
