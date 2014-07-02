@@ -2466,8 +2466,8 @@ and sending the data there."
      (process-status httpcon)
      (length data)
      httpcon)
-    (if (not (eq 'closed (process-status httpcon)))
-        (elnode-http-send-string httpcon data))))
+    (unless (eq 'closed (process-status httpcon))
+      (elnode-http-send-string httpcon data))))
 
 (defun elnode-child-process (httpcon program &rest args)
   "Run the specified PROGRAM asynchronously sending output to HTTPCON.
