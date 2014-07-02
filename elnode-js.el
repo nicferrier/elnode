@@ -135,6 +135,9 @@ See `elnode-make-webserver' for basic webserver details."
                   '(("\\.js$" . elnode-js/browserify-send-func))))
              (elnode--webserver-handler-proc
               httpcon docroot elnode-webserver-extra-mimetypes)))))
+    (add-to-list
+     'elnode--make-webserver-store
+     (cons docroot handler))
     (elnode-start handler 
                   :port (string-to-number (format "%s" port))
                   :host host)))
