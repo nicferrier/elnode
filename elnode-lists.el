@@ -78,14 +78,19 @@
                         (documentation fn))))
             (vector
              (format "%s" port)
-             (cond
-               ((closurep fn) (format "%S" fn))
-               ((byte-code-function-p fn) (format "byte-code"))
-               ((and (listp fn)(eq (car fn) 'lambda)) (format "lambda"))
-               (t (symbol-name fn)))
+             (if (rassoc fn elnode--make-webserver-store)
+                 "elnode webserver"
+                 ;; Else it's not in the webserver list
+                 (cond
+                   ((closurep fn) (format "%S" fn))
+                   ((byte-code-function-p fn) (format "byte-code"))
+                   ((and (listp fn)(eq (car fn) 'lambda)) (format "lambda"))
+                   (t (symbol-name fn))))
              (or (if (and doc (string-match "^\\([^\n]+\\)" doc))
                      (match-string 1 doc)
-                     "no documentation."))))))))
+                     (if (rassoc fn elnode--make-webserver-store)
+                         (car (rassoc fn elnode--make-webserver-store))
+                         "no documentation.")))))))))
 
 (defun elnode-lists-server-find-handler ()
   "Find the handler mentioned in the handler list."
