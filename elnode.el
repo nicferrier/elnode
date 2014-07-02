@@ -2479,14 +2479,19 @@ ARGS is a list of arguments to pass to the program.
 
 It is NOT POSSIBLE to run more than one process at a time
 directed at the same http connection."
-  (let* ((args
+  (let* ((proc-args
           (append
            (list
             (format "%s-%s" (process-name httpcon) program)
             (format " %s-%s" (process-name httpcon) program)
             program) args))
-         (p (let ((process-connection-type nil))
-              (apply 'start-process args))))
+         (p (let ((process-connection-type nil)
+                  (default-directory (file-name-directory program)))
+              (apply 'start-process proc-args))))
+    ;; Store the program and args for later
+    (elnode/con-put
+        httpcon :elnode-child-process-command
+        (format "%s %s" program (s-join " " args)))
     (set-process-coding-system p 'raw-text-unix)
     ;; Bind the http connection to the process
     (elnode/con-put p :elnode-httpcon httpcon)
