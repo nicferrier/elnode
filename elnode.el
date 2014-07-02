@@ -2441,6 +2441,15 @@ happens."
        status httpcon)
       (if (not (eq 'closed (process-status httpcon)))
           (progn
+            ;; Spit out the error at the end of the content
+            (when (elnode/con-get httpcon :elnode-child-process-command)
+              (elnode-http-send-string
+               httpcon
+               (format
+                "%s %s"
+                (elnode/con-get httpcon :elnode-child-process-command)
+                status)))
+            ;; Now close the content
             (elnode-http-send-string httpcon "")
             (process-send-string httpcon "\r\n")
             (elnode--http-end httpcon)))
