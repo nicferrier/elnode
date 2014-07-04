@@ -1138,22 +1138,25 @@ to external processes."
   "Make an actual TCP server."
   (let* ((name (format "*elnode-webserver-%s:%s*" host port))
          (an-buf (get-buffer-create name))
-         (proc
-          (make-network-process
+         (unix-sock-file-name (concat "/tmp/" (make-temp-name port)))
+         (proc-args
+          (list
            :name name
            :buffer an-buf
-           :server 300
+           :server (if (numberp port) 300 't)
            :nowait 't
            :host (cond
                    ((equal host "localhost") 'local)
                    ((equal host "*") nil)
+                   ((not (numberp port)) nil)
                    (t host))
-           :service port
            :coding '(raw-text-unix . raw-text-unix)
-           :family 'ipv4
+           :family (if (numberp port) 'ipv4 'local)
+           :service (if (numberp port) port unix-sock-file-name)
            :filter 'elnode--filter
            ;;:sentinel 'elnode--sentinel
-           :log 'elnode/proc-log)))
+           :log 'elnode/proc-log))
+         (proc (apply 'make-network-process proc-args)))
     (elnode/con-put proc
       :elnode-service-map service-mappings
       :elnode-http-handler request-handler
