@@ -1135,10 +1135,16 @@ to external processes."
   (elnode/con-put client-proc :server server-proc))
 
 (defun elnode/make-service (host port service-mappings request-handler defer-mode)
-  "Make an actual TCP server."
+  "Make an actual server TCP or Unix PORT.
+
+If PORT is a number then a TCP port is made on the specified HOST
+on the PORT.
+
+If PORT is a string a Unix socket is made in \"/tmp/\" and HOST
+is ignored."
   (let* ((name (format "*elnode-webserver-%s:%s*" host port))
          (an-buf (get-buffer-create name))
-         (unix-sock-file-name (concat "/tmp/" (make-temp-name port)))
+         (unix-sock-file-name (concat "/tmp/" port))
          (proc-args
           (list
            :name name
@@ -1146,9 +1152,9 @@ to external processes."
            :server (if (numberp port) 300 't)
            :nowait 't
            :host (cond
+                   ((not (numberp port)) nil)
                    ((equal host "localhost") 'local)
                    ((equal host "*") nil)
-                   ((not (numberp port)) nil)
                    (t host))
            :coding '(raw-text-unix . raw-text-unix)
            :family (if (numberp port) 'ipv4 'local)
