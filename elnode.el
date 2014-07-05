@@ -1144,7 +1144,7 @@ If PORT is a string a Unix socket is made in \"/tmp/\" and HOST
 is ignored."
   (let* ((name (format "*elnode-webserver-%s:%s*" host port))
          (an-buf (get-buffer-create name))
-         (unix-sock-file-name (concat "/tmp/" port))
+         (unix-sock-file-name (unless (numberp port) (concat "/tmp/" port)))
          (proc-args
           (list
            :name name
