@@ -3,6 +3,8 @@
 (require 'elnode)
 (require 'tabulated-list)
 (require 'noflet)
+(require 'dash)
+
 
 ;;; Deferred queue list
 
