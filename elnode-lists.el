@@ -68,29 +68,35 @@
 (defun elnode--list-servers ()
   "List the current Elnode servers for `elnode-list-mode'."
   (noflet ((closurep (v)
-           (and (functionp v) (listp v) (eq (car v) 'closure))))
-    (loop for (port . socket-proc) in elnode-server-socket
-       collect
-         (list
-          port
-          (let* ((fn (elnode/con-lookup socket-proc :elnode-http-handler))
-                 (doc (when (functionp fn)
-                        (documentation fn))))
-            (vector
-             (format "%s" port)
-             (if (rassoc fn elnode--make-webserver-store)
-                 "elnode webserver"
-                 ;; Else it's not in the webserver list
-                 (cond
-                   ((closurep fn) (format "%S" fn))
-                   ((byte-code-function-p fn) (format "byte-code"))
-                   ((and (listp fn)(eq (car fn) 'lambda)) (format "lambda"))
-                   (t (symbol-name fn))))
-             (or (if (and doc (string-match "^\\([^\n]+\\)" doc))
-                     (match-string 1 doc)
-                     (if (rassoc fn elnode--make-webserver-store)
-                         (car (rassoc fn elnode--make-webserver-store))
-                         "no documentation.")))))))))
+             (and (functionp v) (listp v) (eq (car v) 'closure))))
+    (-keep
+     (lambda (pair)
+       (let ((port (car pair)) (socket-proc (cdr pair)))
+         (if (process-live-p socket-proc)
+             (list
+              port
+              (let* ((fn (elnode/con-lookup socket-proc :elnode-http-handler))
+                     (doc (when (functionp fn)
+                            (documentation fn))))
+                (vector
+                 (format "%s" port)
+                 (if (rassoc fn elnode--make-webserver-store)
+                     "elnode webserver"
+                     ;; Else it's not in the webserver list
+                     (cond
+                       ((closurep fn) (format "%S" fn))
+                       ((byte-code-function-p fn) (format "byte-code"))
+                       ((and (listp fn)(eq (car fn) 'lambda)) (format "lambda"))
+                       (t (symbol-name fn))))
+                 (or (if (and doc (string-match "^\\([^\n]+\\)" doc))
+                         (match-string 1 doc)
+                         (if (rassoc fn elnode--make-webserver-store)
+                             (car (rassoc fn elnode--make-webserver-store))
+                             "no documentation."))))))
+             ;; If the socket isn't live then take it out
+             (setq elnode-server-socket (delete pair elnode-server-socket))
+             nil)))
+     elnode-server-socket)))
 
 (defun elnode-lists-server-find-handler ()
   "Find the handler mentioned in the handler list."
