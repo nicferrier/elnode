@@ -118,12 +118,17 @@
 (defun elnode-lists-kill-server ()
   (interactive)
   (goto-char (line-beginning-position))
-  (re-search-forward "^\\([0-9]+\\)" (line-end-position) t)
-  (let ((port (string-to-number (match-string 1))))
-    (elnode-stop port)
-    (let ((buffer-read-only nil))
-      (erase-buffer)
-      (tabulated-list-print))))
+  (re-search-forward "^\\([^ ]+\\)" (line-end-position) t)
+  (let ((port (cond 
+                ((> (string-to-int (match-string 1)) 0)
+                 (string-to-int (match-string 1)))
+                ((file-exists-p (concat "/tmp/" (match-string 1)))
+                 (match-string 1)))))
+    (when port
+      (elnode-stop port)
+      (let ((buffer-read-only nil))
+        (erase-buffer)
+        (tabulated-list-print)))))
 
 (define-derived-mode
     elnode-list-mode tabulated-list-mode "Elnode server list"
