@@ -80,7 +80,7 @@ solves the module problem across node.js and the browser."
              (cons (format "PATH=%s:%s" nodejs  (getenv "PATH"))
                    process-environment)))
         (let ((default-directory docroot))
-          (elnode-http-start httpcon 200 '(Content-type . "application/js")))
+          (elnode-http-start httpcon 200 '(Content-type . "application/javascript")))
           (elnode-child-process httpcon browserify (concat docroot path))))))
 
 (defun elnode-js/browserify-send-func (httpcon targetfile)
