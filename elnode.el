@@ -1993,6 +1993,15 @@ vertical-align: top;
 </html>")))
       (elnode-send-html httpcon page))))
 
+(defvar elnode-send-json-extra-headers nil
+  "Set to a list of HTTP header conses to send with JSON.
+
+For example:
+
+  ((\"Access-Control-Allow-Origin\" . \"*\")
+   (\"Cache-control\" . \"none\"))
+
+could be used to send those headers with `elnode-send-json'.")
 
 (defun* elnode-send-json (httpcon data &key content-type jsonp)
   "Convert DATA to JSON and send to the HTTPCON with a 200 \"Ok\".
@@ -2010,9 +2019,10 @@ HTTPCON and the value of that used.  If neither the JSONP
 parameter, not the HTTP parameter `callback' is present that the
 name \"callback\" is used."
   (let ((json-to-send (elnode-json-fix data)))
-    (elnode-http-start
-     httpcon 200
-     `("Content-type" . ,(or content-type "application/json")))
+    (apply
+     'elnode-http-start httpcon 200
+     `("Content-type" . ,(or content-type "application/json"))
+     elnode-send-json-extra-headers)
     (elnode-http-return
      httpcon
      (if jsonp
