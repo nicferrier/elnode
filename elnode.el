@@ -1850,6 +1850,21 @@ header names, against values which should be strings."
                 (error "unsupported header type")))))
           (cdr p)))))
 
+(defvar elnode-http-special-extra-headers nil
+  "Set to a list of HTTP header conses to send with `elnode-http-start'.
+
+For example:
+
+ (let ((elnode-http-special-extra-headers
+       '((\"Access-Control-Allow-Origin\" . \"*\")
+         (\"Cache-control\" . \"none\"))))
+   (elnode-http-start httpcon 200 '(Content-type \"text/html\")))
+
+will send the combination of all the headers.
+
+This is an alternative to use `elnode-header-set' on the
+HTTPCON.")
+
 (defun elnode-http-start (httpcon status &rest header)
   "Start the http response on the specified http connection.
 
@@ -1858,7 +1873,9 @@ HTTPCON is the HTTP connection being handled.
 STATUS is the HTTP status, eg: 200 or 404; integers or strings
 are acceptable types.
 
-HEADER is a sequence of (`header-name' . `value') pairs.
+HEADER is a sequence of (`header-name' . `value') pairs.  See
+`elnode-http-header-set' and `elnode-http-special-extra-headers'
+for other ways to get headers onto the request.
 
 For example:
 
@@ -1871,7 +1888,8 @@ data.  This is done mainly for testing infrastructure."
       ;; Send the header
       (elnode-msg :debug "elnode-http-start: starting HTTP response on %s" httpcon)
       (let ((header-alist
-             (append (elnode/con-get httpcon :elnode-headers-to-set) header))
+             (append (elnode/con-get httpcon :elnode-headers-to-set)
+                     elnode-http-special-extra-headers header))
             (status-code (if (stringp status)
                              (string-to-number status)
                              status)))
@@ -1993,16 +2011,6 @@ vertical-align: top;
 </html>")))
       (elnode-send-html httpcon page))))
 
-(defvar elnode-send-json-extra-headers nil
-  "Set to a list of HTTP header conses to send with JSON.
-
-For example:
-
-  ((\"Access-Control-Allow-Origin\" . \"*\")
-   (\"Cache-control\" . \"none\"))
-
-could be used to send those headers with `elnode-send-json'.")
-
 (defun* elnode-send-json (httpcon data &key content-type jsonp)
   "Convert DATA to JSON and send to the HTTPCON with a 200 \"Ok\".
 
@@ -2019,10 +2027,9 @@ HTTPCON and the value of that used.  If neither the JSONP
 parameter, not the HTTP parameter `callback' is present that the
 name \"callback\" is used."
   (let ((json-to-send (elnode-json-fix data)))
-    (apply
-     'elnode-http-start httpcon 200
-     `("Content-type" . ,(or content-type "application/json"))
-     elnode-send-json-extra-headers)
+    (elnode-http-start
+     httpcon 200
+     `("Content-type" . ,(or content-type "application/json")))
     (elnode-http-return
      httpcon
      (if jsonp
