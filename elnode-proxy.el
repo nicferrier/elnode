@@ -244,11 +244,18 @@ route to be proxyed to another server.
 Using ROUTES you can describe complex multi-process, multi-port
 elnode configurations.
 
-ROUTES is an alist where each element looks like (REGEXP
-. FUNCTION) or (REGEXP FUNCTION `:service' SERVICE-NAME).
-SERVICE-NAME is a name that may be attached to the route so that
-it can be mapped to a TCP port, or even another Emacs process.
-Mapping service names is done by `elnode-start'."
+ROUTES is an alist where each element looks like: 
+
+  (REGEXP . FUNCTION)
+
+or:
+
+   (REGEXP FUNCTION `:service' SERVICE-NAME)
+
+FUNCTION is a normal elnode handler.  SERVICE-NAME is a name that
+may be attached to the route so that it can be mapped to a TCP
+port, or even another Emacs process.  Mapping service names is
+done by `elnode-start'."
   (let*
       (services
        (rtable
