@@ -1,8 +1,8 @@
 (elnode
- :version "0.9.9.7.9"
+ :version "0.9.9.8.1"
  :doc "The Emacs webserver."
  :requires 
- ((web "0.1.4") ;; for rle and proxy
+ ((web "0.4.3") ;; for proxy
   (dash "1.1.0")
   (noflet "0.0.7")
   (s "1.5.0")
