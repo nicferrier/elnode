@@ -14,18 +14,15 @@
 (require 'kv)
 (require 'cl) ; for destructuring-bind
 
-(defun elnode--web->elnode-hdr (hdr httpcon)
-  "Send the HDR from the web HTTP request to Elnode's HTTPCON."
-  (let ((headers
-         (-filter
-          (lambda (hdr-pair)
-            (unless (member
-                     (downcase (symbol-name (car hdr-pair)))
-                     '("status-code" "status-string" "status-version"))
-              (cons (symbol-name (car hdr-pair))
-                    (cdr hdr-pair))))
-          (kvhash->alist hdr))))
-    (apply 'elnode-http-start  httpcon 200 headers)))
+(defun elnode-proxy/web-hdr-hash->alist (web-hdr)
+  (-filter
+   (lambda (hdr-pair)
+     (unless (member
+              (downcase (symbol-name (car hdr-pair)))
+              '("status-code" "status-string" "status-version"))
+       (cons (symbol-name (car hdr-pair))
+             (cdr hdr-pair))))
+   (kvhash->alist web-hdr)))
 
 (defun elnode--proxy-x-forwarded-for (httpcon)
   "Return an X-Forwaded-For header."
@@ -34,6 +31,15 @@
     (if hdr
         (concat hdr (format ", %s" ipaddr))
         ipaddr)))
+
+(defun elnode-proxy/web-client (httpc header data httpcon)
+  (unless (elnode/con-get httpcon :elnode-proxy-header-sent)
+    (let ((headers (elnode-proxy/web-hdr-hash->alist header)))
+      (apply 'elnode-http-start  httpcon 200 headers))
+    (elnode/con-put httpcon :elnode-proxy-header-sent t))
+  (if (eq data :done)
+      (elnode-http-return httpcon)
+      (elnode-http-send-string httpcon data)))
 
 (defun elnode-proxy-do (httpcon url)
   "Do proxying to URL on HTTPCON.
@@ -61,24 +67,17 @@ specified path and query."
            (cons "params" params)))
          (web-url (s-format url 'aget params-alist))
          hdr-sent)
-      (process-put
-       httpcon
-       :elnode-child-process
-       (web-http-call
-        method
-        (lambda (httpc hdr data)
-          (unless hdr-sent
-            (elnode--web->elnode-hdr hdr httpcon)
-            (setq hdr-sent t))
-          (if (eq data :done)
-              (elnode-http-return httpcon)
-              (elnode-http-send-string httpcon data)))
-        :mode 'stream
-        :url web-url
-        :extra-headers
-        `(("X-Forwarded-For"
-           . ,(elnode--proxy-x-forwarded-for httpcon))
-          ("X-Proxy-Client" . "elnode/web"))))))
+    (let ((web-con
+           (web-http-call
+            method
+            (lambda (httpc hdr data)
+              (elnode-proxy/web-client httpc hdr data httpcon))
+            :mode 'stream
+            :url web-url
+            :extra-headers
+            `(("X-Forwarded-For" . ,(elnode--proxy-x-forwarded-for httpcon))
+              ("X-Proxy-Client" . "elnode/web")))))
+      (elnode/con-put httpcon :elnode-child-process web-con))))
 
 (defun elnode-proxy-bounce (httpcon handler host-port)
   "Bounce this request.
@@ -221,7 +220,7 @@ proxy connection."
 
 (defun elnode/proxy-route (httpcon service handler path)
   "Proxies a particular route from `elnode-route'."
-  (let* ((server (process-get httpcon :server))
+  (let* ((server (elnode/con-get httpcon :server))
          (p2 path)
          (maps (process-get server :elnode-service-map))
          (port

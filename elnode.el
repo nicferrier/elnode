@@ -865,12 +865,16 @@ port number of the connection."
                       (elnode-msg :info "filter: immediate defer on %s" process)
                       (funcall (cdr signal-value) process))))
                   ('t
-                   (unless (elnode/con-get process :elnode-http-started)
+                   (unless (or (elnode/con-get process :elnode-child-process)
+                               (elnode/con-get process :elnode-http-started))
                      (elnode-msg :info "filter: default handling %S" signal-value)
                      (process-send-string process (elnode--format-response 500)))))
-             (if (and (not (elnode/con-get process :elnode-http-started))
+             (if (and (not (or 
+                            (elnode/con-get process :elnode-http-started)
+                            (elnode/con-get process :elnode-child-process)))
                       (not (elnode/con-get process :elnode-deferred)))
                  (process-send-string process (elnode--format-response 500))
+                 ;; Else
                  (when (elnode/con-get process :elnode-finished)
                    (unwind-protect
                         (progn
