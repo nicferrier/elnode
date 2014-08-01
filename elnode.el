@@ -3734,7 +3734,8 @@ the handler and listening on `elnode-init-host'"
         (progn
           (elnode-start
            'elnode-hostpath-default-handler
-           :port elnode-init-port)
+           :port elnode-init-port
+           :host elnode-init-host)
           (setq elnode--inited t))
       (error "Elnode could not initialize."))))
 
@@ -3774,7 +3775,7 @@ init.")
                     (when (and elnode-defer-on
                                (not elnode--defer-timer))
                       (elnode--init-deferring)))
-                (error "Elnode auto-start failed."))))))
+                (error "Elnode auto-start failed.")))))
 
 (provide 'elnode)
 

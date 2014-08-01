@@ -1,0 +1,23 @@
+== nodejs tools? ==
+
+Why have support for nodejs here? Isn't elnode an attempt to replace
+nodejs?
+
+Well... no, not really.
+
+nodejs has some very useful tools built for it for webapps so elnode
+apps that work with nodejs are quite interesting.
+
+Nic particularly likes browserify, which let's you build client side
+JS in the same style as server side JS.
+
+
+Of course, we would love to repalce browserify with an elisp->js
+compiler (and indeed Nic is working on one) but pragmatically nodejs
+is a useful tool.
+
+
+=== What's here? ===
+
+* docker-nodejs - is a Dockerfile built on top of the elnode Docker that pulls in nodejs.
+
