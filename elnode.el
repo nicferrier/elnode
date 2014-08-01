@@ -3738,7 +3738,6 @@ the handler and listening on `elnode-init-host'"
           (setq elnode--inited t))
       (error "Elnode could not initialize."))))
 
-;;;###autoload
 (defcustom elnode-do-init nil
   "Should elnode start a server on load?
 
