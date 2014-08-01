@@ -3763,19 +3763,18 @@ init.")
  'emacs-lisp-mode
  '(("\\<elnode/case\\>" . 'font-lock-keyword-face)))
 
-;; Auto start elnode if we're ever loaded
 ;;;###autoload
-(eval-after-load 'elnode
-  '(progn
-    (when (and (boundp 'elnode-do-init) 
-               elnode-do-init)
-      (condition-case err
-          (progn
-            (elnode-init)
-            (when (and elnode-defer-on 
-                       (not elnode--defer-timer))
-              (elnode--init-deferring)))
-        (error "Elnode could not be started.")))))
+(add-hook 'after-init-hook
+          (lambda ()
+            (when (and (boundp 'elnode-do-init)
+                       (symbol-value 'elnode-do-init))
+              (condition-case err
+                  (progn
+                    (elnode-init)
+                    (when (and elnode-defer-on
+                               (not elnode--defer-timer))
+                      (elnode--init-deferring)))
+                (error "Elnode auto-start failed."))))))
 
 (provide 'elnode)
 
