@@ -2196,7 +2196,9 @@ target path."
   "Strip any leading slash from STR.
 
 If there is no leading slash then just return STR."
-  (if (and (stringp str) (eq (elt str 0) ?/))
+  (if (and (stringp str)
+           (> (length str) 0)
+           (eq (elt str 0) ?/))
       (substring str 1)
       str))
 
