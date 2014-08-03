@@ -2861,10 +2861,15 @@ MODIFIED-TIME is the time the resource was modified, for example
 a file modification time."
   (let* ((modified-since
           (elnode-http-header
-           httpcon 'if-modified-since :time)))
+           httpcon 'if-modified-since :time))
+         ;; Now make lower precision forms, just to seconds
+         (mod-since (-take 2 modified-since))
+         (mod-time (-take 2 modified-time)))
     (and
      modified-since
-     (time-less-p modified-time modified-since))))
+     (or
+      (time-less-p mod-time mod-since)
+      (equal mod-time mod-since)))))
 
 (defun elnode-cached-p (httpcon target-file)
   "Is the specified TARGET-FILE older than the HTTPCON?
