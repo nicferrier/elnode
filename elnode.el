@@ -665,6 +665,9 @@ Necessary for running comet apps."
 
 (defcustom elnode-default-response-table
   '((201 . "Created")
+    (301 . "Moved")
+    (302 . "Found")
+    (304 . "Not modified")
     (400 . "Bad request")
     (404 . "Not found")
     (500 . "Server error")
@@ -1745,7 +1748,9 @@ return DEFAULT instead of `nil'."
 (defconst elnode-http-codes-alist
   (loop for p in '((200 . "Ok")
                    (201 . "Created")
-                   (302 . "Redirect")
+                   (302 . "Moved")
+                   (302 . "Found")
+                   (304 . "Not Modified")
                    (400 . "Bad Request")
                    (401 . "Authenticate")
                    (404 . "Not Found")
@@ -2865,7 +2870,8 @@ This uses `elnode-modified-since'."
   "`elnode-docroot-for' calls this when the resources was cached.
 
 By default it just calls `elnode-send-status' with 304."
-  (elnode-send-status httpcon 304))
+  (elnode-http-start httpcon 304)
+  (elnode-http-return httpcon ""))
 
 (defvar elnode-docroot-for-no-404 nil
   "When set to true `elnode-docroot-for' doesn't check for missing files.")
