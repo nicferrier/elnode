@@ -3083,17 +3083,18 @@ handlers."
                         return i)))
             (if indexfile
                 (elnode-send-file httpcon (concat targetfile "/" indexfile))
-              (let ((index (elnode--webserver-index
-                            docroot
-                            targetfile
-                            pathinfo)))
-                (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
-                (elnode-http-return httpcon index))))
-        ;; Send a file.
-        (elnode-send-file
-         httpcon
-         targetfile
-         :mime-types mime-types)))))
+                ;; Else send an index
+                (let ((index (elnode--webserver-index
+                              docroot
+                              targetfile
+                              pathinfo)))
+                  (elnode-http-start httpcon 200 '("Content-type" . "text/html"))
+                  (elnode-http-return httpcon index))))
+          ;; The target is not a directory so send the file.
+          (elnode-send-file
+           httpcon
+           targetfile
+           :mime-types mime-types)))))
 
 (defun elnode-webserver-handler-maker (&optional docroot extra-mime-types)
   "Make a webserver handler possibly with the DOCROOT and EXTRA-MIME-TYPES.
