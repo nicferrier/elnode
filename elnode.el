@@ -1947,12 +1947,12 @@ sent with `elnode-http-start'
 DATA must be a string, it's just passed to `elnode-http-send'."
   (if (not (elnode/con-get httpcon :elnode-http-started))
       (elnode-msg :warning "elnode-http-return: HTTP not started")
-    (progn
+      ;; We've got a valid HTTP connection, now send the end.
       (when data
         (elnode-http-send-string httpcon data))
       ;; Need to close the chunked encoding here
       (elnode-http-send-string httpcon "")
-      (elnode--http-end httpcon))))
+      (elnode--http-end httpcon)))
 
 (defun elnode-send-html (httpcon html)
   "Simple send for HTML.
