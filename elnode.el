@@ -2655,6 +2655,12 @@ targetfile against the regex patterns in the `car' of this alist
 and then use the function in the `cdr' to send the file instead
 of sending it directly.")
 
+(defsubst elnode--send-file-use-child (filename replacements)
+  "When to use a child process for sending files."
+  (or elnode-webserver-visit-file
+      replacements
+      (< (elt (file-attributes filename) 7) 5000)))
+
 (defun* elnode-send-file (httpcon targetfile
                                   &key
                                   preamble
@@ -2729,21 +2735,22 @@ See `elnode-send-file-assoc' for more possible transformations."
                  `("Last-Modified" . ,(elnode--rfc1123-date
                                        (elnode--file-modified-time targetfile))))
                 (when preamble (elnode-http-send-string httpcon preamble))
-                (if (or elnode-webserver-visit-file replacements)
+                (if (elnode--send-file-use-child filename replacements)
                     (elnode-http-return
                      httpcon
                      (if replacements
                          (elnode--buffer-template
                           (find-file-noselect filename)
-                          ;; Replacements handling
-                          (if (functionp replacements)
+                          (if (functionp replacements)  ; Replacements handling
                               (let ((elnode-replacements-httpcon httpcon)
                                     (elnode-replacements-targetfile targetfile))
                                 (funcall replacements))
                               replacements))
+                         ;; No processing of the file, just send it
                          (with-temp-buffer 
                            (insert-file-contents-literally filename)
                            (buffer-string))))
+                    ;; Otherwise use a child process
                     (elnode-child-process
                      httpcon
                      elnode-send-file-program
