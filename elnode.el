@@ -2466,11 +2466,10 @@ happens."
        (process-status httpcon)
        (process-status process)
        httpcon)
-      (if (not (eq 'closed (process-status httpcon)))
-          (progn
-            (elnode-http-send-string httpcon  "")
-            (process-send-string httpcon "\r\n")
-            (elnode--http-end httpcon)))))
+      (unless (eq 'closed (process-status httpcon))
+        (elnode-http-send-string httpcon "")
+        (process-send-string httpcon "\r\n")
+        (elnode--http-end httpcon))))
    ((string-match "exited abnormally with code \\([0-9]+\\)\n" status)
     (let ((httpcon (elnode/con-get process :elnode-httpcon)))
       (elnode-msg
