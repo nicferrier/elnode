@@ -12,7 +12,7 @@
 (require 'web)
 (require 'elnode)
 (require 'kv)
-(require 'cl) ; for destructuring-bind
+(require 'cl) ; for destructuring-bind and defun*
 
 (defun elnode-proxy/web-hdr-hash->alist (web-hdr)
   (-filter
@@ -32,16 +32,27 @@
         (concat hdr (format ", %s" ipaddr))
         ipaddr)))
 
-(defun elnode-proxy/web-client (httpc header data httpcon)
+(defun elnode-proxy/web-client (httpc header data httpcon web-url header-filter)
+  "The web client used for the proxying.
+
+WEB-URL is the origin URL.  HEADER-FILTER is a function that will
+filter the alist of headers."
   (unless (elnode/con-get httpcon :elnode-proxy-header-sent)
-    (let ((headers (elnode-proxy/web-hdr-hash->alist header)))
-      (apply 'elnode-http-start  httpcon 200 headers))
+    (let* ((headers (elnode-proxy/web-hdr-hash->alist header))
+           (headers-x
+            (condition-case err 
+                (funcall header-filter web-url headers)
+              (error (prog1 headers
+                       (message
+                        "elnode-proxy/web-client: got an error %S while filtering headers %S"
+                        err headers))))))
+      (apply 'elnode-http-start httpcon 200 headers-x))
     (elnode/con-put httpcon :elnode-proxy-header-sent t))
   (if (eq data :done)
       (elnode-http-return httpcon)
       (elnode-http-send-string httpcon data)))
 
-(defun elnode-proxy-do (httpcon url)
+(defun* elnode-proxy-do (httpcon url &key header-filter)
   "Do proxying to URL on HTTPCON.
 
 A request is made to the specified URL.  The URL may include
@@ -54,7 +65,12 @@ variables:
 
 For example, \"http://myserver:8000${path}${query}\" would cause
 \"myserver\" on port 8000 to get the query from the user with the
-specified path and query."
+specified path and query.
+
+:HEADER-FILTER is an optional function which can be used to
+filter the headers returned from the HTTP call to the origin. The
+function is called with the origin URL and the headers as an
+a-list of symbols."
   (let* ((method (elnode-http-method httpcon))
          (path (elnode-http-pathinfo httpcon))
          (params (web-to-query-string
@@ -71,7 +87,12 @@ specified path and query."
            (web-http-call
             method
             (lambda (httpc hdr data)
-              (elnode-proxy/web-client httpc hdr data httpcon))
+              (elnode-proxy/web-client
+               httpc hdr data httpcon web-url
+               (if (functionp header-filter)
+                   header-filter
+                   ;; Else just pass through
+                   (lambda (url headers) headers))))
             :mode 'stream
             :url web-url
             :extra-headers
