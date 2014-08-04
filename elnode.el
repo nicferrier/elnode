@@ -2642,6 +2642,8 @@ It should not be used otherwise.")
 	    month
 	    (format-time-string "%Y %H:%M:%S GMT" time t))))
 
+(defalias 'elnode-rfc1123-date 'elnode--rfc1123-date)
+
 (defsubst elnode--file-modified-time (file)
   "Get modification time for FILE."
   (nth 5 (file-attributes file)))
