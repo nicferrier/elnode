@@ -2768,7 +2768,10 @@ Write code like this:
    (more code))
   (POST
    (different code)
-   (evenmorecode)))"
+   (evenmorecode)))
+
+See `elnode-http-params' and `elnode-http-param' for how to get
+data from a POSTed body."
   (declare
    (debug (sexp &rest (sexp &rest form)))
    (indent 1))
