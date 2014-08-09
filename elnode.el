@@ -1537,6 +1537,79 @@ Returns an association list."
             nil)))
    (split-string query "&")))
 
+(defun elnode--http-form-encoded-to-alist (buffer)
+  "Parse BUFFER containing a POST body and return an a-list.
+
+BUFFER must be positioned correctly at the start of the POST
+body.  The BUFFER must have a final dummy character added to
+identify the end of the text.  Currently an ASCII NUL (0) is
+used.
+
+The returned alist contains text parameter names mapped to
+decoded parameter values.  The decoding is as for
+`elnode--http-param-part-decode'.
+
+There is one experimental case which you must be careful of.
+Image data parameters are identified specifically by Elnode in
+order to parse them efficiently.  Such a parameter is of the
+form:
+
+  data:mime/type;base64,BASE64.DATA.
+
+If a parameter like that is found it is returned with the data as
+a string parameter value but the mime-type set on the string as a
+property `:mime-type'.  This is an experimental feature and
+subject to change."
+  ;; This function is required because string-match won't parse very
+  ;; large regexs, like those of submitted image files.
+  (with-current-buffer buffer
+    (narrow-to-region (point) (point-max))
+    (goto-char (point-min))
+    (let* ((positions-points
+            (-flatten
+             (append
+              (list (point-min-marker))
+              (--map
+               (list it it)
+               (let (collect expr)
+                 (save-excursion
+                   (save-match-data
+                     (while
+                         (setq expr
+                               (and (re-search-forward "&" nil t)
+                                    (point-marker)))
+                       (setq collect (append collect (list expr))))
+                     collect))))
+              (list (point-max-marker)))))
+           (positions (-partition 2 positions-points)))
+      (save-excursion
+        (save-match-data
+          (--map
+           (let ((start (car it))
+                 (end (cadr it)))
+             (goto-char start)
+             (let ((param-name
+                    (let ((found (re-search-forward "=" end t)))
+                      (buffer-substring start (if found (1- found) end)))))
+               (save-excursion
+                 (while (re-search-forward "\\+" end t)
+                   (replace-match " ")))
+               (save-excursion
+                 (while (re-search-forward "%[0-9a-f]\\{2\\}" end t)
+                   (let ((md (save-match-data (url-unhex-string (match-string 0) t))))
+                     (replace-match md))))
+               (if (save-excursion (re-search-forward "data:\\([^;]+\\);base64," nil end))
+                   (cons
+                    param-name
+                    (progn
+                      (base64-decode-region (match-end 0) (1- end))
+                      (propertize
+                       (buffer-substring (match-end 0) (1- end))
+                       :mime-type (match-string 1))))
+                   ;; else it's just a param
+                   (cons param-name (buffer-substring (point) (1- end))))))
+           positions))))))
+
 (defun elnode--alist-merge (a b &optional operator)
   "Merge two association lists non-destructively.
 
@@ -1635,7 +1708,13 @@ A is considered the priority (its elements go in first)."
     (if (equal "multipart/form-data" (car parsed-type))
         (elnode--http-post-mp-decode httpcon parsed-type)
         ;; Else it's a non-multipart request
-        (elnode--http-query-to-alist (elnode--http-post-body httpcon)))))
+        (with-current-buffer (process-buffer httpcon)
+          (goto-char (point-max))
+          (insert "\0")
+          (goto-char (elnode/con-get httpcon :elnode-header-end))
+          (elnode--http-form-encoded-to-alist (current-buffer)))
+        ;;(elnode--http-query-to-alist (elnode--http-post-body httpcon))
+        )))
 
 (defun elnode-http-params (httpcon &rest names)
   "Get an alist of the parameters in the request.

@@ -958,7 +958,7 @@ does have a BASE64 string in it though."
     (should
      (equal
       (elnode--http-post-to-alist :httpcon)
-      `(("a" . ,data)
+      `(("a" . "hello there") ; doesn't test the :mime-type property
         ("d" . "a line= of text")
         ("c" . "3")))))))
 
