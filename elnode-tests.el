@@ -941,6 +941,27 @@ Does a full http parse of a dummy buffer."
       (should-not (elnode-http-param httpcon "b"))
       (should-not (elnode-http-param httpcon "c")))))
 
+(ert-deftest elnode-test-http-post ()
+  "A simpler test of just the POST body parsing.
+
+This doesn't parse the whole body, just the POST content.  It
+does have a BASE64 string in it though."
+  (let* ((data (concat
+              "data:image/png;base64," 
+              (base64-encode-string "hello there")))
+       (params (format "a=%s&d=a+line%%3d+of+text&c=3"
+                       (url-hexify-string data))))
+  (fakir-mock-process :httpcon
+      ((:buffer params))
+    (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
+    (elnode/con-put :httpcon :elnode-header-end 1)
+    (should
+     (equal
+      (elnode--http-post-to-alist :httpcon)
+      `(("a" . ,data)
+        ("d" . "a line= of text")
+        ("c" . "3")))))))
+
 (ert-deftest elnode-test-http-post-empty-params ()
   "Test that the params are ok if they are just empty in the body."
   (let ((post-body ""))
