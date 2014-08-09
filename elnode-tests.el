@@ -862,15 +862,9 @@ testing code so we specifically test that they work."
 (ert-deftest elnode-test-http-get-params ()
   "Test that the params are ok if they are on the status line.
 
-Sets ':elnode-http-params' to nil to trigger `elnode-http-params'
-parsing. That checks the ':elnode-http-method':
-
-- for GET it returns the parsed ':elnode-http-query'
-
-- for POST it returns the merger of the parsed POST body and
-  ':elnode-http-query'.
-
-*** WARNING:: This test so far only handles GET ***"
+Sets `:elnode-http-params' to nil to trigger `elnode-http-params'
+parsing. That checks the `:elnode-http-method' and for GET it
+returns the parsed `:elnode-http-query'."
   (fakir-mock-process :httpcon ()
     (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
     (elnode/con-put :httpcon
