@@ -1522,8 +1522,7 @@ will do:
 
  \"this%20is%09me+and%20this\" -> \"this is\tme and this\" -
  percent encoding and plus encoding"
-  (url-unhex-string (replace-regexp-in-string "\\+" " " param-thing) 't)
-  )
+  (url-unhex-string (replace-regexp-in-string "\\+" " " param-thing) 't))
 
 (defun elnode--http-query-to-alist (query)
   "Crap parser for HTTP QUERY data.
