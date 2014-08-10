@@ -203,9 +203,22 @@ is just a test helper."
                   (apply 'format `(,err-message ,@err-include)))
                  (buffer-substring (point-min) (point-max))))))))
 
+(defmacro elnode-mock-con (symbol bindings &rest body)
+  "Mock an HTTP connection.
+
+This is a simple extension of `fakir-mock-process'.  It does
+exactly what that does except it additionally sets up the elnode
+property hashtable on the process plist."
+  (declare (debug (sexp sexp &rest form))
+           (indent defun))
+  `(fakir-mock-process ,symbol ,bindings
+     (progn
+       (set-process-plist ,symbol (list (make-hash-table :test 'eq)))
+       ,@body)))
+
 (ert-deftest elnode-test-access-log ()
   "Test the access logging."
-  (fakir-mock-process :httpcon
+  (elnode-mock-con :httpcon
       ((:buffer
         (elnode--http-make-hdr
          'get "/"
@@ -213,7 +226,6 @@ is just a test helper."
          '(user-agent . "test-agent")))
        (:elnode-httpresponse-status 200)
        (:elnode-bytes-written 2048))
-    (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
     (elnode/con-put :httpcon
       :elnode-http-started (current-time)
       :elnode-httpresponse-status 200
