@@ -39,7 +39,7 @@ routines."
   "Mock an HTTP connection for SYMBOL and evaluate BODY.
 
 ELNODE-PLIST is either `nil' or a list of elnode properties, such
-as `:elnode-method'."
+as `:elnode-http-method'."
   (declare
    (debug (sexp sexp &rest form))
    (indent defun))
