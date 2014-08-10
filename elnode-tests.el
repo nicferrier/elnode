@@ -2,12 +2,9 @@
 
 ;;; Code:
 
-(require 'ert)
-(require 'fakir)
-(require 'elnode)
+(require 'elnode-testsupport)
 (require 'elnode-wiki)
 (require 'elnode-proxy)
-(require 'elnode-testsupport)
 (require 'kv)
 (require 'mail-parse)
 (require 'noflet)
@@ -203,19 +200,6 @@ is just a test helper."
                   (apply 'format `(,err-message ,@err-include)))
                  (buffer-substring (point-min) (point-max))))))))
 
-(defmacro elnode-mock-con (symbol bindings &rest body)
-  "Mock an HTTP connection.
-
-This is a simple extension of `fakir-mock-process'.  It does
-exactly what that does except it additionally sets up the elnode
-property hashtable on the process plist."
-  (declare (debug (sexp sexp &rest form))
-           (indent defun))
-  `(fakir-mock-process ,symbol ,bindings
-     (progn
-       (set-process-plist ,symbol (list (make-hash-table :test 'eq)))
-       ,@body)))
-
 (ert-deftest elnode-test-access-log ()
   "Test the access logging."
   (elnode-mock-con :httpcon
@@ -265,8 +249,7 @@ property hashtable on the process plist."
                     (message "here!")
                     (setq result :done)))
          (elnode--deferred (list)))
-    (fakir-mock-process :httpcon ()
-      (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
+    (with-elnode-mock-con :httpcon
       ;; The queue starts empty
       (should (equal 0 (length elnode--deferred)))
       ;; Then we add to it...
@@ -391,14 +374,12 @@ my test data")))
 
 (ert-deftest elnode--http-parse-header-complete ()
   "Test the HTTP parsing."
-  (fakir-mock-process
-    :httpcon
-    ((:buffer
-      (elnode--http-make-hdr
-       'get "/"
-       '(host . "localhost")
-       '(user-agent . "test-agent"))))
-    (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
+  (elnode-mock-con :httpcon
+      ((:buffer
+        (elnode--http-make-hdr
+         'get "/"
+         '(host . "localhost")
+         '(user-agent . "test-agent"))))
     ;; Parse the header
     (should
      (equal 'done
@@ -417,11 +398,9 @@ my test data")))
 An HTTP request with an incomplete header is setup and tested,
 then we finish the request (fill out the header) and then test
 again."
-  (fakir-mock-process
-    :httpcon
-    ((:buffer
-      "GET / HTTP/1.1\r\nHost: localh"))
-    (set-process-plist :httpcon (list (make-hash-table :test 'eq)))
+  (elnode-mock-con :httpcon
+      ((:buffer
+        "GET / HTTP/1.1\r\nHost: localh"))
     ;; Now parse
     (should
      ;; It fails with incomplete 'header signal

@@ -1,7 +1,66 @@
 ;;; test support functions for elnode   -*- lexical-binding: t -*-
 
+;;; Code:
+
 (require 'noflet)
 (require 'ert)
+(require 'elnode)
+(require 'fakir)
+
+(defvar elnode--cookie-store nil
+  "Cookie store for test servers.
+
+This is a special defvar for dynamic overriding by
+`with-elnode-mock-server'.")
+
+(defmacro with-elnode-mock-server (handler &rest body)
+  "Execute BODY with a fake server which is bound to HANDLER.
+
+This is useful for doing end to end client testing:
+
+ (ert-deftest elnode-some-page ()
+  (with-elnode-mock-server 'elnode-hostpath-default-handler
+    (elnode-test-call \"/something/test\")))
+
+The test call with be passed to the
+`elnode-hostpath-default-handler' via the normal HTTP parsing
+routines."
+  (declare
+   (indent 1)
+   (debug t))
+  `(let ((elnode--cookie-store (make-hash-table :test 'equal)))
+     (noflet ((elnode/get-server-prop (proc key)
+                (cond
+                  ((eq key :elnode-http-handler)
+                   ,handler))))
+       ,@body)))
+
+(defmacro with-elnode-mock-httpcon (symbol elnode-plist &rest body)
+  "Mock an HTTP connection for SYMBOL and evaluate BODY.
+
+ELNODE-PLIST is either `nil' or a list of elnode properties, such
+as `:elnode-method'."
+  (declare
+   (debug (sexp sexp &rest form))
+   (indent defun))
+  `(fakir-mock-process ,symbol ()
+     (set-process-plist ,symbol (list (make-hash-table :test 'eq)))
+     (elnode/con-put ,symbol ,@elnode-plist)
+     (progn ,@body)))
+
+(defmacro elnode-mock-con (symbol bindings &rest body)
+  "Mock an HTTP connection.
+
+This is a simple extension of `fakir-mock-process'.  It does
+exactly what that does except it additionally sets up the elnode
+property hashtable on the process plist."
+  (declare (debug (sexp sexp &rest form))
+           (indent defun))
+  `(fakir-mock-process ,symbol ,bindings
+     (progn
+       (set-process-plist ,symbol (list (make-hash-table :test 'eq)))
+       ,@body)))
+
 
 (defmacro elnode-sink (httpcon &rest body)
   "Sink the HTTP response from BODY.
