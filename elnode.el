@@ -2494,44 +2494,47 @@ The main job of this sentinel is to monitor when the STATUS of
 PROCESS indicates the end of the PROCESS and to do
 `elnode-http-end' on the associated HTTP connection when that
 happens."
-  (cond
-   ((equal status "finished\n")
-    (let ((httpcon (elnode/con-get process :elnode-httpcon)))
-      (elnode-msg
-       :info
-       "elnode-child-process-sentinel Status @ finished: %s -> %s on %s"
-       (process-status httpcon)
-       (process-status process)
-       httpcon)
-      (unless (eq 'closed (process-status httpcon))
-        (elnode-http-send-string httpcon "")
-        (process-send-string httpcon "\r\n")
-        (elnode--http-end httpcon))))
-   ((string-match "exited abnormally with code \\([0-9]+\\)\n" status)
-    (let ((httpcon (elnode/con-get process :elnode-httpcon)))
-      (elnode-msg
-       :info "elnode-child-process-sentinel: %s on %s"
-       status httpcon)
-      (if (not (eq 'closed (process-status httpcon)))
-          (progn
-            ;; Spit out the error at the end of the content
-            (when (elnode/con-get httpcon :elnode-child-process-command)
-              (elnode-http-send-string
-               httpcon
-               (format
-                "%s %s"
-                (elnode/con-get httpcon :elnode-child-process-command)
-                status)))
-            ;; Now close the content
-            (elnode-http-send-string httpcon "")
-            (process-send-string httpcon "\r\n")
-            (elnode--http-end httpcon)))
-      (delete-process process)
-      (kill-buffer (process-buffer process))))
-   (t
-    (elnode-msg
-     :info "elnode-child-process-sentinel: %s on %s"
-     status process))))
+  (let ((httpcon (process-get process :elnode-httpcon)))
+    (cond
+      ((equal status "finished\n")
+       (let ((httpcon-status (process-status httpcon))
+             (proc-status (process-status process)))
+         (elnode-msg :info "elnode-child-process-sentinel: finished: %s -> %s on %s"
+           httpcon-status proc-status httpcon)
+         (unless (eq 'closed (process-status httpcon))
+           (elnode-http-send-string httpcon "")
+           (process-send-string httpcon "\r\n")
+           (elnode--http-end httpcon)
+           ;; Kill the httpcon
+           (delete-process httpcon)
+           (kill-buffer (process-buffer httpcon))
+           ;; Cleanup the process
+           (delete-process process)
+           (kill-buffer (process-buffer process)))))
+      ((string-match "exited abnormally with code \\([0-9]+\\)\n" status)
+       (elnode-msg :info "elnode-child-process-sentinel: %s on %s"
+         status httpcon)
+       (unless (eq 'closed (process-status httpcon))
+         ;; Spit out the error at the end of the content
+         (when (elnode/con-get httpcon :elnode-child-process-command)
+           (let ((error-message
+                  (format "%s %s"
+                          (elnode/con-get httpcon :elnode-child-process-command)
+                          status)))
+             (elnode-http-send-string httpcon error-message)))
+         ;; Now close the content
+         (elnode-http-send-string httpcon "")
+         (process-send-string httpcon "\r\n"))
+       (elnode--http-end httpcon)
+       ;; Kill the httpcon
+       (delete-process httpcon)
+       (kill-buffer (process-buffer httpcon))
+       ;; Kill the process
+       (delete-process process)
+       (kill-buffer (process-buffer process)))
+      (t
+       (elnode-msg :info "elnode-child-process-sentinel: %s on %s"
+         status process)))))
 
 (defun elnode--child-process-filter (process data)
   "A generic filter function for elnode child processes.
@@ -2542,7 +2545,7 @@ send their output to an Elnode HTTP connection.
 This filter function does the job of taking the output from the
 async process and finding the associated Elnode HTTP connection
 and sending the data there."
-  (let ((httpcon (elnode/con-get process :elnode-httpcon)))
+  (let ((httpcon (process-get process :elnode-httpcon)))
     (elnode-msg
      :info "elnode-child-process-filter http state: %s data length: %s on %s"
      (process-status httpcon)
@@ -2565,7 +2568,7 @@ directed at the same http connection."
           (append
            (list
             (format "%s-%s" (process-name httpcon) program)
-            (format " %s-%s" (process-name httpcon) program)
+            (format "child-proc %s-%s" (process-name httpcon) program)
             program) args))
          (p (let ((process-connection-type nil)
                   (default-directory (file-name-directory program)))
@@ -2576,7 +2579,7 @@ directed at the same http connection."
         (format "%s %s" program (s-join " " args)))
     (set-process-coding-system p 'raw-text-unix)
     ;; Bind the http connection to the process
-    (elnode/con-put p :elnode-httpcon httpcon)
+    (process-put p :elnode-httpcon httpcon)
     ;; Bind the process to the http connection
     ;;
     ;; WARNING: this means you can only have 1 child process at a time
