@@ -2880,7 +2880,7 @@ match replacements.  See `elnode-replacements-pattern'."
 
 ;; Docroot protection
 
-(defun elnode--under-docroot-p (target-file doc-root &optional ignore-missing)
+(defun elnode-under-docroot-p (target-file doc-root &optional ignore-missing)
   "Is the TARGET-FILE under the DOC-ROOT?
 Optional argument IGNORE-MISSING will inhibit checks for missing files."
   (let ((docroot (directory-file-name (expand-file-name doc-root))))
@@ -2890,6 +2890,7 @@ Optional argument IGNORE-MISSING will inhibit checks for missing files."
       target-file)
      (or ignore-missing (file-exists-p target-file)))))
 
+(defalias 'elnode--under-docroot-p 'elnode-under-docroot-p)
 
 (defun elnode-not-found (httpcon target-file)
   "`elnode-docroot-for' calls this when the doc was not found.
@@ -2974,7 +2975,7 @@ date copy) then `elnode-cached' is called."
     `(let ((,dr ,doc-root)
            (,con ,httpcon))
        (let ((,target-file-var (elnode-get-targetfile ,con ,dr)))
-         (if (not (elnode--under-docroot-p
+         (if (not (elnode-under-docroot-p
                    ,target-file-var ,dr elnode-docroot-for-no-404))
              (elnode-not-found ,con ,target-file-var)
            (if (and (not elnode-docroot-for-no-cache)
