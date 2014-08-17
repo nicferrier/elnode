@@ -3660,8 +3660,9 @@ is `:redirect' by default.
 
 REDIRECT is where to redirect to if FAILURE-TYPE is `:redirect'.
 By default this is \"/login/\".  If SENDER is not nil then a
-dispatcher told about this auth scheme will dispatch a path
-naming REDIRECT to SENDER.
+dispatcher made with `elnode-dispatcher' or
+`elnode-hostpath-dispatcher' that is told about this auth scheme
+will dispatch a path naming REDIRECT to SENDER.
 
 SENDER is an Elnode handler taking additional parameters of
 `target' and `redirect'.  By default this is the function
