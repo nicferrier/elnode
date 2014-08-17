@@ -2041,6 +2041,7 @@ This is often useful for debugging."
                            '(("None". "")))))
            (headers (alist->html (elnode-http-headers httpcon)))
            (page (s-lex-format "<html>
+<meta charset=\"utf-8\"></meta>
 <style>
 body { font-family: sans-serif;}
 td {
@@ -3050,6 +3051,7 @@ PATH properly.  It also hexifies single quote."
 
 (defcustom elnode-webserver-index-page-template "<html>
  <head>
+  <meta charset=\"utf-8\"></meta>
   <title>%s</title>
  </head>
  <body>
@@ -3482,6 +3484,7 @@ AUTH-TEST and MAKE-HASH are both optional and passed down to
     (elnode-send-redirect httpcon (or logged-in "/"))))
 
 (defcustom elnode-auth-login-page "<html>
+<head><meta charset=\"utf-8\"></meta</head>
 <body>
 <form method='POST' action='<!##E target E##!>'>
 <input type='hidden' name='redirect' value='<!##E redirect E##!>'/>
