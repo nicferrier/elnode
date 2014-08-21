@@ -9,9 +9,7 @@ USER root
 ADD Dockerfile-install.el /tmp/Dockerfile-install.el
 RUN chown emacs /tmp/Dockerfile-install.el
 USER emacs
-#RUN curl -s http://172.17.42.1:8016/elnode-0.9.9.8.1.tar -o /tmp/elnode-0.9.9.8.1.tar
 ENV HOME /home/emacs
-ENV AUTH /home/emacs/.emacs.d/server/server
-RUN /usr/local/emacs/bin/emacs -daemon ; /usr/local/emacs/bin/emacsclient -f $AUTH -e '(load-file "/tmp/Dockerfile-install.el")'
+RUN /usr/local/emacs/bin/emacs -daemon ; /usr/local/emacs/bin/emacsclient -s /tmp/emacs1000/sock/server -e '(load-file "/tmp/Dockerfile-install.el")'
 EXPOSE 8000
 CMD /usr/local/emacs/bin/emacs -daemon ; tail -f /dev/null
