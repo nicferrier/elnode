@@ -1,11 +1,7 @@
 # A Docker file to install elnode in a docker, this depends on Nic's existing emacs dockers.
 FROM nicferrier/emacsd
 MAINTAINER nic@ferrier.me.uk
-# This is a stupid docker bug - you can't ADD tar files to the docker because it will unpack them
-# So if you want to install a locally produced package you have to do all this
 USER root
-#RUN apt-get update
-#RUN apt-get -y install curl
 ADD Dockerfile-install.el /tmp/Dockerfile-install.el
 RUN chown emacs /tmp/Dockerfile-install.el
 USER emacs
