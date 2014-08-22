@@ -3643,7 +3643,8 @@ users.  It is passed a username and must respond with a token
 that can be checked against the value returned by the hashing
 function (see MAKE-HASH and `elnode-auth-make-hash' which is the
 default hashing function).  AUTH-TEST can be nil in which case a
-default based on AUTH-DB will be used.
+default will be used, based on AUTH-DB using
+`elnode-auth-default-test'.
 
 MAKE-HASH is a function to implement the construction of a hash
 token for authentication.  It takes a username and password and
