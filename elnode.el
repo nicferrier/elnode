@@ -2917,6 +2917,32 @@ a file modification time."
       (time-less-p mod-time mod-since)
       (equal mod-time mod-since)))))
 
+(defmacro elnode-etag (httpcon &rest body)
+  "A macro to implement the Etag cache algorithm.
+
+If the environment variable \"ETAG\" is present then we generate a
+bound symbol `etag' in scope for BODY by `sha1'-ing the current
+ETAG and the pathinfo from the HTTPCON.
+
+Additionally, if the Etag header \"if-none-match\" is present
+then we check that against the generated `etag' value and use
+`elnode-cached' to send a response if they match.
+
+If there is no \"ETAG\" environment variable or if the generated
+`etag' and a presented Etag do not match then the BODY is
+evaluated."
+  (declare (debug (sexp &rest form))
+           (indent 1))
+  (let ((etag-check-v (make-symbol "etag-check")))
+    `(let ((,etag-check-v (or (elnode-http-header httpcon 'if-none-match) "NONE"))
+           (etag (when (getenv "ETAG")
+                   (sha1 (concat
+                          (getenv "ETAG")
+                          (elnode-http-pathinfo httpcon))))))
+       (if (and etag (equal ,etag-check ,etag))
+           (elnode-cached httpcon)
+           ,@body))))
+
 (defun elnode-cached-p (httpcon target-file)
   "Is the specified TARGET-FILE older than the HTTPCON?
 
