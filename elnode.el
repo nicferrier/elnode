@@ -104,7 +104,7 @@ See `elnode-init' for more details."
 
 ;;;###autoload
 (defconst elnode-config-directory
-  (expand-file-name (concat user-emacs-directory "elnode/"))
+  (file-name-as-directory (expand-file-name "elnode" user-emacs-directory))
   "The config directory for elnode to store peripheral files.
 
 This is used as a base for other constant directory or file
@@ -3014,7 +3014,8 @@ date copy) then `elnode-cached' is called."
 ;; Webserver stuff
 
 (defconst elnode-webserver-docroot-default
-  (expand-file-name (concat elnode-config-directory "public_html/"))
+  (file-name-as-directory
+   (expand-file-name "public_html" elnode-config-directory))
   "The default location of the website.
 
 This is used to detect whether elnode needs to create this
