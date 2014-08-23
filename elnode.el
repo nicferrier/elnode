@@ -3397,7 +3397,12 @@ this is `elnode-loggedin-db'."
                :user username
                :token rndstr
                :hash hash)))
-        (puthash username user-record loggedin-db)
+        ;; Treat loggedin-db as a hash of lists
+        (let ((found (gethash username loggedin-db)))
+          (if (not found)
+              (puthash username (list user-record) loggedin-db)
+              (setcdr found (cons user-record (cdr found)))))
+        ;; Return the hash value
         hash)
       ;; Else it was bad so throw an error.
       (signal 'elnode-auth-credentials (list username password))))
@@ -3412,9 +3417,11 @@ Optionally use the LOGGEDIN-DB supplied.  By default this is
 `elnode-loggedin-db'.
 
 Returns USERNAME if true and `nil' if not it fails."
-  (let ((record (gethash username loggedin-db)))
-    (when (equal token (plist-get record :hash))
-      username)))
+  ;; Treat loggedin-db as a hash of lists
+  (catch :found
+    (dolist (record (gethash username loggedin-db))
+      (when (equal token (plist-get record :hash))
+        (throw :found username)))))
 
 (defun elnode-auth-cookie-decode (cookie-value)
   "Decode an encoded elnode auth COOKIE-VALUE.
