@@ -1,5 +1,5 @@
 (elnode
- :version "0.9.9.8.6"
+ :version "0.9.9.8.7"
  :doc "The Emacs webserver."
  :requires 
  ((web "0.4.3") ;; for proxy
