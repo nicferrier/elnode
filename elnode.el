@@ -1556,7 +1556,7 @@ subject to change."
                (save-excursion
                  (while (re-search-forward "%[0-9a-f]\\{2\\}" end t)
                    (let ((md (save-match-data (url-unhex-string (match-string 0) t))))
-                     (replace-match md))))
+                     (replace-match md t t))))
                (if (save-excursion (re-search-forward "data:\\([^;]+\\);base64," nil end))
                    (cons
                     param-name
