@@ -1496,6 +1496,11 @@ Returns an association list."
             nil)))
    (split-string query "&")))
 
+(defalias 'elnode-http-query-to-alist 'elnode--http-query-to-alist
+  "Elnode's HTTP query data parser.
+
+Send a string and get back an association list.")
+
 (defun elnode--http-form-encoded-to-alist (buffer)
   "Parse BUFFER containing a POST body and return an a-list.
 
