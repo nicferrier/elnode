@@ -46,7 +46,16 @@ as `:elnode-http-method'."
   `(fakir-mock-process ,symbol ()
      (set-process-plist ,symbol (list (make-hash-table :test 'eq)))
      (elnode/con-put ,symbol ,@elnode-plist)
-     (progn ,@body)))
+     (when (and (equal "POST" (elnode/con-get ,symbol :elnode-http-method))
+                (not (elnode-http-header ,symbol 'content-type)))
+       (let ((hdr-syms (elnode/con-get ,symbol :elnode-http-header-syms))
+             (hdr-strs (elnode/con-get ,symbol :elnode-http-header)))
+         (push (cons 'content-type "multipart/form-data") hdr-syms)
+         (push (cons "content-type" "multipart/form-data") hdr-strs)
+         (elnode/con-put ,symbol :elnode-http-header-syms hdr-syms)
+         (elnode/con-put ,symbol :elnode-http-header hdr-strs)))
+     (noflet ((elnode--http-post-mp-decode (httpcon parsed-type) nil))
+       (progn ,@body))))
 
 (defmacro elnode-mock-con (symbol bindings &rest body)
   "Mock an HTTP connection.
