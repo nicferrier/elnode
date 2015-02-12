@@ -417,6 +417,32 @@ again."
             (catch 'elnode-parse-http
               (elnode--http-parse :httpcon))))))
 
+(ert-deftest elnode--http-parse-header-incomplete-lcase-host-keyword ()
+  "Test the HTTP parsing of an incomplete header.
+
+An HTTP request with an incomplete header and the keyword host
+spelt with a leading lowercase h is setup and tested,
+then we finish the request (fill out the header) and then test
+again."
+  (elnode-mock-con :httpcon
+      ((:buffer
+        "GET / HTTP/1.1\r\nhost: localh"))
+    ;; Now parse
+    (should
+     ;; It fails with incomplete 'header signal
+     (equal 'header
+            (catch 'elnode-parse-http
+              (elnode--http-parse :httpcon))))
+    ;; Now put the rest of the header in the buffer
+    (with-current-buffer (process-buffer :httpcon)
+      (goto-char (point-max))
+      (insert "ost\r\n\r\n"))
+    (should
+     ;; Now it succeeds with the 'done signal
+     (equal 'done
+            (catch 'elnode-parse-http
+              (elnode--http-parse :httpcon))))))
+
 
 (ert-deftest elnode--http-parse-body-incomplete ()
   "Tests the HTTP parsing of an incomplete body.
