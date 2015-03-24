@@ -52,7 +52,7 @@ filter the alist of headers."
       (elnode-http-return httpcon)
       (elnode-http-send-string httpcon data)))
 
-(defun* elnode-proxy-do (httpcon url &key header-filter)
+(cl-defun elnode-proxy-do (httpcon url &key header-filter)
   "Do proxying to URL on HTTPCON.
 
 A request is made to the specified URL.  The URL may include

@@ -1014,11 +1014,11 @@ testing easier."
     (unless (equal "" cookie-value)
       cookie-value)))
 
-(defun* elnode-test-call (path
-                          &key
-                          (method "GET")
-                          (parameters '())
-                          (headers '()))
+(cl-defun elnode-test-call (path
+                            &key
+                            (method "GET")
+                            (parameters '())
+                            (headers '()))
   "Fake a call to elnode with the PATH.
 
 In addition you can specify some extra HTTP stuff:
@@ -1136,12 +1136,12 @@ is ignored."
     proc))
 
 ;;;###autoload
-(defun* elnode-start (request-handler
-                      &key
-                      port
-                      (host "localhost")
-                      (defer-mode :managed)
-                      service-mappings)
+(cl-defun elnode-start (request-handler
+                        &key
+                        port
+                        (host "localhost")
+                        (defer-mode :managed)
+                        service-mappings)
   "Start a server using REQUEST-HANDLER.
 
 REQUEST-HANDLER will handle requests on PORT on HOST (which is
@@ -1339,7 +1339,7 @@ currently supported conversions are:
       (t
        val))))
 
-(defun* elnode-http-host (httpcon &key split just-host)
+(cl-defun elnode-http-host (httpcon &key split just-host)
   "Return the HTTP `host' name header.
 
 With SPLIT return a list of the hostname and any port part (the
@@ -1807,7 +1807,7 @@ return DEFAULT instead of `nil'."
              (cdr p)))
   "HTTP codes with string keys and integer keys.")
 
-(defun* elnode-http-cookie-make (name data &key expiry path)
+(cl-defun elnode-http-cookie-make (name data &key expiry path)
   "Make a set-cookie header pair from NAME and DATA.
 
 DATA should be a string to be used as the value of the cookie.
@@ -1871,7 +1871,7 @@ See `elnode-http-start'."
                            header
                            (cons header value))))))))
 
-(defun* elnode-http-cookie-set (httpcon name data &key expiry path)
+(cl-defun elnode-http-cookie-set (httpcon name data &key expiry path)
   "Make a cookie and set it on the HTTPCON.
 
 See `elnode-http-cookie-make' for details about cookie making."
@@ -2065,7 +2065,7 @@ vertical-align: top;
 </html>")))
       (elnode-send-html httpcon page))))
 
-(defun* elnode-send-json (httpcon data &key content-type jsonp)
+(cl-defun elnode-send-json (httpcon data &key content-type jsonp)
   "Convert DATA to JSON and send to the HTTPCON with a 200 \"Ok\".
 
 DATA is some lisp object.
@@ -2294,13 +2294,13 @@ If HOSTPATH is specified then the resulting match spec is of the
         (concat (if hostpath "^.*/" "^") redirect "$")
         login-handler)))))
 
-(defun* elnode--dispatch-proc (httpcon
-                              path
-                              url-mapping-table
-                              &key
-                              (function-404 'elnode-send-404)
-                              (log-name "elnode")
-                              extra-table)
+(cl-defun elnode--dispatch-proc (httpcon
+                                 path
+                                 url-mapping-table
+                                 &key
+                                 (function-404 'elnode-send-404)
+                                 (log-name "elnode")
+                                 extra-table)
   "Dispatch to the matched handler for the PATH on the HTTPCON.
 The handler for PATH is matched in the URL-MAPPING-TABLE via
 `elnode--mapper-find'.
@@ -2330,11 +2330,11 @@ wrappers.  If it is specified it is searched first."
      (t
       (funcall function-404 httpcon)))))
 
-(defun* elnode-dispatcher (httpcon
-                           url-mapping-table
-                           &key
-                           (function-404 'elnode-send-404)
-                           auth-scheme)
+(cl-defun elnode-dispatcher (httpcon
+                             url-mapping-table
+                             &key
+                             (function-404 'elnode-send-404)
+                             auth-scheme)
   "Dispatch HTTPCON to the function mapped in URL-MAPPING-TABLE.
 
 URL-MAPPING-TABLE is an alist of:
@@ -2390,12 +2390,12 @@ authentications."
            "")))
    path))
 
-(defun* elnode-hostpath-dispatcher (httpcon
-                                   hostpath-mapping-table
-                                   &key
-                                   (function-404 'elnode-send-404)
-                                   (log-name "elnode")
-                                   auth-scheme)
+(cl-defun elnode-hostpath-dispatcher (httpcon
+                                      hostpath-mapping-table
+                                      &key
+                                      (function-404 'elnode-send-404)
+                                      (log-name "elnode")
+                                      auth-scheme)
   "Dispatch HTTPCON to a handler based on the HOSTPATH-MAPPING-TABLE.
 
 HOSTPATH-MAPPING-TABLE has regexs of the host and the path double
@@ -2710,11 +2710,11 @@ of sending it directly.")
       replacements
       (< (elt (file-attributes filename) 7) 5000)))
 
-(defun* elnode-send-file (httpcon targetfile
-                                  &key
-                                  preamble
-                                  mime-types
-                                  replacements)
+(cl-defun elnode-send-file (httpcon targetfile
+                                    &key
+                                    preamble
+                                    mime-types
+                                    replacements)
   "Send the TARGETFILE to the HTTPCON.
 
 If the TARGETFILE is relative then resolve it via the current
@@ -2852,12 +2852,12 @@ Optionally, use the specified TYPE as the status code, eg:
   (lambda (httpcon)
     (elnode-send-redirect httpcon location type)))
 
-(defun* elnode-make-send-file  (filename
-                                &key
-                                preamble
-                                mime-types
-                                replacements
-                                replacements-pattern)
+(cl-defun elnode-make-send-file  (filename
+                                  &key
+                                  preamble
+                                  mime-types
+                                  replacements
+                                  replacements-pattern)
   "Make a handler that will serve a single FILENAME.
 
 If the FILENAME is relative then it is resolved against the
@@ -3326,11 +3326,11 @@ main `elnode-auth-db' is used."
    (symbol-value auth-db))
   (message "username is %s" username))
 
-(defun* elnode-auth-user-p (username
-                            password
-                            &key
-                            auth-test
-                            (make-hash 'elnode-auth-make-hash))
+(cl-defun elnode-auth-user-p (username
+                              password
+                              &key
+                              auth-test
+                              (make-hash 'elnode-auth-make-hash))
   "Does the AUTH-TEST pass?
 
 The password is stored in the db hashed keyed by the USERNAME,
@@ -3371,12 +3371,12 @@ See `elnode-auth-login' for how this is updated.")
        'error-message
        "Elnode authentication failed"))
 
-(defun* elnode-auth-login (username
-                           password
-                           &key
-                           auth-test
-                           make-hash
-                           (loggedin-db elnode-loggedin-db))
+(cl-defun elnode-auth-login (username
+                             password
+                             &key
+                             auth-test
+                             make-hash
+                             (loggedin-db elnode-loggedin-db))
   "Log a user in.
 
 Check the USERNAME and PASSWORD with `elnode-auth-user-p' and
@@ -3414,10 +3414,10 @@ this is `elnode-loggedin-db'."
       ;; Else it was bad so throw an error.
       (signal 'elnode-auth-credentials (list username password))))
 
-(defun* elnode-auth-check-p (username
-                             token
-                             &key
-                             (loggedin-db elnode-loggedin-db))
+(cl-defun elnode-auth-check-p (username
+                               token
+                               &key
+                               (loggedin-db elnode-loggedin-db))
   "Check login status of the USERNAME against the hashed TOKEN.
 
 Optionally use the LOGGEDIN-DB supplied.  By default this is
@@ -3438,7 +3438,7 @@ Returns a cons of `username' and `token'"
     (cons (match-string 1 cookie-value)
           (match-string 2 cookie-value))))
 
-(defun* elnode-auth-get-cookie-value (httpcon &key (cookie-name "elnode-auth"))
+(cl-defun elnode-auth-get-cookie-value (httpcon &key (cookie-name "elnode-auth"))
   "Return the decoded value for COOKIE-NAME.
 
 By default it's \"elnode-auth\" but you should use whatever
@@ -3447,10 +3447,10 @@ cookie-name you're using for your app."
          (decoded-cons (elnode-auth-cookie-decode (or cookie-value ""))))
     decoded-cons))
 
-(defun* elnode-auth-cookie-check-p (httpcon
-                                    &key
-                                    (cookie-name "elnode-auth")
-                                    (loggedin-db elnode-loggedin-db))
+(cl-defun elnode-auth-cookie-check-p (httpcon
+                                      &key
+                                      (cookie-name "elnode-auth")
+                                      (loggedin-db elnode-loggedin-db))
   "Check that the user is loggedin according to the cookie.
 
 The name of the cookie can be supplied with :COOKIE-NAME - by
@@ -3471,9 +3471,9 @@ that cookie was not found."
               (token (cdr cookie-cons)))
           (elnode-auth-check-p username token :loggedin-db loggedin-db)))))
 
-(defun* elnode-auth-cookie-check (httpcon &key
-                                          (cookie-name "elnode-auth")
-                                          (loggedin-db elnode-loggedin-db))
+(cl-defun elnode-auth-cookie-check (httpcon &key
+                                            (cookie-name "elnode-auth")
+                                            (loggedin-db elnode-loggedin-db))
   "Check the COOKIE-NAME has a loggedin cookie in LOGGEDIN-DB.
 
 Signals `elnode-auth-token' on cookie or authentication failure.
@@ -3489,13 +3489,13 @@ See `elnode-auth-cookie-check-p' for more details."
 (defvar elnode-auth-httpcon nil
   "Dynamic scope variable for HTTP con while we auth.")
 
-(defun* elnode-auth-http-login (httpcon
-                                username password logged-in
-                                &key
-                                (cookie-name "elnode-auth")
-                                auth-test
-                                make-hash
-                                (loggedin-db elnode-loggedin-db))
+(cl-defun elnode-auth-http-login (httpcon
+                                  username password logged-in
+                                  &key
+                                  (cookie-name "elnode-auth")
+                                  auth-test
+                                  make-hash
+                                  (loggedin-db elnode-loggedin-db))
   "Log the USERNAME in on the HTTPCON if PASSWORD is correct.
 
 If authentication succeeds set the relevant cookie and redirect
@@ -3561,13 +3561,13 @@ This function sends the contents of the custom variable
       `(("target" . ,target)
         ("redirect" . ,redirect))))))
 
-(defun* elnode-auth--login-handler (httpcon
-                                    sender target
-                                    &key
-                                    auth-test ; assert not nil?
-                                    make-hash
-                                    (cookie-name "elnode-auth")
-                                    (loggedin-db elnode-loggedin-db))
+(cl-defun elnode-auth--login-handler (httpcon
+                                      sender target
+                                      &key
+                                      auth-test ; assert not nil?
+                                      make-hash
+                                      (cookie-name "elnode-auth")
+                                      (loggedin-db elnode-loggedin-db))
   "An authentication handler implementation.
 
 This is the handler that is mapped to the login path, by default
@@ -3632,15 +3632,15 @@ contains is irrelevant."
     (when user
       (kva "token" user))))
 
-(defun* elnode-auth--make-login-handler (&key
-                                         (sender 'elnode-auth-login-sender)
-                                         (target "/login/")
-                                         auth-test
-                                         make-hash
-                                         ;; only used if the auth-test is not present
-                                         (auth-db elnode-auth-db) 
-                                         (cookie-name "elnode-auth")
-                                         (loggedin-db elnode-loggedin-db))
+(cl-defun elnode-auth--make-login-handler (&key
+                                           (sender 'elnode-auth-login-sender)
+                                           (target "/login/")
+                                           auth-test
+                                           make-hash
+                                           ;; only used if the auth-test is not present
+                                           (auth-db elnode-auth-db) 
+                                           (cookie-name "elnode-auth")
+                                           (loggedin-db elnode-loggedin-db))
   "Make an `elnode-auth--login-handler', binding parameters."
   (lambda (httpcon)
     (elnode-auth--login-handler
@@ -3655,16 +3655,16 @@ contains is irrelevant."
      :cookie-name cookie-name
      :loggedin-db loggedin-db)))
 
-(defun* elnode-defauth (scheme-name
-                        &key
-                        (test :cookie)
-                        auth-test
-                        make-hash
-                        (auth-db 'elnode-auth-db)
-                        (cookie-name "elnode-auth")
-                        (failure-type :redirect)
-                        (redirect "/login/")
-                        (sender 'elnode-auth-login-sender))
+(cl-defun elnode-defauth (scheme-name
+                          &key
+                          (test :cookie)
+                          auth-test
+                          make-hash
+                          (auth-db 'elnode-auth-db)
+                          (cookie-name "elnode-auth")
+                          (failure-type :redirect)
+                          (redirect "/login/")
+                          (sender 'elnode-auth-login-sender))
   "Define an Elnode authentication scheme.
 
 An authentication scheme consists of the following attributes:
