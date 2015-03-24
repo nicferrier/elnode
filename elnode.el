@@ -1394,7 +1394,7 @@ cons is returned."
 (defconst elnode--http-status-line-rx
   (rx (and (group-n 1 (or "GET" "HEAD" "POST" "DELETE" "PUT"))
            " "
-           (group-n 2 (1+ (any "A-Za-z0-9+&=?./:;_-"))) ; FIXME - get this from the spec?
+           (group-n 2 (1+ (any "A-Za-z0-9+&=%?./:;_-"))) ; FIXME - get this from the spec?
            " "
            "HTTP/"
            (group-n 3 (and "1." (1+ (any "0-9"))))))
