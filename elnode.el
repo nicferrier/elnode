@@ -1626,7 +1626,7 @@ A is considered the priority (its elements go in first)."
              (elnode--http-parse-header (current-buffer) (point) t)
            (let* ((cde
                    (mail-header-parse-content-disposition
-                    (kva "content-disposition" alist)))
+                    (kva "Content-Disposition" alist)))
                   (name (kva 'name (cdr cde)))
                   (filename (kva 'filename (cdr cde)))
                   (pt (point)))
