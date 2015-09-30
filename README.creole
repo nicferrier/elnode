@@ -330,7 +330,7 @@ correctly.
 Elnode also has {{{elnode-send-file}}} for sending files to the response,
 along with {{{elnode-docroot-for}}} this makes a powerful simple
 webserver tool.  {{{elnode-send-file}}} can be used to send any
-arbitary file:
+arbitrary file:
 
 {{{
 ##! emacs-lisp
