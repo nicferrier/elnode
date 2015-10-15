@@ -1768,10 +1768,11 @@ return DEFAULT instead of `nil'."
    (elnode--http-parse-status httpcon :elnode-http-version)))
 
 (defun elnode-http-send-string (httpcon str)
-  "Send STR to HTTPCON, doing chunked encoding."
+  "Send STR as bytes to HTTPCON, doing chunked encoding."
   (elnode-msg :debug
       "elnode-http-send-string %s [[%s]]" httpcon (s-truncate 10 str))
-  (let ((len (string-bytes str)))
+  (let* ((bytes (encode-coding-string str 'binary))
+         (len (string-bytes bytes)))
     (elnode/con-put httpcon :elnode-bytes-written
                  (+ len (or (elnode/con-get httpcon :elnode-bytes-written) 0)))
     ;; FIXME Errors can happen here, because the socket goes away.. it
@@ -1780,14 +1781,14 @@ return DEFAULT instead of `nil'."
         (condition-case err
             (process-send-string
              httpcon
-             (format "%x\r\n%s\r\n" (length str) (or str "")))
+             (format "%x\r\n%s\r\n" len (or bytes "")))
           (error
            (elnode-msg :warning
                "elnode-http-send-string failed to send [%s] on %s (%s)"
-             (length str) httpcon (process-status httpcon))))
+             len httpcon (process-status httpcon))))
         (elnode-msg :warning
             "elnode-http-send-string can't print [%s] because %s is %s"
-          (length str) httpcon (process-status httpcon)))))
+          len httpcon (process-status httpcon)))))
 
 (defconst elnode-http-codes-alist
   (loop for p in '((200 . "Ok")
