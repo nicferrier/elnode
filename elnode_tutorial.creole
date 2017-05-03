@@ -60,7 +60,7 @@ enter the Lisp code for the handler, for that old time feel you could type this 
 (elnode-start 'my-elnode-hello-world-handler :port 8028 :host "localhost")
 }}}
 
-make the Lisp code //live//
+Feel the strom grow, give the command to Igor to throw the switch and make the Lisp code //live!//
 
 {{{
 M-x eval-buffer
