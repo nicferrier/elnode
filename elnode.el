@@ -1116,7 +1116,7 @@ is ignored."
            :name name
            :buffer an-buf
            :server (if (numberp port) 300 't)
-           :nowait 't
+           :nowait nil
            :host (cond
                    ((not (numberp port)) nil)
                    ((equal host "localhost") 'local)
