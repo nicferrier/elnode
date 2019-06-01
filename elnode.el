@@ -1116,7 +1116,7 @@ is ignored."
            :name name
            :buffer an-buf
            :server (if (numberp port) 300 't)
-           :nowait 't
+           :nowait (< emacs-major-version 26)
            :host (cond
                    ((not (numberp port)) nil)
                    ((equal host "localhost") 'local)
@@ -1266,7 +1266,7 @@ The port is chosen randomly from the ephemeral ports. "
                     (make-network-process
                      :name "*test-proc*"
                      :server t
-                     :nowait 't
+                     :nowait (< emacs-major-version 26)
                      :host 'local
                      :service port
                      :family 'ipv4))
