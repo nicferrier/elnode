@@ -1300,7 +1300,7 @@ Serves only to connect the server process to the client processes"
      :name "*elnode-webserver-proc*"
      :buffer an-buf
      :server t
-     :nowait 't
+     :nowait (< emacs-major-version 26)
      :host (cond
              ((equal host "localhost") 'local)
              ((equal host "*") nil)
@@ -1447,7 +1447,7 @@ The port is chosen randomly from the ephemeral ports. "
                     (make-network-process
                      :name "*test-proc*"
                      :server t
-                     :nowait 't
+                     :nowait (< emacs-major-version 26)
                      :host 'local
                      :service port
                      :family 'ipv4))
