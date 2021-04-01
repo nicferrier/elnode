@@ -1,4 +1,4 @@
-;;; elnode-rle.el --- Remote Lisp Executiion with Elnode  -*- lexical-binding: t -*-
+;;; elnode-rle.el --- Remote Lisp Execution with Elnode  -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2012  Nic Ferrier
 
